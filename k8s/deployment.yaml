@@ -1,0 +1,143 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adsb-notifier-worker
+  labels:
+    app.kubernetes.io/name: adsb-notifier
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: adsb-notifier
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: adsb-notifier
+        app.kubernetes.io/component: worker
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/messedUpRyan/adsb-notifier-worker:latest
+          imagePullPolicy: IfNotPresent
+          args: ["--config", "http://adsb-notifier-api:8000/config"]
+          envFrom:
+            - secretRef:
+                name: adsb-notifier-secrets
+                optional: true
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adsb-notifier-api
+  labels:
+    app.kubernetes.io/name: adsb-notifier
+    app.kubernetes.io/component: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: adsb-notifier
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: adsb-notifier
+        app.kubernetes.io/component: api
+    spec:
+      initContainers:
+        - name: seed-config
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - test -f /config/config.json || cp /seed/config.json /config/config.json
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: config-seed
+              mountPath: /seed
+              readOnly: true
+      containers:
+        - name: api
+          image: ghcr.io/messedUpRyan/adsb-notifier-api:latest
+          imagePullPolicy: IfNotPresent
+          args: ["--config", "/config/config.json", "--backup-retention", "20"]
+          envFrom:
+            - secretRef:
+                name: adsb-notifier-secrets
+                optional: true
+          ports:
+            - name: http
+              containerPort: 8000
+          volumeMounts:
+            - name: config
+              mountPath: /config
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: adsb-notifier-config
+        - name: config-seed
+          configMap:
+            name: adsb-notifier-config-seed
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adsb-notifier-ui
+  labels:
+    app.kubernetes.io/name: adsb-notifier
+    app.kubernetes.io/component: ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: adsb-notifier
+      app.kubernetes.io/component: ui
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: adsb-notifier
+        app.kubernetes.io/component: ui
+    spec:
+      containers:
+        - name: ui
+          image: ghcr.io/messedUpRyan/adsb-notifier-ui:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi

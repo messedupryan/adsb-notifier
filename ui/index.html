@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Cache-Control" content="no-store" />
+    <title>ADS-B Notifier Config</title>
+    <link rel="stylesheet" href="/styles.css?v=20260803-9" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="toolbar">
+        <div>
+          <h1>ADS-B Notifier</h1>
+          <p id="status">Loading configuration...</p>
+        </div>
+        <div class="actions">
+          <button id="reload" type="button">Reload</button>
+          <button id="discard" type="button">Discard</button>
+          <button id="save" type="button">Save</button>
+        </div>
+      </section>
+      <section id="message-panel" class="message-panel hidden" aria-live="polite"></section>
+
+      <nav class="tabs" aria-label="Configuration sections">
+        <button class="tab active" type="button" data-tab="settings">Settings</button>
+        <button class="tab" type="button" data-tab="notifications">Notifications</button>
+        <button class="tab" type="button" data-tab="rules">Rules</button>
+        <button class="tab" type="button" data-tab="json">JSON</button>
+      </nav>
+
+      <section id="settings" class="tab-panel active">
+        <div class="form-grid">
+          <label>
+            ADS-B endpoint
+            <input id="adsb-url" name="adsb_url" type="url" />
+          </label>
+          <label>
+            Home latitude
+            <input id="home-lat" name="home.lat" type="number" step="0.000001" />
+          </label>
+          <label>
+            Home longitude
+            <input id="home-lon" name="home.lon" type="number" step="0.000001" />
+          </label>
+          <label>
+            Poll seconds
+            <input id="poll-seconds" name="poll_seconds" type="number" min="5" step="1" />
+          </label>
+          <label>
+            Stale aircraft seconds
+            <input id="stale-aircraft-seconds" name="stale_aircraft_seconds" type="number" min="1" step="1" />
+          </label>
+        </div>
+      </section>
+
+      <section id="notifications" class="tab-panel">
+        <div class="provider-grid">
+          <article class="provider">
+            <header>
+              <h2>Email</h2>
+              <div class="provider-actions">
+                <button id="test-email" type="button">Test</button>
+                <label class="switch"><input id="email-enabled" type="checkbox" /> Enabled</label>
+              </div>
+            </header>
+            <div class="form-grid compact">
+              <label>SMTP host <input id="email-smtp-host" type="text" /></label>
+              <label>SMTP port <input id="email-smtp-port" type="number" min="1" step="1" /></label>
+              <label>Username <input id="email-username" type="text" /></label>
+              <label>Password <input id="email-password" type="text" /></label>
+              <label>From <input id="email-from" type="email" /></label>
+              <label>To <input id="email-to" type="text" /></label>
+              <label class="switch wide"><input id="email-starttls" type="checkbox" /> Use STARTTLS</label>
+            </div>
+          </article>
+
+          <article class="provider">
+            <header>
+              <h2>Twilio SMS</h2>
+              <div class="provider-actions">
+                <button id="test-twilio" type="button">Test</button>
+                <label class="switch"><input id="twilio-enabled" type="checkbox" /> Enabled</label>
+              </div>
+            </header>
+            <div class="form-grid compact">
+              <label>Account SID <input id="twilio-account-sid" type="text" /></label>
+              <label>Auth token <input id="twilio-auth-token" type="text" /></label>
+              <label>From <input id="twilio-from" type="text" /></label>
+              <label>To <input id="twilio-to" type="text" /></label>
+            </div>
+          </article>
+
+          <article class="provider">
+            <header>
+              <h2>Webhook</h2>
+              <div class="provider-actions">
+                <button id="test-webhook" type="button">Test</button>
+                <label class="switch"><input id="webhook-enabled" type="checkbox" /> Enabled</label>
+              </div>
+            </header>
+            <div class="form-grid compact">
+              <label class="wide">URL <input id="webhook-url" type="text" /></label>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="rules" class="tab-panel">
+        <div class="rules-layout">
+          <aside class="rule-list-panel">
+            <div class="section-header">
+              <h2>Rules</h2>
+              <div class="rule-actions">
+                <select id="new-rule-type" aria-label="New rule type">
+                  <option value="tail">Tail</option>
+                  <option value="military">Military</option>
+                  <option value="aircraft_type">Aircraft type</option>
+                  <option value="circling">Circling</option>
+                </select>
+                <button id="add-rule" type="button">Add</button>
+              </div>
+            </div>
+            <div id="rule-list" class="rule-list"></div>
+          </aside>
+
+          <article class="rule-editor">
+            <div class="section-header">
+              <h2 id="rule-editor-title">Rule Details</h2>
+              <div class="rule-actions">
+                <button id="duplicate-rule" type="button">Duplicate</button>
+                <button id="delete-rule" type="button">Delete</button>
+              </div>
+            </div>
+            <div id="rule-empty" class="empty-state">Select or add a rule.</div>
+            <div id="rule-form" class="form-grid hidden">
+              <label>Name <input id="rule-name" type="text" /></label>
+              <label>
+                Event
+                <select id="rule-event">
+                  <option value="tail">Tail</option>
+                  <option value="military">Military</option>
+                  <option value="aircraft_type">Aircraft type</option>
+                  <option value="circling">Circling</option>
+                </select>
+              </label>
+              <label class="switch wide"><input id="rule-enabled" type="checkbox" /> Enabled</label>
+              <label>Radius miles <input id="rule-radius" type="number" min="0" step="0.1" /></label>
+              <label>Cooldown minutes <input id="rule-cooldown" type="number" min="0" step="1" /></label>
+              <label>Min altitude ft <input id="rule-min-altitude" type="number" step="100" /></label>
+              <label>Max altitude ft <input id="rule-max-altitude" type="number" step="100" /></label>
+              <label class="tail-field wide">Tail numbers, callsigns, or ICAO hex <input id="rule-tail-numbers" type="text" /></label>
+              <label class="aircraft-type-field">Aircraft types <input id="rule-aircraft-types" type="text" /></label>
+              <label class="aircraft-type-field">Categories <input id="rule-categories" type="text" /></label>
+              <label class="military-field switch wide"><input id="rule-military" type="checkbox" /> Require military flag</label>
+              <label class="circling-field">Heading change degrees <input id="rule-heading-change" type="number" min="1" step="1" /></label>
+              <label class="circling-field">Window minutes <input id="rule-window-minutes" type="number" min="1" step="1" /></label>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="json" class="tab-panel">
+        <div class="json-panel">
+          <label for="config-json">Configuration JSON</label>
+          <textarea id="config-json" spellcheck="false"></textarea>
+        </div>
+      </section>
+      <footer class="app-footer">
+        <span>ADS-B Notifier</span>
+        <span id="ui-version">UI version loading</span>
+      </footer>
+    </main>
+    <div id="confirm-modal" class="modal-overlay hidden" role="presentation">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+        <h2 id="confirm-title">Confirm action</h2>
+        <p id="confirm-message"></p>
+        <div class="modal-actions">
+          <button id="confirm-cancel" type="button">Cancel</button>
+          <button id="confirm-accept" type="button">Continue</button>
+        </div>
+      </section>
+    </div>
+    <script src="/app.js?v=20260803-9"></script>
+  </body>
+</html>

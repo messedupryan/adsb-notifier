@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adsb-notifier-config-seed
+  labels:
+    app.kubernetes.io/name: adsb-notifier
+data:
+  config.json: |
+    {
+      "adsb_url": "http://readsb.default.svc.cluster.local/tar1090/data/aircraft.json",
+      "home": {
+        "lat": 40.7608,
+        "lon": -111.8910
+      },
+      "poll_seconds": 30,
+      "stale_aircraft_seconds": 90,
+      "notifications": {
+        "email": {
+          "enabled": false,
+          "smtp_host": "smtp.gmail.com",
+          "smtp_port": 587,
+          "starttls": true,
+          "username": "env:SMTP_USERNAME",
+          "password": "env:SMTP_PASSWORD",
+          "from": "env:SMTP_USERNAME",
+          "to": ["env:SMTP_USERNAME"]
+        },
+        "twilio": { "enabled": false },
+        "webhook": { "enabled": false },
+        "twitter": { "enabled": false }
+      },
+      "rules": [
+        {
+          "name": "Tail number near home",
+          "event": "tail",
+          "tail_numbers": ["N12345"],
+          "radius_miles": 25,
+          "max_altitude_ft": 12000,
+          "cooldown_minutes": 60
+        }
+      ]
+    }

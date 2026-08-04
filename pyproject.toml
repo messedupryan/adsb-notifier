@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adsb-notifier"
+version = "0.1.0"
+description = "Containerized ADS-B event monitor with configurable notifications."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+adsb-notifier = "adsb_notifier.main:main"
+adsb-notifier-api = "adsb_notifier.api:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.setuptools.packages.find]
+include = ["adsb_notifier*"]

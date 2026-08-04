@@ -1,0 +1,70 @@
+{
+  "adsb_url": "http://readsb.default.svc.cluster.local/tar1090/data/aircraft.json",
+  "home": {
+    "lat": 40.7608,
+    "lon": -111.8910
+  },
+  "poll_seconds": 30,
+  "stale_aircraft_seconds": 90,
+  "notifications": {
+    "email": {
+      "enabled": false,
+      "smtp_host": "smtp.gmail.com",
+      "smtp_port": 587,
+      "starttls": true,
+      "username": "env:SMTP_USERNAME",
+      "password": "env:SMTP_PASSWORD",
+      "from": "env:SMTP_USERNAME",
+      "to": ["env:SMTP_USERNAME"]
+    },
+    "twilio": {
+      "enabled": false,
+      "account_sid": "env:TWILIO_ACCOUNT_SID",
+      "auth_token": "env:TWILIO_AUTH_TOKEN",
+      "from": "env:TWILIO_FROM",
+      "to": "env:TWILIO_TO"
+    },
+    "webhook": {
+      "enabled": false,
+      "url": "env:ALERT_WEBHOOK_URL"
+    },
+    "twitter": {
+      "enabled": false
+    }
+  },
+  "rules": [
+    {
+      "name": "Tail number near home",
+      "event": "tail",
+      "tail_numbers": ["N12345"],
+      "radius_miles": 25,
+      "max_altitude_ft": 12000,
+      "cooldown_minutes": 60
+    },
+    {
+      "name": "Military nearby",
+      "event": "military",
+      "military": true,
+      "radius_miles": 40,
+      "max_altitude_ft": 25000,
+      "cooldown_minutes": 30
+    },
+    {
+      "name": "Helicopter nearby",
+      "event": "aircraft_type",
+      "aircraft_types": ["H60", "EC45"],
+      "categories": ["A7"],
+      "radius_miles": 15,
+      "cooldown_minutes": 20
+    },
+    {
+      "name": "Circling near home",
+      "event": "circling",
+      "radius_miles": 12,
+      "max_altitude_ft": 10000,
+      "circling_min_heading_change_deg": 270,
+      "circling_window_minutes": 8,
+      "cooldown_minutes": 45
+    }
+  ]
+}
