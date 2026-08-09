@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
+NOTIFICATION_PROVIDERS = {"email", "pushover", "twilio", "webhook"}
+
 
 @dataclass(frozen=True)
 class Home:
@@ -18,8 +20,18 @@ class Home:
 class Notifications:
     email: dict[str, Any] | None = None
     twilio: dict[str, Any] | None = None
+    pushover: dict[str, Any] | None = None
     webhook: dict[str, Any] | None = None
     twitter: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class AdsbSource:
+    provider: str
+    query: str = "point"
+    base_url: str | None = None
+    radius_miles: float | None = None
+    value: str | None = None
 
 
 @dataclass(frozen=True)
@@ -38,11 +50,13 @@ class Rule:
     cooldown_minutes: int = 30
     circling_min_heading_change_deg: float = 270.0
     circling_window_minutes: int = 8
+    notification_providers: set[str] | None = None
 
 
 @dataclass(frozen=True)
 class Settings:
     adsb_url: str
+    adsb_source: AdsbSource | None
     home: Home
     poll_seconds: int
     stale_aircraft_seconds: int
@@ -67,23 +81,53 @@ def load_settings_data(path: str | Path) -> dict[str, Any]:
 def parse_settings(data: dict[str, Any]) -> Settings:
     home_data = data["home"]
     notification_data = data.get("notifications", {})
+    _validate_notifications(notification_data)
     _validate_unique_rule_names(data.get("rules", []))
     rules = [_parse_rule(item) for item in data.get("rules", [])]
     if not rules:
         raise ValueError("config must include at least one rule")
 
     return Settings(
-        adsb_url=_env_or_value(data["adsb_url"]),
+        adsb_url=_env_or_value(data.get("adsb_url", "")),
+        adsb_source=_parse_adsb_source(data.get("adsb_source")),
         home=Home(lat=float(home_data["lat"]), lon=float(home_data["lon"])),
         poll_seconds=int(data.get("poll_seconds", 30)),
         stale_aircraft_seconds=int(data.get("stale_aircraft_seconds", 90)),
         notifications=Notifications(
             email=notification_data.get("email"),
             twilio=notification_data.get("twilio"),
+            pushover=notification_data.get("pushover"),
             webhook=notification_data.get("webhook"),
             twitter=notification_data.get("twitter"),
         ),
         rules=rules,
+    )
+
+
+def _validate_notifications(data: dict[str, Any]) -> None:
+    pushover = data.get("pushover")
+    if isinstance(pushover, dict) and pushover.get("enabled"):
+        _require_provider_fields(pushover, "pushover", ["app_token", "user_key"])
+
+
+def _require_provider_fields(config: dict[str, Any], provider: str, required_fields: list[str]) -> None:
+    missing = [field for field in required_fields if config.get(field) in (None, "")]
+    if missing:
+        raise ValueError(f"{provider} notifications require {', '.join(missing)} when enabled")
+
+
+def _parse_adsb_source(data: dict[str, Any] | None) -> AdsbSource | None:
+    if not data:
+        return None
+    provider = str(data.get("provider", "")).strip().lower()
+    if not provider:
+        raise ValueError("adsb_source requires provider")
+    return AdsbSource(
+        provider=provider,
+        query=str(data.get("query", "point")).strip().lower(),
+        base_url=_optional_env_or_value(data.get("base_url")),
+        radius_miles=None if data.get("radius_miles") in (None, "") else float(data["radius_miles"]),
+        value=_optional_env_or_value(data.get("value")),
     )
 
 
@@ -104,7 +148,22 @@ def _parse_rule(data: dict[str, Any]) -> Rule:
         cooldown_minutes=_required_int(data, "cooldown_minutes", name),
         circling_min_heading_change_deg=float(data.get("circling_min_heading_change_deg", 270.0)),
         circling_window_minutes=int(data.get("circling_window_minutes", 8)),
+        notification_providers=_parse_notification_providers(data),
     )
+
+
+def _parse_notification_providers(data: dict[str, Any]) -> set[str] | None:
+    if "notification_providers" not in data:
+        return None
+    providers = {
+        str(provider).strip().lower()
+        for provider in data.get("notification_providers", [])
+        if str(provider).strip()
+    }
+    unknown = providers - NOTIFICATION_PROVIDERS
+    if unknown:
+        raise ValueError(f"unsupported notification provider: {', '.join(sorted(unknown))}")
+    return providers
 
 
 def _validate_unique_rule_names(rules: list[dict[str, Any]]) -> None:
@@ -155,3 +214,7 @@ def _env_or_value(value: str) -> str:
         except KeyError as exc:
             raise ValueError(f"missing required environment variable: {env_name}") from exc
     return value
+
+
+def _optional_env_or_value(value: str | None) -> str | None:
+    return None if value is None else _env_or_value(value)

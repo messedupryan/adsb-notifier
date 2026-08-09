@@ -2,9 +2,20 @@ let config = null;
 let savedConfig = null;
 let isDirty = false;
 let selectedRuleId = null;
-let activeTab = "settings";
-const uiVersion = "20260803-9";
+let activeTab = "dashboard";
+const uiVersion = "20260808-14";
+const notificationProviderOrder = ["pushover", "email", "webhook", "twilio"];
 const apiBase = new URLSearchParams(window.location.search).get("api") || "/api";
+const assetVersion = `v=${uiVersion}`;
+const themeStorageKey = "adsb-notifier-theme";
+const defaultTheme = {mode: "light", accent: "teal"};
+const themeAssets = {
+  amber: {logo: `/images/logo_amber.png?${assetVersion}`, icon: `/images/icon_amber.png?${assetVersion}`},
+  blue: {logo: `/images/logo_blue.png?${assetVersion}`, icon: `/images/icon_blue.png?${assetVersion}`},
+  rose: {logo: `/images/logo_rose.png?${assetVersion}`, icon: `/images/icon_rose.png?${assetVersion}`},
+  teal: {logo: `/images/logo_teal.png?${assetVersion}`, icon: `/images/icon_teal.png?${assetVersion}`},
+  violet: {logo: `/images/logo_violet.png?${assetVersion}`, icon: `/images/icon_violet.png?${assetVersion}`},
+};
 let confirmResolver = null;
 let confirmReturnFocus = null;
 
@@ -22,13 +33,26 @@ const fields = {
   emailPassword: document.querySelector("#email-password"),
   emailFrom: document.querySelector("#email-from"),
   emailTo: document.querySelector("#email-to"),
+  emailSubjectTemplate: document.querySelector("#email-subject-template"),
+  emailBodyTemplate: document.querySelector("#email-body-template"),
+  pushoverEnabled: document.querySelector("#pushover-enabled"),
+  pushoverAppToken: document.querySelector("#pushover-app-token"),
+  pushoverUserKey: document.querySelector("#pushover-user-key"),
+  pushoverDevice: document.querySelector("#pushover-device"),
+  pushoverPriority: document.querySelector("#pushover-priority"),
+  pushoverSound: document.querySelector("#pushover-sound"),
+  pushoverTitleTemplate: document.querySelector("#pushover-title-template"),
+  pushoverMessageTemplate: document.querySelector("#pushover-message-template"),
   twilioEnabled: document.querySelector("#twilio-enabled"),
   twilioAccountSid: document.querySelector("#twilio-account-sid"),
-  twilioAuthToken: document.querySelector("#twilio-auth-token"),
+  twilioApiKeySid: document.querySelector("#twilio-api-key-sid"),
+  twilioApiKeySecret: document.querySelector("#twilio-api-key-secret"),
   twilioFrom: document.querySelector("#twilio-from"),
   twilioTo: document.querySelector("#twilio-to"),
+  twilioBodyTemplate: document.querySelector("#twilio-body-template"),
   webhookEnabled: document.querySelector("#webhook-enabled"),
   webhookUrl: document.querySelector("#webhook-url"),
+  webhookMessageTemplate: document.querySelector("#webhook-message-template"),
   ruleName: document.querySelector("#rule-name"),
   ruleEvent: document.querySelector("#rule-event"),
   ruleEnabled: document.querySelector("#rule-enabled"),
@@ -39,6 +63,8 @@ const fields = {
   ruleTailNumbers: document.querySelector("#rule-tail-numbers"),
   ruleAircraftTypes: document.querySelector("#rule-aircraft-types"),
   ruleCategories: document.querySelector("#rule-categories"),
+  ruleNotificationProviders: document.querySelector("#rule-notification-providers"),
+  ruleNotificationEmpty: document.querySelector("#rule-notification-empty"),
   ruleMilitary: document.querySelector("#rule-military"),
   ruleHeadingChange: document.querySelector("#rule-heading-change"),
   ruleWindowMinutes: document.querySelector("#rule-window-minutes"),
@@ -54,11 +80,21 @@ const saveButton = document.querySelector("#save");
 const ruleList = document.querySelector("#rule-list");
 const newRuleType = document.querySelector("#new-rule-type");
 const addRuleButton = document.querySelector("#add-rule");
+const testRuleButton = document.querySelector("#test-rule");
 const duplicateRuleButton = document.querySelector("#duplicate-rule");
 const deleteRuleButton = document.querySelector("#delete-rule");
 const testEmailButton = document.querySelector("#test-email");
+const testPushoverButton = document.querySelector("#test-pushover");
 const testTwilioButton = document.querySelector("#test-twilio");
 const testWebhookButton = document.querySelector("#test-webhook");
+const refreshStatusButton = document.querySelector("#refresh-status");
+const workerStatusValue = document.querySelector("#worker-status-value");
+const workerLastPoll = document.querySelector("#worker-last-poll");
+const workerAircraftCount = document.querySelector("#worker-aircraft-count");
+const workerNotificationCount = document.querySelector("#worker-notification-count");
+const workerAdsbSource = document.querySelector("#worker-adsb-source");
+const workerLastError = document.querySelector("#worker-last-error");
+const recentMatches = document.querySelector("#recent-matches");
 const ruleForm = document.querySelector("#rule-form");
 const ruleEmpty = document.querySelector("#rule-empty");
 const ruleEditorTitle = document.querySelector("#rule-editor-title");
@@ -67,8 +103,13 @@ const confirmTitle = document.querySelector("#confirm-title");
 const confirmMessage = document.querySelector("#confirm-message");
 const confirmCancelButton = document.querySelector("#confirm-cancel");
 const confirmAcceptButton = document.querySelector("#confirm-accept");
+const themeMode = document.querySelector("#theme-mode");
+const themeAccent = document.querySelector("#theme-accent");
+const appLogo = document.querySelector("#app-logo");
+const footerIcon = document.querySelector("#footer-icon");
 
 versionLabel.textContent = `UI ${uiVersion}`;
+initThemeControls();
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => requestTabChange(tab.dataset.tab));
@@ -77,11 +118,15 @@ reloadButton.addEventListener("click", loadConfig);
 discardButton.addEventListener("click", () => discardChanges());
 saveButton.addEventListener("click", () => saveConfig());
 addRuleButton.addEventListener("click", addRule);
+testRuleButton.addEventListener("click", testSelectedRule);
 duplicateRuleButton.addEventListener("click", duplicateSelectedRule);
 deleteRuleButton.addEventListener("click", deleteSelectedRule);
 testEmailButton.addEventListener("click", () => testNotification("email"));
+testPushoverButton.addEventListener("click", () => testNotification("pushover"));
 testTwilioButton.addEventListener("click", () => testNotification("twilio"));
 testWebhookButton.addEventListener("click", () => testNotification("webhook"));
+refreshStatusButton.addEventListener("click", () => loadWorkerStatus());
+fields.ruleNotificationProviders.addEventListener("change", handleInput);
 ruleList.addEventListener("click", async (event) => {
   const item = event.target.closest(".rule-item");
   if (!item) return;
@@ -111,6 +156,7 @@ ruleList.addEventListener("click", async (event) => {
 });
 
 document.querySelectorAll("input, select, textarea").forEach((input) => {
+  if (input.dataset.themeControl) return;
   input.addEventListener("input", handleInput);
   input.addEventListener("change", handleInput);
 });
@@ -136,6 +182,49 @@ window.addEventListener("unhandledrejection", (event) => {
 });
 
 loadConfig();
+loadWorkerStatus();
+
+function initThemeControls() {
+  const theme = readThemePreference();
+  themeMode.value = theme.mode;
+  themeAccent.value = theme.accent;
+  applyTheme(theme);
+  themeMode.addEventListener("change", () => saveThemePreference({mode: themeMode.value, accent: themeAccent.value}));
+  themeAccent.addEventListener("change", () => saveThemePreference({mode: themeMode.value, accent: themeAccent.value}));
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (themeMode.value === "system") {
+      applyTheme({mode: "system", accent: themeAccent.value});
+    }
+  });
+}
+
+function readThemePreference() {
+  try {
+    return {...defaultTheme, ...JSON.parse(localStorage.getItem(themeStorageKey) || "{}")};
+  } catch {
+    return {...defaultTheme};
+  }
+}
+
+function saveThemePreference(theme) {
+  const nextTheme = {
+    mode: ["light", "dark", "system"].includes(theme.mode) ? theme.mode : defaultTheme.mode,
+    accent: ["teal", "blue", "amber", "rose", "violet"].includes(theme.accent) ? theme.accent : defaultTheme.accent,
+  };
+  localStorage.setItem(themeStorageKey, JSON.stringify(nextTheme));
+  applyTheme(nextTheme);
+}
+
+function applyTheme(theme) {
+  const resolvedMode =
+    theme.mode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : theme.mode === "dark" ? "dark" : "light";
+  document.documentElement.dataset.mode = resolvedMode;
+  document.documentElement.dataset.themeMode = theme.mode;
+  document.documentElement.dataset.accent = theme.accent;
+  const assets = themeAssets[theme.accent] || themeAssets.teal;
+  appLogo.src = assets.logo;
+  footerIcon.src = assets.icon;
+}
 
 async function loadConfig() {
   if (
@@ -281,6 +370,8 @@ function activateTab(tabName) {
   if (tabName === "json") {
     commitForms();
     renderJson();
+  } else if (tabName === "dashboard") {
+    loadWorkerStatus();
   } else if (previousTab === "json" && fields.json.value.trim()) {
     if (syncFromJson()) {
       renderForms();
@@ -296,10 +387,53 @@ function renderAll() {
   renderJson();
 }
 
+async function loadWorkerStatus() {
+  try {
+    const response = await fetch(`${apiBase}/status`);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || "Unable to load worker status");
+    }
+    renderWorkerStatus(payload);
+  } catch (error) {
+    renderWorkerStatus({status: "error", last_error: error.message || "Unable to load worker status", recent_matches: []});
+  }
+}
+
+function renderWorkerStatus(status) {
+  workerStatusValue.textContent = status.status || "unknown";
+  workerLastPoll.textContent = formatDateTime(status.last_poll_at) || "Never";
+  workerAircraftCount.textContent = status.aircraft_count ?? "0";
+  workerNotificationCount.textContent = status.notification_count ?? "0";
+  workerAdsbSource.textContent = status.adsb_url || "Unknown";
+  workerLastError.textContent = status.last_error || "None";
+
+  recentMatches.replaceChildren();
+  const matches = Array.isArray(status.recent_matches) ? status.recent_matches : [];
+  if (matches.length === 0) {
+    recentMatches.append(emptyState("No recent matches"));
+    return;
+  }
+  matches.slice(0, 10).forEach((match) => {
+    const item = document.createElement("div");
+    item.className = "match-item";
+    const title = document.createElement("strong");
+    title.textContent = `${match.rule_name || "Rule"}: ${match.aircraft_label || match.hex || "Aircraft"}`;
+    const meta = document.createElement("span");
+    const type = match.aircraft_type || "unknown type";
+    const distance = match.distance_miles ?? "unknown";
+    const altitude = match.altitude_ft === null || match.altitude_ft === undefined ? "unknown altitude" : `${match.altitude_ft} ft`;
+    meta.textContent = `${type} · ${distance} mi · ${altitude}`;
+    item.append(title, meta);
+    recentMatches.append(item);
+  });
+}
+
 function renderForms() {
   if (!config) return;
   const notifications = config.notifications || {};
   const email = notifications.email || {};
+  const pushover = notifications.pushover || {};
   const twilio = notifications.twilio || {};
   const webhook = notifications.webhook || {};
 
@@ -317,15 +451,29 @@ function renderForms() {
   fields.emailPassword.value = email.password || "";
   fields.emailFrom.value = email.from || "";
   fields.emailTo.value = listToText(email.to);
+  fields.emailSubjectTemplate.value = email.subject_template || "";
+  fields.emailBodyTemplate.value = email.body_template || "";
+
+  fields.pushoverEnabled.checked = Boolean(pushover.enabled);
+  fields.pushoverAppToken.value = pushover.app_token || "";
+  fields.pushoverUserKey.value = pushover.user_key || "";
+  fields.pushoverDevice.value = pushover.device || "";
+  fields.pushoverPriority.value = pushover.priority ?? "";
+  fields.pushoverSound.value = pushover.sound || "";
+  fields.pushoverTitleTemplate.value = pushover.title_template || pushover.title || "";
+  fields.pushoverMessageTemplate.value = pushover.message_template || pushover.body_template || pushover.template || "";
 
   fields.twilioEnabled.checked = Boolean(twilio.enabled);
   fields.twilioAccountSid.value = twilio.account_sid || "";
-  fields.twilioAuthToken.value = twilio.auth_token || "";
+  fields.twilioApiKeySid.value = twilio.api_key_sid || "";
+  fields.twilioApiKeySecret.value = twilio.api_key_secret || "";
   fields.twilioFrom.value = twilio.from || "";
   fields.twilioTo.value = twilio.to || "";
+  fields.twilioBodyTemplate.value = twilio.body_template || twilio.message_template || twilio.template || "";
 
   fields.webhookEnabled.checked = Boolean(webhook.enabled);
   fields.webhookUrl.value = webhook.url || "";
+  fields.webhookMessageTemplate.value = webhook.message_template || webhook.body_template || webhook.template || "";
   renderRuleEditor();
 }
 
@@ -362,6 +510,7 @@ function renderRuleEditor() {
   const hasRule = Boolean(rule);
   ruleForm.classList.toggle("hidden", !hasRule);
   ruleEmpty.classList.toggle("hidden", hasRule);
+  testRuleButton.disabled = !hasRule;
   deleteRuleButton.disabled = !hasRule;
   duplicateRuleButton.disabled = !hasRule;
   ruleEditorTitle.textContent = hasRule ? "Rule Details" : "Rule Details";
@@ -380,7 +529,25 @@ function renderRuleEditor() {
   fields.ruleMilitary.checked = rule.military !== false;
   fields.ruleHeadingChange.value = rule.circling_min_heading_change_deg ?? 270;
   fields.ruleWindowMinutes.value = rule.circling_window_minutes ?? 8;
+  renderRuleNotificationProviders(rule);
   updateRuleFieldVisibility(rule.event || "tail");
+}
+
+function renderRuleNotificationProviders(rule) {
+  const available = enabledNotificationProviders();
+  const selected = new Set(Array.isArray(rule.notification_providers) ? rule.notification_providers : available);
+  fields.ruleNotificationProviders.replaceChildren();
+  fields.ruleNotificationEmpty.classList.toggle("hidden", available.length > 0);
+  available.forEach((provider) => {
+    const label = document.createElement("label");
+    label.className = "switch";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.value = provider;
+    input.checked = selected.has(provider);
+    label.append(input, document.createTextNode(providerLabel(provider)));
+    fields.ruleNotificationProviders.append(label);
+  });
 }
 
 function renderJson() {
@@ -397,9 +564,15 @@ function syncFromForms() {
   };
   config.poll_seconds = integerValue(fields.pollSeconds, 30);
   config.stale_aircraft_seconds = integerValue(fields.staleAircraftSeconds, 90);
+  const notifications = config.notifications || {};
+  const existingEmail = notifications.email || {};
+  const existingPushover = notifications.pushover || {};
+  const existingTwilio = notifications.twilio || {};
+  const existingWebhook = notifications.webhook || {};
   config.notifications = {
-    ...config.notifications,
+    ...notifications,
     email: {
+      ...existingEmail,
       enabled: fields.emailEnabled.checked,
       smtp_host: fields.emailSmtpHost.value.trim(),
       smtp_port: integerValue(fields.emailSmtpPort, 587),
@@ -408,21 +581,39 @@ function syncFromForms() {
       password: fields.emailPassword.value.trim(),
       from: fields.emailFrom.value.trim(),
       to: textToList(fields.emailTo.value),
+      subject_template: fields.emailSubjectTemplate.value.trim(),
+      body_template: fields.emailBodyTemplate.value.trim(),
+    },
+    pushover: {
+      ...existingPushover,
+      enabled: fields.pushoverEnabled.checked,
+      app_token: fields.pushoverAppToken.value.trim(),
+      user_key: fields.pushoverUserKey.value.trim(),
+      device: fields.pushoverDevice.value.trim(),
+      priority: optionalIntegerValue(fields.pushoverPriority),
+      sound: fields.pushoverSound.value.trim(),
+      title_template: fields.pushoverTitleTemplate.value.trim(),
+      message_template: fields.pushoverMessageTemplate.value.trim(),
     },
     twilio: {
+      ...existingTwilio,
       enabled: fields.twilioEnabled.checked,
       account_sid: fields.twilioAccountSid.value.trim(),
-      auth_token: fields.twilioAuthToken.value.trim(),
+      api_key_sid: fields.twilioApiKeySid.value.trim(),
+      api_key_secret: fields.twilioApiKeySecret.value.trim(),
       from: fields.twilioFrom.value.trim(),
       to: fields.twilioTo.value.trim(),
+      body_template: fields.twilioBodyTemplate.value.trim(),
     },
     webhook: {
+      ...existingWebhook,
       enabled: fields.webhookEnabled.checked,
       url: fields.webhookUrl.value.trim(),
+      message_template: fields.webhookMessageTemplate.value.trim(),
     },
   };
-
   syncSelectedRuleFromForms();
+  normalizeRuleNotificationProviders(config);
 }
 
 function syncSelectedRuleFromForms() {
@@ -439,11 +630,19 @@ function syncSelectedRuleFromForms() {
     rule.tail_numbers = textToList(fields.ruleTailNumbers.value);
     rule.aircraft_types = textToList(fields.ruleAircraftTypes.value);
     rule.categories = textToList(fields.ruleCategories.value);
+    rule.notification_providers = selectedRuleNotificationProviders();
     rule.military = fields.ruleMilitary.checked;
     rule.circling_min_heading_change_deg = numberValue(fields.ruleHeadingChange);
     rule.circling_window_minutes = integerValue(fields.ruleWindowMinutes);
     pruneRuleForEvent(rule);
   }
+}
+
+function selectedRuleNotificationProviders() {
+  const available = new Set(enabledNotificationProviders());
+  return Array.from(fields.ruleNotificationProviders.querySelectorAll("input:checked"))
+    .map((input) => input.value)
+    .filter((provider) => available.has(provider));
 }
 
 function syncFromJson() {
@@ -507,6 +706,47 @@ async function deleteSelectedRule() {
     showSuccess(`Deleted rule: ${ruleName}`);
   } catch (error) {
     showErrors([error.message || "Unable to delete rule"]);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function testSelectedRule() {
+  if (!config || !getSelectedRule()) return;
+  if (isDirty) {
+    const shouldSave = await confirmAction({
+      title: "Save before test?",
+      message: "Save this rule before testing it against live ADS-B data.",
+      acceptLabel: "Save",
+    });
+    if (!shouldSave) return;
+    const saved = await saveConfig({successMessage: "Saved rule before test", quiet: true});
+    if (!saved) return;
+  }
+
+  const rule = getSelectedRule();
+  if (!rule) return;
+  clearMessage();
+  setStatus(`Testing ${rule.name || "selected rule"}...`);
+  setBusy(true);
+  try {
+    const response = await fetch(`${apiBase}/rules/${encodeURIComponent(rule.id)}/test`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || "Unable to test rule");
+    }
+    if (!payload.matched) {
+      showSuccess(`No live matches for ${payload.rule?.name || rule.name || "selected rule"}. No notifications sent.`);
+      return;
+    }
+    const first = payload.matches?.[0];
+    const aircraft = first ? `${first.aircraft_label} ${first.distance_miles} mi` : `${payload.match_count} match`;
+    showSuccess(`Sent ${payload.sent_count} notification${payload.sent_count === 1 ? "" : "s"} for ${payload.rule?.name || rule.name}: ${aircraft}.`);
+  } catch (error) {
+    showErrors([error.message || "Unable to test rule"]);
   } finally {
     setBusy(false);
   }
@@ -594,7 +834,7 @@ async function discardChanges() {
 }
 
 function normalizeConfig(payload) {
-  return {
+  return normalizeRuleNotificationProviders({
     ...payload,
     config_revision: Number(payload.config_revision) || 1,
     adsb_url: payload.adsb_url || "",
@@ -606,12 +846,24 @@ function normalizeConfig(payload) {
     stale_aircraft_seconds: payload.stale_aircraft_seconds ?? 90,
     notifications: payload.notifications || {},
     rules: normalizeRules(payload.rules),
-  };
+  });
 }
 
 function normalizeRules(rules) {
   if (!Array.isArray(rules)) return [];
   return rules.map((rule) => ({...rule, id: rule.id || createClientRuleId(), enabled: rule.enabled !== false}));
+}
+
+function normalizeRuleNotificationProviders(payload) {
+  const available = enabledNotificationProviders(payload);
+  payload.rules = (payload.rules || []).map((rule) => {
+    const selected = Array.isArray(rule.notification_providers) ? rule.notification_providers : available;
+    return {
+      ...rule,
+      notification_providers: selected.filter((provider) => available.includes(provider)),
+    };
+  });
+  return payload;
 }
 
 function cloneConfig(payload) {
@@ -681,6 +933,7 @@ function validateConfig(payload) {
   if (duplicateNames.length > 0) {
     errors.push(validationError(`Rule names must be unique: ${duplicateNames.join(", ")}.`, fields.ruleName));
   }
+  const availableProviders = enabledNotificationProviders(payload);
 
   (payload.rules || []).forEach((rule, index) => {
     const label = rule.name || `Rule ${index + 1}`;
@@ -714,6 +967,13 @@ function validateConfig(payload) {
     if (rule.event === "circling" && !isRequiredNumber(rule.circling_window_minutes)) {
       errors.push(ruleValidationError(`${label} needs a circling window.`, rule, "windowMinutes"));
     }
+    if (
+      rule.enabled !== false &&
+      availableProviders.length > 0 &&
+      (!Array.isArray(rule.notification_providers) || rule.notification_providers.length === 0)
+    ) {
+      errors.push(ruleValidationError(`${label} needs at least one notification type.`, rule, "notificationProviders"));
+    }
   });
 
   return errors;
@@ -745,6 +1005,7 @@ function ruleFieldForKey(key) {
     tailNumbers: fields.ruleTailNumbers,
     aircraftTypes: fields.ruleAircraftTypes,
     categories: fields.ruleCategories,
+    notificationProviders: fields.ruleNotificationProviders,
     headingChange: fields.ruleHeadingChange,
     windowMinutes: fields.ruleWindowMinutes,
   }[key];
@@ -758,6 +1019,7 @@ function createRule(eventType) {
     enabled: true,
     radius_miles: 25,
     cooldown_minutes: 30,
+    notification_providers: enabledNotificationProviders(),
   };
   if (eventType === "tail") {
     return {...base, tail_numbers: ["N12345"]};
@@ -824,6 +1086,14 @@ function pruneRuleForEvent(rule) {
   }
 }
 
+function enabledNotificationProviders(payload = config) {
+  const notifications = payload?.notifications || {};
+  return notificationProviderOrder.filter((provider) => {
+    const providerConfig = notifications[provider];
+    return providerConfig && providerConfig.enabled === true;
+  });
+}
+
 function updateRuleFieldVisibility(eventType) {
   document.querySelectorAll(".tail-field").forEach((node) => node.classList.toggle("hidden", eventType !== "tail"));
   document.querySelectorAll(".aircraft-type-field").forEach((node) => {
@@ -868,6 +1138,13 @@ function integerValue(input, fallback = null) {
   return value === null ? null : Math.trunc(value);
 }
 
+function optionalIntegerValue(input) {
+  const value = input.value.trim();
+  if (value === "") return "";
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : "";
+}
+
 function listToText(value) {
   if (Array.isArray(value)) return value.join(", ");
   return value || "";
@@ -908,6 +1185,7 @@ function eventLabel(eventType) {
 function providerLabel(provider) {
   return {
     email: "email",
+    pushover: "Pushover",
     twilio: "Twilio SMS",
     webhook: "webhook",
   }[provider] || provider;
@@ -919,6 +1197,13 @@ function ruleSummary(rule) {
   if (rule.event === "military") return "Military flag";
   if (rule.event === "circling") return `${rule.circling_min_heading_change_deg ?? 270} deg`;
   return `${rule.cooldown_minutes ?? 30} min`;
+}
+
+function formatDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
 }
 
 function isRuleField(target) {

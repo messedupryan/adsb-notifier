@@ -13,14 +13,18 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from adsb_notifier.config import parse_settings
-from adsb_notifier.notifiers import send_test_notification
+from adsb_notifier.adsb import fetch_aircraft_for_settings
+from adsb_notifier.config import NOTIFICATION_PROVIDERS, parse_settings
+from adsb_notifier.notifiers import NotificationFanout, send_test_notification
+from adsb_notifier.rules import RuleEngine
+from adsb_notifier.status import read_status
 
 LOGGER = logging.getLogger(__name__)
 
 
 class ConfigApiHandler(BaseHTTPRequestHandler):
     config_path: Path
+    status_path: Path
     backup_retention: int = 20
 
     def do_GET(self) -> None:
@@ -30,6 +34,9 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             return
         if route == ["config"]:
             self._send_json(_read_config(self.config_path))
+            return
+        if route == ["status"]:
+            self._send_json(read_status(self.status_path))
             return
         if route == ["rules"]:
             config = _read_config(self.config_path)
@@ -44,6 +51,9 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
         if route == ["notifications", "test"]:
             self._test_notification()
             return
+        if len(route) == 3 and route[0] == "rules" and route[2] == "test":
+            self._test_rule(route[1])
+            return
         if route != ["rules"]:
             self._send_error(HTTPStatus.NOT_FOUND, "not found")
             return
@@ -53,7 +63,9 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             config = _ensure_rule_ids(_read_config(self.config_path))
             _check_revision(self.headers.get("If-Match"), config)
             rule = _ensure_rule_id(rule)
+            rule = _normalize_rule_notification_providers(rule, config)
             config.setdefault("rules", []).append(rule)
+            config = _normalize_notification_provider_selections(config)
             parse_settings(config)
             config = _bump_revision(config)
             _write_config(self.config_path, config, create_backup=True, backup_retention=self.backup_retention)
@@ -92,6 +104,41 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             return
 
         self._send_json({"ok": True, "provider": provider})
+
+    def _test_rule(self, rule_id: str) -> None:
+        try:
+            config = _read_config(self.config_path)
+            rule = _find_rule(config, rule_id)
+            test_config = dict(config)
+            test_config["rules"] = [rule]
+            settings = parse_settings(test_config)
+            aircraft = fetch_aircraft_for_settings(settings)
+            sightings = RuleEngine(settings).evaluate(aircraft)
+            fanout = NotificationFanout(settings.notifications)
+            for sighting in sightings:
+                fanout.send(sighting)
+        except KeyError:
+            self._send_error(HTTPStatus.NOT_FOUND, "rule not found")
+            return
+        except (TypeError, ValueError) as exc:
+            LOGGER.warning("rule test rejected: %s", exc)
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        except Exception as exc:
+            LOGGER.exception("rule test failed")
+            self._send_error(HTTPStatus.BAD_GATEWAY, f"rule test failed: {exc}")
+            return
+
+        self._send_json(
+            {
+                "ok": True,
+                "rule": rule,
+                "matched": bool(sightings),
+                "match_count": len(sightings),
+                "sent_count": len(sightings),
+                "matches": [_sighting_summary(sighting) for sighting in sightings],
+            }
+        )
 
     def do_PUT(self) -> None:
         route = _route(self.path)
@@ -140,6 +187,7 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             payload = _ensure_rule_ids(self._read_json_body())
             current = _read_config(self.config_path)
             _check_revision(self.headers.get("If-Match"), current)
+            payload = _normalize_notification_provider_selections(payload)
             parse_settings(payload)
             payload = _bump_revision(payload, current)
             _write_config(self.config_path, payload, create_backup=True, backup_retention=self.backup_retention)
@@ -167,7 +215,7 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             rules = config.get("rules", [])
             for index, existing_rule in enumerate(rules):
                 if existing_rule.get("id") == rule_id:
-                    rules[index] = rule
+                    rules[index] = _normalize_rule_notification_providers(rule, config)
                     break
             else:
                 self._send_error(HTTPStatus.NOT_FOUND, "rule not found")
@@ -228,6 +276,11 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
 def main() -> None:
     parser = argparse.ArgumentParser(description="Manage ADS-B notifier configuration.")
     parser.add_argument("--config", default="/config/config.json", help="Path to JSON config file.")
+    parser.add_argument(
+        "--status-file",
+        default=os.environ.get("ADSB_STATUS_FILE", "status.json"),
+        help="Path to worker status JSON file served by GET /status.",
+    )
     parser.add_argument("--host", default="0.0.0.0", help="Host interface to bind.")
     parser.add_argument("--port", type=int, default=8000, help="Port to bind.")
     parser.add_argument(
@@ -245,6 +298,7 @@ def main() -> None:
         _write_config(config_path, _default_config())
 
     ConfigApiHandler.config_path = config_path
+    ConfigApiHandler.status_path = Path(args.status_file)
     ConfigApiHandler.backup_retention = max(0, args.backup_retention)
     server = ThreadingHTTPServer((args.host, args.port), ConfigApiHandler)
     LOGGER.info(
@@ -259,7 +313,7 @@ def main() -> None:
 
 def _read_config(path: Path) -> dict[str, Any]:
     config = json.loads(path.read_text(encoding="utf-8"))
-    normalized = _ensure_revision(_ensure_rule_ids(config))
+    normalized = _normalize_notification_provider_selections(_ensure_revision(_ensure_rule_ids(config)))
     if normalized != config:
         _write_config(path, normalized)
     return normalized
@@ -327,6 +381,62 @@ def _ensure_rule_id(rule: dict[str, Any], seen: set[str] | None = None) -> dict[
         rule_id = f"rule-{uuid.uuid4().hex[:12]}"
     next_rule["id"] = rule_id
     return next_rule
+
+
+def _find_rule(config: dict[str, Any], rule_id: str) -> dict[str, Any]:
+    for rule in config.get("rules", []):
+        if rule.get("id") == rule_id:
+            return rule
+    raise KeyError(rule_id)
+
+
+def _sighting_summary(sighting: Any) -> dict[str, Any]:
+    plane = sighting.aircraft
+    return {
+        "rule_name": sighting.rule_name,
+        "event_type": sighting.event_type,
+        "aircraft_label": plane.label,
+        "registration": plane.registration,
+        "flight": plane.flight,
+        "hex": plane.hex,
+        "aircraft_type": plane.aircraft_type or plane.category,
+        "distance_miles": round(sighting.distance_miles, 2),
+        "altitude_ft": plane.altitude_ft,
+        "notification_providers": sorted(sighting.notification_providers or []),
+    }
+
+
+def _normalize_notification_provider_selections(config: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(config)
+    normalized["rules"] = [
+        _normalize_rule_notification_providers(rule, normalized)
+        for rule in normalized.get("rules", [])
+    ]
+    return normalized
+
+
+def _normalize_rule_notification_providers(rule: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    next_rule = dict(rule)
+    enabled = _enabled_notification_providers(config)
+    if "notification_providers" in next_rule:
+        selected = {
+            str(provider).strip().lower()
+            for provider in next_rule.get("notification_providers", [])
+            if str(provider).strip()
+        }
+        next_rule["notification_providers"] = sorted((selected & NOTIFICATION_PROVIDERS) & enabled)
+        return next_rule
+    next_rule["notification_providers"] = sorted(enabled)
+    return next_rule
+
+
+def _enabled_notification_providers(config: dict[str, Any]) -> set[str]:
+    notifications = config.get("notifications", {})
+    return {
+        provider
+        for provider in NOTIFICATION_PROVIDERS
+        if isinstance(notifications.get(provider), dict) and notifications[provider].get("enabled", True)
+    }
 
 
 class RevisionConflict(ValueError):

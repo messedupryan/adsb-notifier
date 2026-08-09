@@ -1,5 +1,10 @@
 {
   "adsb_url": "http://readsb.default.svc.cluster.local/tar1090/data/aircraft.json",
+  "adsb_source": {
+    "provider": "airplanes_live",
+    "query": "point",
+    "radius_miles": 40
+  },
   "home": {
     "lat": 40.7608,
     "lon": -111.8910
@@ -15,18 +20,33 @@
       "username": "env:SMTP_USERNAME",
       "password": "env:SMTP_PASSWORD",
       "from": "env:SMTP_USERNAME",
-      "to": ["env:SMTP_USERNAME"]
+      "to": ["env:SMTP_USERNAME"],
+      "subject_template": "ADS-B alert: {aircraft_label} matched {rule_name}",
+      "body_template": "{message}\n\nAircraft: {aircraft_label}\nRegistration: {registration}\nFlight: {flight}\nType: {aircraft_type}\nDescription: {description}\nOperator: {operator}\nAltitude: {altitude_label}\nDistance: {distance_miles:.1f} mi\nTrack: {track_label}\nSpeed: {ground_speed_label}\nVertical rate: {vertical_rate_label}\nSquawk: {squawk}\nSeen: {seen_label}\nHex: {hex}\nRule: {rule_name}\nObserved: {observed_at}"
     },
     "twilio": {
       "enabled": false,
       "account_sid": "env:TWILIO_ACCOUNT_SID",
-      "auth_token": "env:TWILIO_AUTH_TOKEN",
+      "api_key_sid": "env:TWILIO_API_KEY_SID",
+      "api_key_secret": "env:TWILIO_API_KEY_SECRET",
       "from": "env:TWILIO_FROM",
-      "to": "env:TWILIO_TO"
+      "to": "env:TWILIO_TO",
+      "body_template": "{rule_name}: {aircraft_label} {distance_miles_1} mi away at {altitude_label}"
+    },
+    "pushover": {
+      "enabled": false,
+      "app_token": "env:PUSHOVER_APP_TOKEN",
+      "user_key": "env:PUSHOVER_USER_KEY",
+      "device": "",
+      "priority": 0,
+      "sound": "pushover",
+      "title_template": "ADS-B: {aircraft_label}",
+      "message_template": "{rule_name}: {aircraft_label} ({aircraft_type}) {distance_miles_1} mi away at {altitude_label}"
     },
     "webhook": {
       "enabled": false,
-      "url": "env:ALERT_WEBHOOK_URL"
+      "url": "env:ALERT_WEBHOOK_URL",
+      "message_template": "{rule_name}: {aircraft_label} ({aircraft_type}) {distance_miles_1} mi away at {altitude_label}"
     },
     "twitter": {
       "enabled": false

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 
@@ -12,6 +13,8 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = ThreadingHTTPServer(("127.0.0.1", 8766), NoCacheHandler)
-    print("Serving UI on http://127.0.0.1:8766/")
+    host = os.environ.get("UI_HOST", "127.0.0.1")
+    port = int(os.environ.get("UI_PORT", "8766"))
+    server = ThreadingHTTPServer((host, port), NoCacheHandler)
+    print(f"Serving UI on http://{host}:{port}/")
     server.serve_forever()

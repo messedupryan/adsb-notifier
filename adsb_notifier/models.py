@@ -31,5 +31,5 @@ class Sighting:
     distance_miles: float
     rule_name: str
     event_type: str
+    notification_providers: set[str] | None = None
     observed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-

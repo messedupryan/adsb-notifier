@@ -2,6 +2,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: adsb-notifier-config
+  namespace: adsb
   labels:
     app.kubernetes.io/name: adsb-notifier
 spec:

@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "adsb-notifier.fullname" . }}-worker
+  labels:
+    {{- include "adsb-notifier.componentLabels" (dict "root" . "component" "worker") | nindent 4 }}
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "adsb-notifier.componentSelectorLabels" (dict "root" . "component" "worker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "adsb-notifier.componentSelectorLabels" (dict "root" . "component" "worker") | nindent 8 }}
+    spec:
+      containers:
+        - name: worker
+          image: {{ include "adsb-notifier.image" (dict "root" . "repository" .Values.worker.image.repository) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --config
+            - http://{{ include "adsb-notifier.fullname" . }}-api:{{ .Values.api.service.port }}/config
+            - --status-file
+            - {{ .Values.config.statusPath }}
+          envFrom:
+            - secretRef:
+                name: {{ include "adsb-notifier.secretName" . }}
+                optional: true
+          volumeMounts:
+            - name: config
+              mountPath: /status
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: {{ include "adsb-notifier.pvcName" . }}

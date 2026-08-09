@@ -9,6 +9,7 @@ k8s/secret.*.yaml
 # Local runtime config and generated state
 config.dev.json
 config.local.json
+status.json
 backups/
 *.log
 *.pid

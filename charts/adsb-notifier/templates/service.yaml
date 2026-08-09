@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "adsb-notifier.fullname" . }}-api
+  labels:
+    {{- include "adsb-notifier.componentLabels" (dict "root" . "component" "api") | nindent 4 }}
+spec:
+  selector:
+    {{- include "adsb-notifier.componentSelectorLabels" (dict "root" . "component" "api") | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.api.service.port }}
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "adsb-notifier.fullname" . }}-ui
+  labels:
+    {{- include "adsb-notifier.componentLabels" (dict "root" . "component" "ui") | nindent 4 }}
+spec:
+  type: {{ .Values.ui.service.type }}
+  selector:
+    {{- include "adsb-notifier.componentSelectorLabels" (dict "root" . "component" "ui") | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.ui.service.port }}
+      targetPort: http

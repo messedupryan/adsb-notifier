@@ -11,10 +11,12 @@ from adsb_notifier.api import (
     _backup_config,
     _ensure_revision,
     _ensure_rule_ids,
+    _normalize_notification_provider_selections,
     _read_config,
     _write_config,
 )
 from adsb_notifier.config import load_settings_data, parse_settings
+from adsb_notifier.models import Aircraft
 
 
 def valid_config() -> dict:
@@ -50,6 +52,29 @@ def config_with_email() -> dict:
     return payload
 
 
+def config_with_pushover() -> dict:
+    payload = valid_config()
+    payload["notifications"] = {
+        "pushover": {
+            "enabled": True,
+            "app_token": "env:PUSHOVER_APP_TOKEN",
+            "user_key": "env:PUSHOVER_USER_KEY",
+        }
+    }
+    return payload
+
+
+def config_with_enabled_notifications() -> dict:
+    payload = valid_config()
+    payload["notifications"] = {
+        "email": {"enabled": True, "smtp_host": "smtp.example.test", "from": "from@example.test", "to": ["to@example.test"]},
+        "pushover": {"enabled": True, "app_token": "env:PUSHOVER_APP_TOKEN", "user_key": "env:PUSHOVER_USER_KEY"},
+        "twilio": {"enabled": False},
+        "webhook": {"enabled": True, "url": "https://example.test/webhook"},
+    }
+    return payload
+
+
 def test_write_config_round_trips_json(tmp_path):
     path = tmp_path / "config.json"
     payload = valid_config()
@@ -70,6 +95,26 @@ def test_read_config_backfills_rule_ids(tmp_path):
     assert config["rules"][0]["id"].startswith("rule-")
     assert config["config_revision"] == 1
     assert json.loads(path.read_text())["rules"][0]["id"] == config["rules"][0]["id"]
+
+
+def test_read_config_backfills_rule_notification_providers(tmp_path):
+    path = tmp_path / "config.json"
+    payload = config_with_enabled_notifications()
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    config = _read_config(path)
+
+    assert config["rules"][0]["notification_providers"] == ["email", "pushover", "webhook"]
+
+
+def test_disabled_global_provider_is_pruned_from_rules():
+    payload = config_with_enabled_notifications()
+    payload["rules"][0]["notification_providers"] = ["email", "pushover", "twilio", "webhook"]
+    payload["notifications"]["pushover"]["enabled"] = False
+
+    config = _normalize_notification_provider_selections(payload)
+
+    assert config["rules"][0]["notification_providers"] == ["email", "webhook"]
 
 
 def test_ensure_rule_ids_replaces_duplicate_ids():
@@ -317,8 +362,8 @@ def test_notification_test_endpoint_sends_provider(tmp_path, monkeypatch):
     _write_config(path, config_with_email())
     sent = []
 
-    def fake_send_email(config, message):
-        sent.append((config, message))
+    def fake_send_email(config, message, subject=None):
+        sent.append((config, message, subject))
 
     monkeypatch.setattr("adsb_notifier.notifiers.send_email", fake_send_email)
 
@@ -328,6 +373,30 @@ def test_notification_test_endpoint_sends_provider(tmp_path, monkeypatch):
     assert response == {"ok": True, "provider": "email"}
     assert sent[0][0]["smtp_host"] == "smtp.example.test"
     assert sent[0][1] == "ADS-B Notifier test notification"
+    assert sent[0][2] == "ADS-B alert"
+
+
+def test_status_endpoint_returns_worker_status(tmp_path):
+    path = tmp_path / "config.json"
+    status_path = tmp_path / "status.json"
+    _write_config(path, valid_config())
+    status_path.write_text(json.dumps({"status": "ok", "aircraft_count": 12}), encoding="utf-8")
+
+    with api_server(path, status_path=status_path) as base_url:
+        response = request_json(f"{base_url}/status")
+
+    assert response == {"status": "ok", "aircraft_count": 12}
+
+
+def test_status_endpoint_returns_unknown_when_missing(tmp_path):
+    path = tmp_path / "config.json"
+    _write_config(path, valid_config())
+
+    with api_server(path, status_path=tmp_path / "missing-status.json") as base_url:
+        response = request_json(f"{base_url}/status")
+
+    assert response["status"] == "unknown"
+    assert response["recent_matches"] == []
 
 
 def test_notification_test_endpoint_rejects_disabled_provider(tmp_path):
@@ -347,7 +416,7 @@ def test_notification_test_endpoint_returns_error_when_send_fails(tmp_path, monk
     path = tmp_path / "config.json"
     _write_config(path, config_with_email())
 
-    def fake_send_email(config, message):
+    def fake_send_email(config, message, subject=None):
         raise RuntimeError("smtp auth failed")
 
     monkeypatch.setattr("adsb_notifier.notifiers.send_email", fake_send_email)
@@ -357,6 +426,97 @@ def test_notification_test_endpoint_returns_error_when_send_fails(tmp_path, monk
             request_json(f"{base_url}/notifications/test", method="POST", payload={"provider": "email"})
 
     assert exc.value.code == 502
+
+
+def test_notification_test_endpoint_sends_pushover(tmp_path, monkeypatch):
+    path = tmp_path / "config.json"
+    _write_config(path, config_with_pushover())
+    sent = []
+
+    def fake_send_pushover(config, message, title=None):
+        sent.append((config, message, title))
+
+    monkeypatch.setattr("adsb_notifier.notifiers.send_pushover", fake_send_pushover)
+
+    with api_server(path) as base_url:
+        response = request_json(f"{base_url}/notifications/test", method="POST", payload={"provider": "pushover"})
+
+    assert response == {"ok": True, "provider": "pushover"}
+    assert sent[0][0]["app_token"] == "env:PUSHOVER_APP_TOKEN"
+    assert sent[0][1] == "ADS-B Notifier test notification"
+    assert sent[0][2] == "ADS-B alert"
+
+
+def test_rule_test_endpoint_sends_when_rule_matches_live_data(tmp_path, monkeypatch):
+    path = tmp_path / "config.json"
+    payload = config_with_pushover()
+    payload["rules"][0]["id"] = "rule-target"
+    payload["rules"][0]["notification_providers"] = ["pushover"]
+    _write_config(path, payload)
+    sent = []
+
+    monkeypatch.setattr(
+        "adsb_notifier.api.fetch_aircraft_for_settings",
+        lambda settings: [
+            Aircraft(
+                hex="A12345",
+                registration="N12345",
+                aircraft_type="C172",
+                lat=40.7608,
+                lon=-111.8910,
+                altitude_ft=5500,
+            )
+        ],
+    )
+    monkeypatch.setattr("adsb_notifier.notifiers.send_pushover", lambda config, message, title=None: sent.append((message, title)))
+
+    with api_server(path) as base_url:
+        response = request_json(f"{base_url}/rules/rule-target/test", method="POST")
+
+    assert response["ok"] is True
+    assert response["matched"] is True
+    assert response["sent_count"] == 1
+    assert response["matches"][0]["aircraft_label"] == "N12345"
+    assert sent == [("target: N12345 (C172) 0.0 mi away at 5500 ft", "ADS-B alert")]
+
+
+def test_rule_test_endpoint_does_not_send_when_rule_has_no_live_match(tmp_path, monkeypatch):
+    path = tmp_path / "config.json"
+    payload = config_with_pushover()
+    payload["rules"][0]["id"] = "rule-target"
+    _write_config(path, payload)
+    sent = []
+
+    monkeypatch.setattr(
+        "adsb_notifier.api.fetch_aircraft_for_settings",
+        lambda settings: [
+            Aircraft(
+                hex="A99999",
+                registration="N99999",
+                lat=40.7608,
+                lon=-111.8910,
+                altitude_ft=5500,
+            )
+        ],
+    )
+    monkeypatch.setattr("adsb_notifier.notifiers.send_pushover", lambda config, message, title=None: sent.append((message, title)))
+
+    with api_server(path) as base_url:
+        response = request_json(f"{base_url}/rules/rule-target/test", method="POST")
+
+    assert response["ok"] is True
+    assert response["matched"] is False
+    assert response["sent_count"] == 0
+    assert response["matches"] == []
+    assert sent == []
+
+
+def test_pushover_enabled_requires_app_token_and_user_key():
+    payload = valid_config()
+    payload["notifications"] = {"pushover": {"enabled": True, "app_token": ""}}
+
+    with pytest.raises(ValueError, match="pushover notifications require app_token, user_key"):
+        parse_settings(payload)
 
 
 def test_delete_last_rule_is_rejected(tmp_path):
@@ -372,15 +532,17 @@ def test_delete_last_rule_is_rejected(tmp_path):
 
 
 class api_server:
-    def __init__(self, config_path, backup_retention: int = 20):
+    def __init__(self, config_path, backup_retention: int = 20, status_path=None):
         self.config_path = config_path
         self.backup_retention = backup_retention
+        self.status_path = status_path or config_path.parent / "status.json"
         self.server = None
         self.thread = None
         self.base_url = ""
 
     def __enter__(self):
         ConfigApiHandler.config_path = self.config_path
+        ConfigApiHandler.status_path = self.status_path
         ConfigApiHandler.backup_retention = self.backup_retention
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), ConfigApiHandler)
         host, port = self.server.server_address

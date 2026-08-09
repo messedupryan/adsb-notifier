@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: adsb-notifier-worker
+  namespace: adsb
   labels:
     app.kubernetes.io/name: adsb-notifier
     app.kubernetes.io/component: worker
@@ -19,13 +20,16 @@ spec:
     spec:
       containers:
         - name: worker
-          image: ghcr.io/messedUpRyan/adsb-notifier-worker:latest
+          image: pi-lab-registry.local/adsb-notifier-worker:latest
           imagePullPolicy: IfNotPresent
-          args: ["--config", "http://adsb-notifier-api:8000/config"]
+          args: ["--config", "http://adsb-notifier-api:8000/config", "--status-file", "/status/status.json"]
           envFrom:
             - secretRef:
                 name: adsb-notifier-secrets
                 optional: true
+          volumeMounts:
+            - name: status
+              mountPath: /status
           resources:
             requests:
               cpu: 25m
@@ -33,11 +37,16 @@ spec:
             limits:
               cpu: 250m
               memory: 256Mi
+      volumes:
+        - name: status
+          persistentVolumeClaim:
+            claimName: adsb-notifier-config
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: adsb-notifier-api
+  namespace: adsb
   labels:
     app.kubernetes.io/name: adsb-notifier
     app.kubernetes.io/component: api
@@ -68,9 +77,9 @@ spec:
               readOnly: true
       containers:
         - name: api
-          image: ghcr.io/messedUpRyan/adsb-notifier-api:latest
+          image: pi-lab-registry.local/adsb-notifier-api:latest
           imagePullPolicy: IfNotPresent
-          args: ["--config", "/config/config.json", "--backup-retention", "20"]
+          args: ["--config", "/config/config.json", "--status-file", "/status/status.json", "--backup-retention", "20"]
           envFrom:
             - secretRef:
                 name: adsb-notifier-secrets
@@ -81,6 +90,8 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /config
+            - name: config
+              mountPath: /status
           readinessProbe:
             httpGet:
               path: /healthz
@@ -106,6 +117,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: adsb-notifier-ui
+  namespace: adsb
   labels:
     app.kubernetes.io/name: adsb-notifier
     app.kubernetes.io/component: ui
@@ -123,7 +135,7 @@ spec:
     spec:
       containers:
         - name: ui
-          image: ghcr.io/messedUpRyan/adsb-notifier-ui:latest
+          image: pi-lab-registry.local/adsb-notifier-ui:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

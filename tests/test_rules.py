@@ -8,6 +8,7 @@ from adsb_notifier.rules import RuleEngine
 def settings_with(rule: Rule) -> Settings:
     return Settings(
         adsb_url="http://example.test/aircraft.json",
+        adsb_source=None,
         home=Home(lat=40.7608, lon=-111.8910),
         poll_seconds=30,
         stale_aircraft_seconds=90,

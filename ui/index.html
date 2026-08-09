@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="Cache-Control" content="no-store" />
     <title>ADS-B Notifier Config</title>
-    <link rel="stylesheet" href="/styles.css?v=20260803-9" />
+    <link rel="stylesheet" href="/styles.css?v=20260808-14" />
   </head>
   <body>
     <main class="app-shell">
       <section class="toolbar">
-        <div>
-          <h1>ADS-B Notifier</h1>
+        <div class="brand">
+          <h1><img id="app-logo" class="app-logo" src="/images/logo_teal.png?v=20260808-14" alt="ADS-B Notifier" /></h1>
           <p id="status">Loading configuration...</p>
         </div>
         <div class="actions">
@@ -23,15 +23,64 @@
       <section id="message-panel" class="message-panel hidden" aria-live="polite"></section>
 
       <nav class="tabs" aria-label="Configuration sections">
-        <button class="tab active" type="button" data-tab="settings">Settings</button>
+        <button class="tab active" type="button" data-tab="dashboard">Dashboard</button>
+        <button class="tab" type="button" data-tab="settings">Settings</button>
         <button class="tab" type="button" data-tab="notifications">Notifications</button>
         <button class="tab" type="button" data-tab="rules">Rules</button>
         <button class="tab" type="button" data-tab="json">JSON</button>
       </nav>
 
-      <section id="settings" class="tab-panel active">
+      <section id="dashboard" class="tab-panel active">
+        <div class="dashboard-grid">
+          <article class="status-card">
+            <header>
+              <h2>Worker</h2>
+              <button id="refresh-status" type="button">Refresh</button>
+            </header>
+            <dl class="status-list">
+              <div><dt>Status</dt><dd id="worker-status-value">Unknown</dd></div>
+              <div><dt>Last poll</dt><dd id="worker-last-poll">Never</dd></div>
+              <div><dt>Aircraft</dt><dd id="worker-aircraft-count">0</dd></div>
+              <div><dt>Notifications</dt><dd id="worker-notification-count">0</dd></div>
+              <div><dt>ADS-B source</dt><dd id="worker-adsb-source">Unknown</dd></div>
+              <div><dt>Last error</dt><dd id="worker-last-error">None</dd></div>
+            </dl>
+          </article>
+          <article class="status-card">
+            <header>
+              <h2>Recent Matches</h2>
+            </header>
+            <div id="recent-matches" class="recent-matches"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="settings" class="tab-panel">
         <div class="form-grid">
-          <label>
+          <fieldset class="settings-group wide">
+            <legend>Appearance</legend>
+            <div class="form-grid compact">
+              <label>
+                Mode
+                <select id="theme-mode" data-theme-control="true">
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                  <option value="system">System</option>
+                </select>
+              </label>
+              <label>
+                Accent
+                <select id="theme-accent" data-theme-control="true">
+                  <option value="teal">Teal</option>
+                  <option value="blue">Blue</option>
+                  <option value="amber">Amber</option>
+                  <option value="rose">Rose</option>
+                  <option value="violet">Violet</option>
+                </select>
+              </label>
+            </div>
+          </fieldset>
+          <label class="wide">
             ADS-B endpoint
             <input id="adsb-url" name="adsb_url" type="url" />
           </label>
@@ -72,6 +121,27 @@
               <label>From <input id="email-from" type="email" /></label>
               <label>To <input id="email-to" type="text" /></label>
               <label class="switch wide"><input id="email-starttls" type="checkbox" /> Use STARTTLS</label>
+              <label class="wide">Subject template <input id="email-subject-template" type="text" /></label>
+              <label class="wide">Body template <textarea id="email-body-template" rows="10"></textarea></label>
+            </div>
+          </article>
+
+          <article class="provider">
+            <header>
+              <h2>Pushover</h2>
+              <div class="provider-actions">
+                <button id="test-pushover" type="button">Test</button>
+                <label class="switch"><input id="pushover-enabled" type="checkbox" /> Enabled</label>
+              </div>
+            </header>
+            <div class="form-grid compact">
+              <label>App token <input id="pushover-app-token" type="text" /></label>
+              <label>User key <input id="pushover-user-key" type="text" /></label>
+              <label>Device <input id="pushover-device" type="text" /></label>
+              <label>Priority <input id="pushover-priority" type="number" min="-2" max="2" step="1" /></label>
+              <label>Sound <input id="pushover-sound" type="text" /></label>
+              <label class="wide">Title template <input id="pushover-title-template" type="text" /></label>
+              <label class="wide">Message template <textarea id="pushover-message-template" rows="4"></textarea></label>
             </div>
           </article>
 
@@ -85,9 +155,11 @@
             </header>
             <div class="form-grid compact">
               <label>Account SID <input id="twilio-account-sid" type="text" /></label>
-              <label>Auth token <input id="twilio-auth-token" type="text" /></label>
+              <label>API key SID <input id="twilio-api-key-sid" type="text" /></label>
+              <label>API key secret <input id="twilio-api-key-secret" type="text" /></label>
               <label>From <input id="twilio-from" type="text" /></label>
               <label>To <input id="twilio-to" type="text" /></label>
+              <label class="wide">Message template <textarea id="twilio-body-template" rows="4"></textarea></label>
             </div>
           </article>
 
@@ -101,6 +173,7 @@
             </header>
             <div class="form-grid compact">
               <label class="wide">URL <input id="webhook-url" type="text" /></label>
+              <label class="wide">Message template <textarea id="webhook-message-template" rows="4"></textarea></label>
             </div>
           </article>
         </div>
@@ -128,6 +201,7 @@
             <div class="section-header">
               <h2 id="rule-editor-title">Rule Details</h2>
               <div class="rule-actions">
+                <button id="test-rule" type="button">Test</button>
                 <button id="duplicate-rule" type="button">Duplicate</button>
                 <button id="delete-rule" type="button">Delete</button>
               </div>
@@ -145,6 +219,11 @@
                 </select>
               </label>
               <label class="switch wide"><input id="rule-enabled" type="checkbox" /> Enabled</label>
+              <fieldset class="rule-notifications wide">
+                <legend>Notifications</legend>
+                <div id="rule-notification-providers" class="checkbox-grid"></div>
+                <p id="rule-notification-empty" class="empty-state hidden">No notification types are enabled globally.</p>
+              </fieldset>
               <label>Radius miles <input id="rule-radius" type="number" min="0" step="0.1" /></label>
               <label>Cooldown minutes <input id="rule-cooldown" type="number" min="0" step="1" /></label>
               <label>Min altitude ft <input id="rule-min-altitude" type="number" step="100" /></label>
@@ -167,8 +246,11 @@
         </div>
       </section>
       <footer class="app-footer">
-        <span>ADS-B Notifier</span>
-        <span id="ui-version">UI version loading</span>
+        <div class="footer-brand">
+          <span>ADS-B Notifier</span>
+          <span id="ui-version">UI version loading</span>
+        </div>
+        <img id="footer-icon" class="footer-icon" src="/images/icon_teal.png?v=20260808-14" alt="" aria-hidden="true" />
       </footer>
     </main>
     <div id="confirm-modal" class="modal-overlay hidden" role="presentation">
@@ -181,6 +263,6 @@
         </div>
       </section>
     </div>
-    <script src="/app.js?v=20260803-9"></script>
+    <script src="/app.js?v=20260808-14"></script>
   </body>
 </html>

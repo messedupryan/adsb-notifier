@@ -63,7 +63,14 @@ class RuleEngine:
         else:
             return None
 
-        return Sighting(aircraft=plane, distance_miles=distance, rule_name=rule.name, event_type=rule.event, observed_at=observed_at)
+        return Sighting(
+            aircraft=plane,
+            distance_miles=distance,
+            rule_name=rule.name,
+            event_type=rule.event,
+            notification_providers=rule.notification_providers,
+            observed_at=observed_at,
+        )
 
     def _record_track(self, aircraft_hex: str, heading: float, observed_at: datetime) -> None:
         points = self.tracks[aircraft_hex]

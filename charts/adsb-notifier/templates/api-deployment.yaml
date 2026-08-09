@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "adsb-notifier.fullname" . }}-api
+  labels:
+    {{- include "adsb-notifier.componentLabels" (dict "root" . "component" "api") | nindent 4 }}
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "adsb-notifier.componentSelectorLabels" (dict "root" . "component" "api") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "adsb-notifier.componentSelectorLabels" (dict "root" . "component" "api") | nindent 8 }}
+    spec:
+      initContainers:
+        - name: seed-config
+          image: {{ .Values.initImage.repository }}:{{ .Values.initImage.tag }}
+          imagePullPolicy: {{ .Values.initImage.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - test -f {{ .Values.config.mountPath }}/{{ .Values.config.fileName }} || cp /seed/{{ .Values.config.fileName }} {{ .Values.config.mountPath }}/{{ .Values.config.fileName }}
+          volumeMounts:
+            - name: config
+              mountPath: {{ .Values.config.mountPath }}
+            - name: config-seed
+              mountPath: /seed
+              readOnly: true
+      containers:
+        - name: api
+          image: {{ include "adsb-notifier.image" (dict "root" . "repository" .Values.api.image.repository) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --config
+            - {{ .Values.config.mountPath }}/{{ .Values.config.fileName }}
+            - --status-file
+            - {{ .Values.config.statusPath }}
+            - --backup-retention
+            - {{ .Values.config.backupRetention | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ include "adsb-notifier.secretName" . }}
+                optional: true
+          ports:
+            - name: http
+              containerPort: 8000
+          volumeMounts:
+            - name: config
+              mountPath: {{ .Values.config.mountPath }}
+            - name: config
+              mountPath: /status
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: {{ include "adsb-notifier.pvcName" . }}
+        - name: config-seed
+          configMap:
+            name: {{ include "adsb-notifier.fullname" . }}-config-seed

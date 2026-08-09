@@ -1,4 +1,18 @@
-from adsb_notifier.notifiers import send_email
+import base64
+
+from adsb_notifier.models import Aircraft, Sighting
+from adsb_notifier.notifiers import (
+    NotificationFanout,
+    render_email_body,
+    render_email_subject,
+    render_pushover_message,
+    render_pushover_title,
+    render_sms_message,
+    render_webhook_message,
+    send_email,
+    send_pushover,
+    send_twilio_sms,
+)
 
 
 def test_send_email_expands_env_values(monkeypatch):
@@ -46,3 +60,258 @@ def test_send_email_expands_env_values(monkeypatch):
     assert login_calls == [("pilot@example.test", "app-password")]
     assert sent_messages[0]["From"] == "pilot@example.test"
     assert sent_messages[0]["To"] == "pilot@example.test"
+
+
+def test_send_twilio_sms_uses_api_key_credentials(monkeypatch):
+    requests = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return None
+
+        def read(self):
+            return b"{}"
+
+    def fake_urlopen(request, timeout):
+        requests.append((request, timeout))
+        return FakeResponse()
+
+    monkeypatch.setenv("TWILIO_ACCOUNT_SID", "AC12345678901234567890123456789012")
+    monkeypatch.setenv("TWILIO_API_KEY_SID", "SK12345678901234567890123456789012")
+    monkeypatch.setenv("TWILIO_API_KEY_SECRET", "api-secret")
+    monkeypatch.setenv("TWILIO_FROM", "+15551234567")
+    monkeypatch.setenv("TWILIO_TO", "+15557654321")
+    monkeypatch.setattr("adsb_notifier.notifiers.urlopen", fake_urlopen)
+
+    send_twilio_sms(
+        {
+            "account_sid": "env:TWILIO_ACCOUNT_SID",
+            "api_key_sid": "env:TWILIO_API_KEY_SID",
+            "api_key_secret": "env:TWILIO_API_KEY_SECRET",
+            "from": "env:TWILIO_FROM",
+            "to": "env:TWILIO_TO",
+        },
+        "ADS-B SMS test",
+    )
+
+    request, timeout = requests[0]
+    expected_auth = base64.b64encode(b"SK12345678901234567890123456789012:api-secret").decode("ascii")
+    assert timeout == 15
+    assert request.full_url == "https://api.twilio.com/2010-04-01/Accounts/AC12345678901234567890123456789012/Messages.json"
+    assert request.headers["Authorization"] == f"Basic {expected_auth}"
+
+
+def test_send_twilio_sms_falls_back_to_auth_token(monkeypatch):
+    requests = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return None
+
+        def read(self):
+            return b"{}"
+
+    def fake_urlopen(request, timeout):
+        requests.append(request)
+        return FakeResponse()
+
+    monkeypatch.setattr("adsb_notifier.notifiers.urlopen", fake_urlopen)
+
+    send_twilio_sms(
+        {
+            "account_sid": "AC12345678901234567890123456789012",
+            "auth_token": "account-token",
+            "from": "+15551234567",
+            "to": "+15557654321",
+        },
+        "ADS-B SMS test",
+    )
+
+    expected_auth = base64.b64encode(b"AC12345678901234567890123456789012:account-token").decode("ascii")
+    assert requests[0].headers["Authorization"] == f"Basic {expected_auth}"
+
+
+def test_send_pushover_posts_expected_payload(monkeypatch):
+    requests = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return None
+
+        def read(self):
+            return b"{}"
+
+    def fake_urlopen(request, timeout):
+        requests.append((request, timeout))
+        return FakeResponse()
+
+    monkeypatch.setenv("PUSHOVER_APP_TOKEN", "app-token")
+    monkeypatch.setenv("PUSHOVER_USER_KEY", "user-key")
+    monkeypatch.setattr("adsb_notifier.notifiers.urlopen", fake_urlopen)
+
+    send_pushover(
+        {
+            "app_token": "env:PUSHOVER_APP_TOKEN",
+            "user_key": "env:PUSHOVER_USER_KEY",
+            "device": "phone",
+            "priority": 1,
+            "sound": "pushover",
+        },
+        "ADS-B Pushover test",
+        title="ADS-B alert",
+    )
+
+    request, timeout = requests[0]
+    body = request.data.decode("utf-8")
+    assert timeout == 15
+    assert request.full_url == "https://api.pushover.net/1/messages.json"
+    assert "token=app-token" in body
+    assert "user=user-key" in body
+    assert "message=ADS-B+Pushover+test" in body
+    assert "title=ADS-B+alert" in body
+    assert "device=phone" in body
+    assert "priority=1" in body
+    assert "sound=pushover" in body
+
+
+def test_fanout_sends_only_selected_rule_providers(monkeypatch):
+    sent = []
+
+    monkeypatch.setattr("adsb_notifier.notifiers.send_email", lambda config, message, subject=None: sent.append("email"))
+    monkeypatch.setattr("adsb_notifier.notifiers.send_twilio_sms", lambda config, message: sent.append("twilio"))
+    monkeypatch.setattr("adsb_notifier.notifiers.send_pushover", lambda config, message, title=None: sent.append("pushover"))
+
+    sighting = sample_sighting()
+    sighting = Sighting(
+        aircraft=sighting.aircraft,
+        distance_miles=sighting.distance_miles,
+        rule_name=sighting.rule_name,
+        event_type=sighting.event_type,
+        notification_providers={"pushover"},
+        observed_at=sighting.observed_at,
+    )
+
+    NotificationFanout(
+        config=type(
+            "Notifications",
+            (),
+            {
+                "email": {"enabled": True, "from": "from@example.test", "to": "to@example.test"},
+                "twilio": {"enabled": True},
+                "pushover": {"enabled": True, "app_token": "token", "user_key": "user"},
+                "webhook": None,
+                "twitter": None,
+            },
+        )()
+    ).send(sighting)
+
+    assert sent == ["pushover"]
+
+
+def test_fanout_defaults_missing_rule_providers_to_all_enabled(monkeypatch):
+    sent = []
+
+    monkeypatch.setattr("adsb_notifier.notifiers.send_email", lambda config, message, subject=None: sent.append("email"))
+    monkeypatch.setattr("adsb_notifier.notifiers.send_pushover", lambda config, message, title=None: sent.append("pushover"))
+
+    NotificationFanout(
+        config=type(
+            "Notifications",
+            (),
+            {
+                "email": {"enabled": True, "from": "from@example.test", "to": "to@example.test"},
+                "twilio": None,
+                "pushover": {"enabled": True, "app_token": "token", "user_key": "user"},
+                "webhook": None,
+                "twitter": None,
+            },
+        )()
+    ).send(sample_sighting())
+
+    assert sent == ["email", "pushover"]
+
+
+def test_email_templates_render_rich_aircraft_fields():
+    sighting = sample_sighting()
+    config = {
+        "subject_template": "ADS-B: {aircraft_label} matched {rule_name}",
+        "body_template": "Aircraft {registration} / {flight}\nType {aircraft_type}\n{distance_miles:.1f} mi, {altitude_label}, {vertical_rate_label}",
+    }
+
+    assert render_email_subject(config, sighting) == "ADS-B: N141DU matched TEST TAIL NUMBER"
+    assert render_email_body(config, sighting) == (
+        "Aircraft N141DU / DAL1277\n"
+        "Type BCS1\n"
+        "27.0 mi, 10850 ft, descending 640 ft/min"
+    )
+
+
+def test_sms_template_can_be_shorter_than_email():
+    sighting = sample_sighting()
+
+    assert (
+        render_sms_message({"body_template": "{rule_name}: {aircraft_label} {distance_miles_1}mi {altitude_ft}ft"}, sighting)
+        == "TEST TAIL NUMBER: N141DU 27.0mi 10850ft"
+    )
+
+
+def test_pushover_templates_are_independent():
+    sighting = sample_sighting()
+    config = {
+        "title_template": "{aircraft_label} near home",
+        "message_template": "{rule_name}: {aircraft_label} {distance_miles_1} mi {altitude_label}",
+    }
+
+    assert render_pushover_title(config, sighting) == "N141DU near home"
+    assert render_pushover_message(config, sighting) == "TEST TAIL NUMBER: N141DU 27.0 mi 10850 ft"
+
+
+def test_webhook_message_template_is_independent():
+    sighting = sample_sighting()
+
+    assert (
+        render_webhook_message({"message_template": "{event_type}|{hex}|{ground_speed_label}"}, sighting)
+        == "tail|A0B1C2|295 kt"
+    )
+
+
+def test_template_missing_placeholder_renders_empty():
+    sighting = sample_sighting()
+
+    assert render_sms_message({"body_template": "{aircraft_label}{unknown_field}"}, sighting) == "N141DU"
+
+
+def sample_sighting() -> Sighting:
+    return Sighting(
+        aircraft=Aircraft(
+            hex="A0B1C2",
+            flight="DAL1277",
+            registration="N141DU",
+            aircraft_type="BCS1",
+            category="A3",
+            lat=40.76,
+            lon=-111.89,
+            altitude_ft=10850,
+            track_deg=204,
+            seen_seconds=3.4,
+            raw={
+                "desc": "Airbus A220-100",
+                "ownOp": "Delta Air Lines",
+                "gs": 295,
+                "baro_rate": -640,
+                "squawk": "1200",
+            },
+        ),
+        distance_miles=27.04,
+        rule_name="TEST TAIL NUMBER",
+        event_type="tail",
+    )

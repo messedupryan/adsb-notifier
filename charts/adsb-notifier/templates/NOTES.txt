@@ -1,0 +1,20 @@
+ADS-B Notifier has been deployed.
+
+{{- if .Values.ingress.enabled }}
+Ingress hosts:
+{{- range .Values.ingress.hosts }}
+  http://{{ .host }}/
+{{- end }}
+{{- else }}
+Port-forward the UI:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "adsb-notifier.fullname" . }}-ui 8080:{{ .Values.ui.service.port }}
+{{- end }}
+
+Worker status is available through the UI API proxy:
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+  http://{{ .host }}/api/status
+{{- end }}
+{{- else }}
+  http://127.0.0.1:8080/api/status
+{{- end }}
