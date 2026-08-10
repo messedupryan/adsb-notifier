@@ -7,6 +7,24 @@ from adsb_notifier.version import __version__
 
 ROOT = Path(__file__).resolve().parents[1]
 
+VERSION_MANAGED_FILES = [
+    "VERSION",
+    "pyproject.toml",
+    "charts/adsb-notifier/Chart.yaml",
+    "charts/adsb-notifier/values.yaml",
+    "ui/index.html",
+    "ui/app.js",
+    "adsb_notifier/version.py",
+    "docs/DEVELOPMENT.md",
+    "docs/VERSIONING.md",
+    "README.md",
+    "Dockerfile",
+    "Dockerfile.api",
+    "Dockerfile.ui",
+    "Makefile",
+    "tests/test_versioning.py",
+]
+
 
 def project_version() -> str:
     return (ROOT / "VERSION").read_text(encoding="utf-8").strip()
@@ -39,3 +57,12 @@ def test_default_image_tag_matches_project_version():
     values = (ROOT / "charts" / "adsb-notifier" / "values.yaml").read_text(encoding="utf-8")
 
     assert f"  tag: {project_version()}" in values
+
+
+def test_makefile_bump_version_target_covers_version_managed_files():
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+
+    assert "bump-version:" in makefile
+    assert "NEW_VERSION" in makefile
+    for path in VERSION_MANAGED_FILES:
+        assert path in makefile
