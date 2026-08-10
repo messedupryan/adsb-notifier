@@ -1,11 +1,11 @@
 SHELL := /bin/bash
 
-REGISTRY ?= pi-lab-registry.local
+REGISTRY ?= registry.example.test
 IMAGE_TAG ?= latest
 NAMESPACE ?= adsb
 RELEASE ?= adsb-notifier
 HELM_CHART ?= charts/adsb-notifier
-HELM_VALUES ?= charts/adsb-notifier/values.pi-lab.yaml
+HELM_VALUES ?= charts/adsb-notifier/values.yaml
 HELM_ADOPT ?= false
 HELM_ARGS ?=
 
@@ -40,9 +40,9 @@ help:
 		'  make status        Show Kubernetes resources' \
 		'' \
 		'Common overrides:' \
-		'  REGISTRY=pi-lab-registry.local IMAGE_TAG=latest NAMESPACE=adsb' \
+		'  REGISTRY=registry.example.test IMAGE_TAG=latest NAMESPACE=adsb' \
 		'  LOCAL_CONFIG=config.dev.json API_PORT=8765 UI_PORT=8766' \
-		'  HELM_CHART=charts/adsb-notifier HELM_VALUES=charts/adsb-notifier/values.pi-lab.yaml' \
+		'  HELM_CHART=charts/adsb-notifier HELM_VALUES=charts/adsb-notifier/values.yaml' \
 		'  HELM_ADOPT=true HELM_ARGS="--set image.tag=latest"'
 
 test:
@@ -99,7 +99,6 @@ k8s-secret:
 		--from-literal=TWILIO_TO="$${TWILIO_TO:-}" \
 		--from-literal=PUSHOVER_APP_TOKEN="$${PUSHOVER_APP_TOKEN:-}" \
 		--from-literal=PUSHOVER_USER_KEY="$${PUSHOVER_USER_KEY:-}" \
-		--from-literal=ALERT_WEBHOOK_URL="$${ALERT_WEBHOOK_URL:-}" \
 		--dry-run=client -o yaml | kubectl apply -f -
 
 deploy-k8s:

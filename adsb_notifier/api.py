@@ -21,6 +21,12 @@ from adsb_notifier.rules import RuleEngine
 from adsb_notifier.status import read_status
 
 LOGGER = logging.getLogger(__name__)
+REDACTED_SECRET = "********"
+SECRET_NOTIFICATION_FIELDS = {
+    "email": {"password"},
+    "pushover": {"app_token", "user_key"},
+    "twilio": {"api_key_secret", "auth_token"},
+}
 
 
 class ConfigApiHandler(BaseHTTPRequestHandler):
@@ -34,7 +40,7 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True})
             return
         if route == ["config"]:
-            self._send_json(_read_config(self.config_path))
+            self._send_json(_public_config(_read_config(self.config_path)))
             return
         if route == ["status"]:
             self._send_json(read_status(self.status_path))
@@ -185,8 +191,8 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
 
     def _replace_config(self) -> None:
         try:
-            payload = _ensure_rule_ids(self._read_json_body())
             current = _read_config(self.config_path)
+            payload = _ensure_rule_ids(_restore_redacted_secrets(self._read_json_body(), current))
             _check_revision(self.headers.get("If-Match"), current)
             payload = _normalize_notification_provider_selections(payload)
             parse_settings(payload)
@@ -205,7 +211,7 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
 
-        self._send_json(_read_config(self.config_path))
+        self._send_json(_public_config(_read_config(self.config_path)))
 
     def _replace_rule(self, rule_id: str) -> None:
         try:
@@ -314,7 +320,7 @@ def main() -> None:
 
 def _read_config(path: Path) -> dict[str, Any]:
     config = json.loads(path.read_text(encoding="utf-8"))
-    normalized = _normalize_notification_provider_selections(_ensure_revision(_ensure_rule_ids(config)))
+    normalized = _normalize_notification_provider_selections(_normalize_notification_blocks(_ensure_revision(_ensure_rule_ids(config))))
     if normalized != config:
         _write_config(path, normalized)
     return normalized
@@ -417,6 +423,18 @@ def _normalize_notification_provider_selections(config: dict[str, Any]) -> dict[
     return normalized
 
 
+def _normalize_notification_blocks(config: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(config)
+    notifications = normalized.get("notifications", {})
+    if isinstance(notifications, dict):
+        normalized["notifications"] = {
+            provider: provider_config
+            for provider, provider_config in notifications.items()
+            if provider in NOTIFICATION_PROVIDERS
+        }
+    return normalized
+
+
 def _normalize_rule_notification_providers(rule: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
     next_rule = dict(rule)
     enabled = _enabled_notification_providers(config)
@@ -442,6 +460,38 @@ def _enabled_notification_providers(config: dict[str, Any]) -> set[str]:
         for provider in NOTIFICATION_PROVIDERS
         if isinstance(notifications.get(provider), dict) and notifications[provider].get("enabled", True)
     }
+
+
+def _public_config(config: dict[str, Any]) -> dict[str, Any]:
+    public = json.loads(json.dumps(config))
+    notifications = public.get("notifications", {})
+    if not isinstance(notifications, dict):
+        return public
+    for provider, fields in SECRET_NOTIFICATION_FIELDS.items():
+        provider_config = notifications.get(provider)
+        if not isinstance(provider_config, dict):
+            continue
+        for field in fields:
+            if provider_config.get(field) not in (None, ""):
+                provider_config[field] = REDACTED_SECRET
+    return public
+
+
+def _restore_redacted_secrets(payload: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    restored = json.loads(json.dumps(payload))
+    incoming_notifications = restored.get("notifications", {})
+    current_notifications = current.get("notifications", {})
+    if not isinstance(incoming_notifications, dict) or not isinstance(current_notifications, dict):
+        return restored
+    for provider, fields in SECRET_NOTIFICATION_FIELDS.items():
+        incoming_provider = incoming_notifications.get(provider)
+        current_provider = current_notifications.get(provider)
+        if not isinstance(incoming_provider, dict) or not isinstance(current_provider, dict):
+            continue
+        for field in fields:
+            if incoming_provider.get(field) == REDACTED_SECRET and current_provider.get(field) not in (None, ""):
+                incoming_provider[field] = current_provider[field]
+    return restored
 
 
 class RevisionConflict(ValueError):

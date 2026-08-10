@@ -120,6 +120,8 @@ def _recent_matches(path: str | Path, settings: Settings, sightings: list[Sighti
         if not isinstance(match, dict) or not _match_is_recent(match, cutoff):
             continue
         match = _backfill_match_links(match)
+        # Status history is append-only between polls, so this stable key prevents
+        # re-saving the same live match while still allowing repeat alerts later.
         key = (
             match.get("observed_at"),
             match.get("rule_name"),

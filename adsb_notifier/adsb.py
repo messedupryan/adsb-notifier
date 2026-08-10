@@ -142,6 +142,7 @@ def _military_flag(row: dict) -> bool:
     if _bool_or_false(row.get("military", row.get("mil"))):
         return True
     try:
+        # readsb/Airplanes.live expose military registration metadata in bit 0 of dbFlags.
         return bool(int(row.get("dbFlags", 0)) & 1)
     except (TypeError, ValueError):
         return False
@@ -173,6 +174,7 @@ def _altitude_or_none(value: object) -> int | None:
     if value is None:
         return None
     if isinstance(value, str) and value.strip().lower() == "ground":
+        # Ground traffic arrives as a string in common aircraft.json feeds.
         return 0
     try:
         return int(float(value))

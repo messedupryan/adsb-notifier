@@ -43,14 +43,6 @@
       "sound": "pushover",
       "title_template": "ADS-B: {aircraft_label}",
       "message_template": "{rule_name}: {aircraft_label} ({aircraft_type}) {distance_miles_1} mi away at {altitude_label}"
-    },
-    "webhook": {
-      "enabled": false,
-      "url": "env:ALERT_WEBHOOK_URL",
-      "message_template": "{rule_name}: {aircraft_label} ({aircraft_type}) {distance_miles_1} mi away at {altitude_label}"
-    },
-    "twitter": {
-      "enabled": false
     }
   },
   "rules": [

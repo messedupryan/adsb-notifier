@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import json
 import logging
 import os
 import smtplib
@@ -41,11 +40,6 @@ class NotificationFanout:
                 title=render_pushover_title(self.config.pushover, sighting, message),
             )
             sent = True
-        if self._should_send_provider("webhook", selected_providers):
-            send_webhook(self.config.webhook, sighting, render_webhook_message(self.config.webhook, sighting, message))
-            sent = True
-        if self.config.twitter and self.config.twitter.get("enabled", False):
-            LOGGER.warning("Twitter/X posting is configured but not implemented; use webhook integration for now.")
         if not sent:
             LOGGER.info("Notification: %s", message)
 
@@ -111,11 +105,6 @@ def send_test_notification(config: Notifications, provider: str) -> None:
             title=render_pushover_title(config.pushover, sighting, message),
         )
         return
-    if provider == "webhook":
-        if not config.webhook or not config.webhook.get("enabled", True):
-            raise ValueError("webhook notifications are not enabled")
-        send_webhook(config.webhook, sighting, render_webhook_message(config.webhook, sighting, message))
-        return
     raise ValueError(f"unsupported notification provider: {provider}")
 
 
@@ -155,13 +144,6 @@ def render_pushover_title(config: dict, sighting: Sighting, fallback_message: st
 
 
 def render_pushover_message(config: dict, sighting: Sighting, fallback_message: str | None = None) -> str:
-    template = config.get("message_template") or config.get("body_template") or config.get("template")
-    if template:
-        return render_template(template, sighting, fallback_message)
-    return fallback_message or format_sighting(sighting)
-
-
-def render_webhook_message(config: dict, sighting: Sighting, fallback_message: str | None = None) -> str:
     template = config.get("message_template") or config.get("body_template") or config.get("template")
     if template:
         return render_template(template, sighting, fallback_message)
@@ -284,25 +266,6 @@ def send_pushover(config: dict, message: str, title: str | None = None) -> None:
         "https://api.pushover.net/1/messages.json",
         data=urlencode(payload).encode("utf-8"),
         headers={"Content-Type": "application/x-www-form-urlencoded"},
-        method="POST",
-    )
-    with urlopen(request, timeout=15) as response:
-        response.read()
-
-
-def send_webhook(config: dict, sighting: Sighting, message: str) -> None:
-    payload = {
-        "message": message,
-        "rule": sighting.rule_name,
-        "event_type": sighting.event_type,
-        "distance_miles": round(sighting.distance_miles, 2),
-        "aircraft": sighting.aircraft.raw,
-        "observed_at": sighting.observed_at.isoformat(),
-    }
-    request = Request(
-        _secret_or_value(config["url"]),
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
         method="POST",
     )
     with urlopen(request, timeout=15) as response:

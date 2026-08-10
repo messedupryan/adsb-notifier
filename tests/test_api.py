@@ -12,7 +12,9 @@ from adsb_notifier.api import (
     _ensure_revision,
     _ensure_rule_ids,
     _normalize_notification_provider_selections,
+    _public_config,
     _read_config,
+    _restore_redacted_secrets,
     _write_config,
 )
 from adsb_notifier.config import load_settings_data, parse_settings
@@ -71,7 +73,6 @@ def config_with_enabled_notifications() -> dict:
         "email": {"enabled": True, "smtp_host": "smtp.example.test", "from": "from@example.test", "to": ["to@example.test"]},
         "pushover": {"enabled": True, "app_token": "env:PUSHOVER_APP_TOKEN", "user_key": "env:PUSHOVER_USER_KEY"},
         "twilio": {"enabled": False},
-        "webhook": {"enabled": True, "url": "https://example.test/webhook"},
     }
     return payload
 
@@ -105,7 +106,7 @@ def test_read_config_backfills_rule_notification_providers(tmp_path):
 
     config = _read_config(path)
 
-    assert config["rules"][0]["notification_providers"] == ["email", "pushover", "webhook"]
+    assert config["rules"][0]["notification_providers"] == ["email", "pushover"]
 
 
 def test_disabled_global_provider_is_pruned_from_rules():
@@ -115,7 +116,48 @@ def test_disabled_global_provider_is_pruned_from_rules():
 
     config = _normalize_notification_provider_selections(payload)
 
-    assert config["rules"][0]["notification_providers"] == ["email", "webhook"]
+    assert config["rules"][0]["notification_providers"] == ["email"]
+
+
+def test_read_config_removes_removed_notification_blocks(tmp_path):
+    path = tmp_path / "config.json"
+    payload = config_with_enabled_notifications()
+    payload["notifications"]["webhook"] = {"enabled": True, "url": "env:ALERT_WEBHOOK_URL"}
+    payload["notifications"]["twitter"] = {"enabled": False}
+    payload["rules"][0]["notification_providers"] = ["email", "webhook"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    config = _read_config(path)
+
+    assert "webhook" not in config["notifications"]
+    assert "twitter" not in config["notifications"]
+    assert config["rules"][0]["notification_providers"] == ["email"]
+
+
+def test_public_config_redacts_notification_secrets():
+    payload = config_with_pushover()
+    payload["notifications"]["email"] = {"enabled": True, "password": "env:SMTP_PASSWORD"}
+    payload["notifications"]["twilio"] = {"enabled": True, "api_key_secret": "env:TWILIO_API_KEY_SECRET"}
+
+    public = _public_config(payload)
+
+    assert public["notifications"]["email"]["password"] == "********"
+    assert public["notifications"]["pushover"]["app_token"] == "********"
+    assert public["notifications"]["pushover"]["user_key"] == "********"
+    assert public["notifications"]["twilio"]["api_key_secret"] == "********"
+    assert payload["notifications"]["pushover"]["app_token"] == "env:PUSHOVER_APP_TOKEN"
+
+
+def test_restore_redacted_secrets_preserves_current_values():
+    current = config_with_pushover()
+    incoming = config_with_pushover()
+    incoming["notifications"]["pushover"]["app_token"] = "********"
+    incoming["notifications"]["pushover"]["user_key"] = "replacement-user-key"
+
+    restored = _restore_redacted_secrets(incoming, current)
+
+    assert restored["notifications"]["pushover"]["app_token"] == "env:PUSHOVER_APP_TOKEN"
+    assert restored["notifications"]["pushover"]["user_key"] == "replacement-user-key"
 
 
 def test_empty_rule_notification_providers_backfill_when_global_provider_is_enabled():

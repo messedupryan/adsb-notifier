@@ -20,7 +20,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
             - --config
-            - http://{{ include "adsb-notifier.fullname" . }}-api:{{ .Values.api.service.port }}/config
+            - {{ .Values.config.mountPath }}/{{ .Values.config.fileName }}
             - --status-file
             - {{ .Values.config.statusPath }}
           envFrom:
@@ -28,6 +28,8 @@ spec:
                 name: {{ include "adsb-notifier.secretName" . }}
                 optional: true
           volumeMounts:
+            - name: config
+              mountPath: {{ .Values.config.mountPath }}
             - name: config
               mountPath: /status
           resources:

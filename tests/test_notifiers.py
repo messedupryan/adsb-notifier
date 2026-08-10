@@ -8,7 +8,6 @@ from adsb_notifier.notifiers import (
     render_pushover_message,
     render_pushover_title,
     render_sms_message,
-    render_webhook_message,
     send_email,
     send_pushover,
     send_twilio_sms,
@@ -208,8 +207,6 @@ def test_fanout_sends_only_selected_rule_providers(monkeypatch):
                 "email": {"enabled": True, "from": "from@example.test", "to": "to@example.test"},
                 "twilio": {"enabled": True},
                 "pushover": {"enabled": True, "app_token": "token", "user_key": "user"},
-                "webhook": None,
-                "twitter": None,
             },
         )()
     ).send(sighting)
@@ -231,8 +228,6 @@ def test_fanout_defaults_missing_rule_providers_to_all_enabled(monkeypatch):
                 "email": {"enabled": True, "from": "from@example.test", "to": "to@example.test"},
                 "twilio": None,
                 "pushover": {"enabled": True, "app_token": "token", "user_key": "user"},
-                "webhook": None,
-                "twitter": None,
             },
         )()
     ).send(sample_sighting())
@@ -247,9 +242,9 @@ def test_email_templates_render_rich_aircraft_fields():
         "body_template": "Aircraft {registration} / {flight}\nType {aircraft_type}\n{distance_miles:.1f} mi, {altitude_label}, {vertical_rate_label}",
     }
 
-    assert render_email_subject(config, sighting) == "ADS-B: N141DU matched TEST TAIL NUMBER"
+    assert render_email_subject(config, sighting) == "ADS-B: N123AB matched TEST TAIL NUMBER"
     assert render_email_body(config, sighting) == (
-        "Aircraft N141DU / DAL1277\n"
+        "Aircraft N123AB / TEST123\n"
         "Type BCS1\n"
         "27.0 mi, 10850 ft, descending 640 ft/min"
     )
@@ -260,7 +255,7 @@ def test_sms_template_can_be_shorter_than_email():
 
     assert (
         render_sms_message({"body_template": "{rule_name}: {aircraft_label} {distance_miles_1}mi {altitude_ft}ft"}, sighting)
-        == "TEST TAIL NUMBER: N141DU 27.0mi 10850ft"
+        == "TEST TAIL NUMBER: N123AB 27.0mi 10850ft"
     )
 
 
@@ -280,31 +275,22 @@ def test_pushover_templates_are_independent():
         "message_template": "{rule_name}: {aircraft_label} {distance_miles_1} mi {altitude_label}",
     }
 
-    assert render_pushover_title(config, sighting) == "N141DU near home"
-    assert render_pushover_message(config, sighting) == "TEST TAIL NUMBER: N141DU 27.0 mi 10850 ft"
-
-
-def test_webhook_message_template_is_independent():
-    sighting = sample_sighting()
-
-    assert (
-        render_webhook_message({"message_template": "{event_type}|{hex}|{ground_speed_label}"}, sighting)
-        == "tail|A0B1C2|295 kt"
-    )
+    assert render_pushover_title(config, sighting) == "N123AB near home"
+    assert render_pushover_message(config, sighting) == "TEST TAIL NUMBER: N123AB 27.0 mi 10850 ft"
 
 
 def test_template_missing_placeholder_renders_empty():
     sighting = sample_sighting()
 
-    assert render_sms_message({"body_template": "{aircraft_label}{unknown_field}"}, sighting) == "N141DU"
+    assert render_sms_message({"body_template": "{aircraft_label}{unknown_field}"}, sighting) == "N123AB"
 
 
 def sample_sighting() -> Sighting:
     return Sighting(
         aircraft=Aircraft(
             hex="A0B1C2",
-            flight="DAL1277",
-            registration="N141DU",
+            flight="TEST123",
+            registration="N123AB",
             aircraft_type="BCS1",
             category="A3",
             lat=40.76,

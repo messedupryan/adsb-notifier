@@ -20,14 +20,16 @@ spec:
     spec:
       containers:
         - name: worker
-          image: pi-lab-registry.local/adsb-notifier-worker:latest
+          image: registry.example.test/adsb-notifier-worker:latest
           imagePullPolicy: Always
-          args: ["--config", "http://adsb-notifier-api:8000/config", "--status-file", "/status/status.json"]
+          args: ["--config", "/config/config.json", "--status-file", "/status/status.json"]
           envFrom:
             - secretRef:
                 name: adsb-notifier-secrets
                 optional: true
           volumeMounts:
+            - name: status
+              mountPath: /config
             - name: status
               mountPath: /status
           resources:
@@ -77,7 +79,7 @@ spec:
               readOnly: true
       containers:
         - name: api
-          image: pi-lab-registry.local/adsb-notifier-api:latest
+          image: registry.example.test/adsb-notifier-api:latest
           imagePullPolicy: Always
           args: ["--config", "/config/config.json", "--status-file", "/status/status.json", "--backup-retention", "20"]
           envFrom:
@@ -135,7 +137,7 @@ spec:
     spec:
       containers:
         - name: ui
-          image: pi-lab-registry.local/adsb-notifier-ui:latest
+          image: registry.example.test/adsb-notifier-ui:latest
           imagePullPolicy: Always
           ports:
             - name: http

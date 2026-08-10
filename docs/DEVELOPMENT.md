@@ -145,6 +145,8 @@ pipenv run adsb-notifier-api --config config.dev.json --backup-retention 20
 
 Use `0` to disable backups.
 
+The API redacts notification secret fields when serving configuration to the UI. In Kubernetes, the worker reads the live config file from shared storage so notification secrets remain available to the worker without exposing them through the browser-facing config response.
+
 ## Container Builds
 
 Build all images:
@@ -193,10 +195,7 @@ TWILIO_FROM
 TWILIO_TO
 PUSHOVER_APP_TOKEN
 PUSHOVER_USER_KEY
-ALERT_WEBHOOK_URL
 ```
-
-Webhook support is currently present but expected to be removed in a future cleanup.
 
 ## Helm Deployment
 

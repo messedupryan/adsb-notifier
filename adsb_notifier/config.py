@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
-NOTIFICATION_PROVIDERS = {"email", "pushover", "twilio", "webhook"}
+NOTIFICATION_PROVIDERS = {"email", "pushover", "twilio"}
 DEFAULT_RECENT_MATCHES_WINDOW_HOURS = 24
 MAX_RECENT_MATCHES_WINDOW_HOURS = 168
 
@@ -23,8 +23,6 @@ class Notifications:
     email: dict[str, Any] | None = None
     twilio: dict[str, Any] | None = None
     pushover: dict[str, Any] | None = None
-    webhook: dict[str, Any] | None = None
-    twitter: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -102,8 +100,6 @@ def parse_settings(data: dict[str, Any]) -> Settings:
             email=notification_data.get("email"),
             twilio=notification_data.get("twilio"),
             pushover=notification_data.get("pushover"),
-            webhook=notification_data.get("webhook"),
-            twitter=notification_data.get("twitter"),
         ),
         rules=rules,
     )

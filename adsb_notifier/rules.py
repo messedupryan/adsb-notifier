@@ -84,6 +84,8 @@ class RuleEngine:
         headings = [point.heading for point in self.tracks[aircraft_hex] if point.observed_at >= cutoff]
         if len(headings) < 4:
             return False
+        # Accumulate the smallest turn between consecutive tracks so wraparound
+        # headings like 350 -> 010 count as a 20 degree turn, not 340 degrees.
         heading_change = sum(_smallest_heading_delta(a, b) for a, b in zip(headings, headings[1:]))
         return heading_change >= rule.circling_min_heading_change_deg
 

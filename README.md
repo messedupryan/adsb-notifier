@@ -62,11 +62,8 @@ Current notification support includes:
 - SMTP email
 - Pushover push notifications
 - Twilio SMS
-- Generic webhook
 
 Pushover is the recommended phone notification path for a small personal deployment because it avoids carrier SMS registration and compliance overhead. Twilio remains useful when actual SMS delivery is required.
-
-Webhook support currently exists in the codebase but is not a primary target for this project and may be removed in a future cleanup.
 
 ## Architecture
 
@@ -85,7 +82,7 @@ Shared config/status storage
 Configuration API <---- Web UI
 ```
 
-In Kubernetes, the worker reads configuration from the API, while the API owns persistence of the live configuration file. The worker and API share status storage so the UI can display operational state and recent matches.
+In Kubernetes, the API owns persistence of the live configuration file and serves a redacted configuration view to the UI. The worker reads the live configuration file from shared storage and writes status so the UI can display operational state and recent matches.
 
 ## Project Layout
 

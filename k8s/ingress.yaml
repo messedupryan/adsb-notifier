@@ -9,7 +9,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: adsb-notifier.local
+    - host: adsb-notifier.example.test
       http:
         paths:
           - path: /
@@ -19,7 +19,7 @@ spec:
                 name: adsb-notifier-ui
                 port:
                   number: 80
-    - host: adsb-notifier.10.0.0.100.sslip.io
+    - host: adsb-notifier-alt.example.test
       http:
         paths:
           - path: /

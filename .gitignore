@@ -60,3 +60,5 @@ ui/build/
 *.tar
 *.tgz
 *.kubeconfig
+charts/*/values.local.yaml
+charts/*/values.*.local.yaml

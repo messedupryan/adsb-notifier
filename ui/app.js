@@ -3,8 +3,9 @@ let savedConfig = null;
 let isDirty = false;
 let selectedRuleId = null;
 let activeTab = "dashboard";
-const uiVersion = "20260809-12";
-const notificationProviderOrder = ["pushover", "email", "webhook", "twilio"];
+const uiVersion = "20260810-1";
+const redactedSecret = "********";
+const notificationProviderOrder = ["pushover", "email", "twilio"];
 const apiBase = new URLSearchParams(window.location.search).get("api") || "/api";
 const assetVersion = `v=${uiVersion}`;
 const themeStorageKey = "adsb-notifier-theme";
@@ -55,9 +56,6 @@ const fields = {
   twilioFrom: document.querySelector("#twilio-from"),
   twilioTo: document.querySelector("#twilio-to"),
   twilioBodyTemplate: document.querySelector("#twilio-body-template"),
-  webhookEnabled: document.querySelector("#webhook-enabled"),
-  webhookUrl: document.querySelector("#webhook-url"),
-  webhookMessageTemplate: document.querySelector("#webhook-message-template"),
   ruleName: document.querySelector("#rule-name"),
   ruleEvent: document.querySelector("#rule-event"),
   ruleEnabled: document.querySelector("#rule-enabled"),
@@ -92,7 +90,6 @@ const deleteRuleButton = document.querySelector("#delete-rule");
 const testEmailButton = document.querySelector("#test-email");
 const testPushoverButton = document.querySelector("#test-pushover");
 const testTwilioButton = document.querySelector("#test-twilio");
-const testWebhookButton = document.querySelector("#test-webhook");
 const refreshStatusButton = document.querySelector("#refresh-status");
 const workerStatusValue = document.querySelector("#worker-status-value");
 const workerLastPoll = document.querySelector("#worker-last-poll");
@@ -138,7 +135,6 @@ deleteRuleButton.addEventListener("click", deleteSelectedRule);
 testEmailButton.addEventListener("click", () => testNotification("email"));
 testPushoverButton.addEventListener("click", () => testNotification("pushover"));
 testTwilioButton.addEventListener("click", () => testNotification("twilio"));
-testWebhookButton.addEventListener("click", () => testNotification("webhook"));
 refreshStatusButton.addEventListener("click", () => loadWorkerStatus());
 recenterMapButton.addEventListener("click", () => recenterDashboardMap());
 fitMapButton.addEventListener("click", () => fitDashboardMap());
@@ -537,6 +533,8 @@ function renderDashboardMap(status) {
   alertMapEmpty.textContent = matches.length === 0 ? "No recent matches with positions" : "";
   alertMapEmpty.classList.toggle("hidden", matches.length > 0);
   updateMapActionState();
+  // Fit after every redraw because Leaflet calculates bounds from current
+  // container pixels; dashboard layout changes can otherwise leave stale sizing.
   fitDashboardMap({maxZoom: dashboardMapZoom()});
 }
 
@@ -578,6 +576,8 @@ function fitDashboardMap({maxZoom = 13} = {}) {
   if (!Number.isFinite(homeLat) || !Number.isFinite(homeLon)) return;
 
   const bounds = window.L.latLngBounds([[homeLat, homeLon]]);
+  // Include rule radii as well as matched positions so initial zoom shows the
+  // alert area, not just the latest aircraft cluster.
   activeRulesWithRadius().forEach((rule) => {
     bounds.extend(radiusBounds(homeLat, homeLon, Number(rule.radius_miles)));
   });
@@ -637,7 +637,6 @@ function renderForms() {
   const email = notifications.email || {};
   const pushover = notifications.pushover || {};
   const twilio = notifications.twilio || {};
-  const webhook = notifications.webhook || {};
 
   fields.adsbUrl.value = config.adsb_url || "";
   fields.homeLat.value = config.home?.lat ?? "";
@@ -651,15 +650,15 @@ function renderForms() {
   fields.emailSmtpPort.value = email.smtp_port ?? 587;
   fields.emailStarttls.checked = email.starttls !== false;
   fields.emailUsername.value = email.username || "";
-  fields.emailPassword.value = email.password || "";
+  fields.emailPassword.value = secretFieldValue(email.password);
   fields.emailFrom.value = email.from || "";
   fields.emailTo.value = listToText(email.to);
   fields.emailSubjectTemplate.value = email.subject_template || "";
   fields.emailBodyTemplate.value = email.body_template || "";
 
   fields.pushoverEnabled.checked = Boolean(pushover.enabled);
-  fields.pushoverAppToken.value = pushover.app_token || "";
-  fields.pushoverUserKey.value = pushover.user_key || "";
+  fields.pushoverAppToken.value = secretFieldValue(pushover.app_token);
+  fields.pushoverUserKey.value = secretFieldValue(pushover.user_key);
   fields.pushoverDevice.value = pushover.device || "";
   fields.pushoverPriority.value = pushover.priority ?? "";
   fields.pushoverSound.value = pushover.sound || "";
@@ -669,14 +668,10 @@ function renderForms() {
   fields.twilioEnabled.checked = Boolean(twilio.enabled);
   fields.twilioAccountSid.value = twilio.account_sid || "";
   fields.twilioApiKeySid.value = twilio.api_key_sid || "";
-  fields.twilioApiKeySecret.value = twilio.api_key_secret || "";
+  fields.twilioApiKeySecret.value = secretFieldValue(twilio.api_key_secret);
   fields.twilioFrom.value = twilio.from || "";
   fields.twilioTo.value = twilio.to || "";
   fields.twilioBodyTemplate.value = twilio.body_template || twilio.message_template || twilio.template || "";
-
-  fields.webhookEnabled.checked = Boolean(webhook.enabled);
-  fields.webhookUrl.value = webhook.url || "";
-  fields.webhookMessageTemplate.value = webhook.message_template || webhook.body_template || webhook.template || "";
   renderRuleEditor();
 }
 
@@ -774,7 +769,6 @@ function syncFromForms() {
   const existingEmail = notifications.email || {};
   const existingPushover = notifications.pushover || {};
   const existingTwilio = notifications.twilio || {};
-  const existingWebhook = notifications.webhook || {};
   config.notifications = {
     ...notifications,
     email: {
@@ -810,12 +804,6 @@ function syncFromForms() {
       from: fields.twilioFrom.value.trim(),
       to: fields.twilioTo.value.trim(),
       body_template: fields.twilioBodyTemplate.value.trim(),
-    },
-    webhook: {
-      ...existingWebhook,
-      enabled: fields.webhookEnabled.checked,
-      url: fields.webhookUrl.value.trim(),
-      message_template: fields.webhookMessageTemplate.value.trim(),
     },
   };
   syncSelectedRuleFromForms();
@@ -1369,6 +1357,10 @@ function listToText(value) {
   return value || "";
 }
 
+function secretFieldValue(value) {
+  return value ? redactedSecret : "";
+}
+
 function textToList(value) {
   if (value instanceof HTMLInputElement || value instanceof HTMLTextAreaElement) {
     return textToList(value.value);
@@ -1533,7 +1525,6 @@ function providerLabel(provider) {
     email: "email",
     pushover: "Pushover",
     twilio: "Twilio SMS",
-    webhook: "webhook",
   }[provider] || provider;
 }
 
@@ -1627,5 +1618,4 @@ function setBusy(isBusy) {
   saveButton.disabled = isBusy;
   testEmailButton.disabled = isBusy;
   testTwilioButton.disabled = isBusy;
-  testWebhookButton.disabled = isBusy;
 }
