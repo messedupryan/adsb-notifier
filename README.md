@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="ui/images/logo_amber.png" alt="ADS-B Notifier" width="520" />
+</p>
+
 # ADS-B Notifier
 
 ADS-B Notifier watches live aircraft data near a configured home location and sends notifications when saved rules match. It is intended for small personal or homelab deployments where you want to know when specific aircraft, aircraft types, or categories appear nearby.
@@ -9,6 +13,18 @@ The project is organized as three deployable components:
 - **Web UI**: manages settings, notification providers, rules, live rule tests, and recent matches.
 
 The app can run locally during development or as containers in Kubernetes. See [Development Guide](docs/DEVELOPMENT.md) for setup, testing, container builds, and deployment commands.
+
+## Contents
+
+- [Features](#features)
+- [UI](#ui)
+- [Notification Providers](#notification-providers)
+- [Architecture](#architecture)
+- [Project Layout](#project-layout)
+- [Configuration Overview](#configuration-overview)
+- [Dashboard](#dashboard)
+- [Development](#development)
+- [Status](#status)
 
 ## Features
 
@@ -25,6 +41,19 @@ The app can run locally during development or as containers in Kubernetes. See [
 - Worker status and recent match history.
 - Dashboard map with home location, active rule radii, recent match markers, selected-match highlighting, and ADS-B Exchange aircraft links.
 - Light/dark UI modes, accent themes, themed logo assets, and theme-aware favicon.
+
+## UI
+
+Screenshots will be added as the UI stabilizes. Useful examples to capture:
+
+| View | What to Show |
+| --- | --- |
+| Dashboard overview | Worker summary across the top, recent matches on the left, and the alert map on the right. |
+| Selected match map | A selected recent match highlighted in the list and on the map, with home location still visible. |
+| Rule editor | A configured alert rule with radius, altitude, notification provider selection, and live rule test button. |
+| Notification settings | Email, Pushover, and SMS provider sections with template fields visible but secrets hidden or redacted. |
+| Appearance settings | Light/dark mode and accent theme controls showing the themed logo/icon behavior. |
+| Mobile dashboard | Stacked dashboard layout on a narrow viewport. |
 
 ## Notification Providers
 
