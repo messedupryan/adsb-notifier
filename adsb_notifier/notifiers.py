@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from adsb_notifier.config import Notifications
+from adsb_notifier.links import adsb_exchange_aircraft_url
 from adsb_notifier.models import Aircraft, Sighting
 
 LOGGER = logging.getLogger(__name__)
@@ -192,6 +193,7 @@ def template_context(sighting: Sighting, fallback_message: str | None = None) ->
         "registration": plane.registration or "",
         "flight": plane.flight or "",
         "hex": plane.hex,
+        "adsb_exchange_url": adsb_exchange_aircraft_url(plane.hex),
         "aircraft_type": plane.aircraft_type or plane.category or "unknown type",
         "category": plane.category or "",
         "description": raw.get("desc") or "",

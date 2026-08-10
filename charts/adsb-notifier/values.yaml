@@ -4,7 +4,7 @@ fullnameOverride: ""
 image:
   registry: pi-lab-registry.local
   tag: latest
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 secret:
   create: false
@@ -37,6 +37,7 @@ seedConfig:
     lon: -111.891
   poll_seconds: 30
   stale_aircraft_seconds: 90
+  recent_matches_window_hours: 24
   notifications:
     email:
       enabled: false
@@ -49,7 +50,7 @@ seedConfig:
       to:
         - env:SMTP_USERNAME
       subject_template: "ADS-B alert: {aircraft_label} matched {rule_name}"
-      body_template: "{message}\n\nAircraft: {aircraft_label}\nRegistration: {registration}\nFlight: {flight}\nType: {aircraft_type}\nDescription: {description}\nOperator: {operator}\nAltitude: {altitude_label}\nDistance: {distance_miles:.1f} mi\nTrack: {track_label}\nSpeed: {ground_speed_label}\nVertical rate: {vertical_rate_label}\nSquawk: {squawk}\nSeen: {seen_label}\nHex: {hex}\nRule: {rule_name}\nObserved: {observed_at}"
+      body_template: "{message}\n\nAircraft: {aircraft_label}\nRegistration: {registration}\nFlight: {flight}\nType: {aircraft_type}\nDescription: {description}\nOperator: {operator}\nAltitude: {altitude_label}\nDistance: {distance_miles:.1f} mi\nTrack: {track_label}\nSpeed: {ground_speed_label}\nVertical rate: {vertical_rate_label}\nSquawk: {squawk}\nSeen: {seen_label}\nHex: {hex}\nADS-B Exchange: {adsb_exchange_url}\nRule: {rule_name}\nObserved: {observed_at}"
     twilio:
       enabled: false
       account_sid: env:TWILIO_ACCOUNT_SID
@@ -69,6 +70,7 @@ seedConfig:
       message_template: "{rule_name}: {aircraft_label} ({aircraft_type}) {distance_miles_1} mi away at {altitude_label}"
     webhook:
       enabled: false
+      url: env:ALERT_WEBHOOK_URL
       message_template: "{rule_name}: {aircraft_label} ({aircraft_type}) {distance_miles_1} mi away at {altitude_label}"
     twitter:
       enabled: false

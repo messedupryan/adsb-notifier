@@ -8,14 +8,16 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
-from adsb_notifier.adsb import fetch_aircraft_for_settings
+from adsb_notifier.adsb import AdsbRateLimitError, fetch_aircraft_for_settings
 from adsb_notifier.config import Settings, load_settings
 from adsb_notifier.notifiers import NotificationFanout
 from adsb_notifier.rules import RuleEngine
-from adsb_notifier.status import write_error_status, write_poll_status
+from adsb_notifier.status import write_error_status, write_poll_status, write_rate_limit_status
 
 LOGGER = logging.getLogger(__name__)
 SHOULD_STOP = False
+DEFAULT_RATE_LIMIT_BACKOFF_SECONDS = 60
+MAX_RATE_LIMIT_BACKOFF_SECONDS = 900
 
 
 def main() -> None:
@@ -40,8 +42,10 @@ def main() -> None:
     config_mtime = _config_mtime(config_path) if not _is_url(config_location) else None
     engine = RuleEngine(settings)
     notifications = NotificationFanout(settings.notifications)
+    rate_limit_attempts = 0
 
     while not SHOULD_STOP:
+        sleep_seconds = settings.poll_seconds
         try:
             if _is_url(config_location):
                 next_settings = _apply_overrides(load_settings(config_location), args.adsb_url)
@@ -65,13 +69,24 @@ def main() -> None:
                 notifications.send(sighting)
             write_poll_status(args.status_file, settings, len(aircraft), sightings)
             LOGGER.info("poll complete aircraft=%s notifications=%s", len(aircraft), len(sightings))
+            rate_limit_attempts = 0
+        except AdsbRateLimitError as exc:
+            sleep_seconds = _rate_limit_backoff_seconds(
+                retry_after_seconds=exc.retry_after_seconds,
+                poll_seconds=settings.poll_seconds,
+                attempts=rate_limit_attempts,
+            )
+            rate_limit_attempts += 1
+            write_rate_limit_status(args.status_file, settings, exc, sleep_seconds)
+            LOGGER.warning("ADS-B source rate limited; backing off for %ss", sleep_seconds)
         except Exception as exc:
+            rate_limit_attempts = 0
             write_error_status(args.status_file, exc)
             LOGGER.exception("poll failed")
 
         if args.once:
             break
-        time.sleep(settings.poll_seconds)
+        time.sleep(sleep_seconds)
 
 
 def _handle_stop(signum: int, frame: object) -> None:
@@ -102,6 +117,18 @@ def _apply_overrides(settings: Settings, adsb_url: str | None = None) -> Setting
     if not adsb_url:
         return settings
     return replace(settings, adsb_url=adsb_url, adsb_source=None)
+
+
+def _rate_limit_backoff_seconds(
+    retry_after_seconds: int | None,
+    poll_seconds: int,
+    attempts: int,
+) -> int:
+    if retry_after_seconds is not None:
+        return max(1, retry_after_seconds)
+
+    base_delay = max(DEFAULT_RATE_LIMIT_BACKOFF_SECONDS, poll_seconds * 2)
+    return min(MAX_RATE_LIMIT_BACKOFF_SECONDS, base_delay * (2**attempts))
 
 
 if __name__ == "__main__":

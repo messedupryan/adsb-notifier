@@ -3,7 +3,7 @@ let savedConfig = null;
 let isDirty = false;
 let selectedRuleId = null;
 let activeTab = "dashboard";
-const uiVersion = "20260808-14";
+const uiVersion = "20260809-12";
 const notificationProviderOrder = ["pushover", "email", "webhook", "twilio"];
 const apiBase = new URLSearchParams(window.location.search).get("api") || "/api";
 const assetVersion = `v=${uiVersion}`;
@@ -18,6 +18,10 @@ const themeAssets = {
 };
 let confirmResolver = null;
 let confirmReturnFocus = null;
+let latestWorkerStatus = null;
+let dashboardMap = null;
+let dashboardMapLayers = null;
+let selectedRecentMatchKey = null;
 
 const fields = {
   adsbUrl: document.querySelector("#adsb-url"),
@@ -25,6 +29,7 @@ const fields = {
   homeLon: document.querySelector("#home-lon"),
   pollSeconds: document.querySelector("#poll-seconds"),
   staleAircraftSeconds: document.querySelector("#stale-aircraft-seconds"),
+  recentMatchesWindowHours: document.querySelector("#recent-matches-window-hours"),
   emailEnabled: document.querySelector("#email-enabled"),
   emailSmtpHost: document.querySelector("#email-smtp-host"),
   emailSmtpPort: document.querySelector("#email-smtp-port"),
@@ -66,6 +71,7 @@ const fields = {
   ruleNotificationProviders: document.querySelector("#rule-notification-providers"),
   ruleNotificationEmpty: document.querySelector("#rule-notification-empty"),
   ruleMilitary: document.querySelector("#rule-military"),
+  ruleIncludeTisb: document.querySelector("#rule-include-tisb"),
   ruleHeadingChange: document.querySelector("#rule-heading-change"),
   ruleWindowMinutes: document.querySelector("#rule-window-minutes"),
   json: document.querySelector("#config-json"),
@@ -93,8 +99,14 @@ const workerLastPoll = document.querySelector("#worker-last-poll");
 const workerAircraftCount = document.querySelector("#worker-aircraft-count");
 const workerNotificationCount = document.querySelector("#worker-notification-count");
 const workerAdsbSource = document.querySelector("#worker-adsb-source");
+const workerRateLimitRetry = document.querySelector("#worker-rate-limit-retry");
 const workerLastError = document.querySelector("#worker-last-error");
 const recentMatches = document.querySelector("#recent-matches");
+const alertMap = document.querySelector("#alert-map");
+const alertMapEmpty = document.querySelector("#alert-map-empty");
+const recenterMapButton = document.querySelector("#recenter-map");
+const fitMapButton = document.querySelector("#fit-map");
+const selectedMapButton = document.querySelector("#selected-map");
 const ruleForm = document.querySelector("#rule-form");
 const ruleEmpty = document.querySelector("#rule-empty");
 const ruleEditorTitle = document.querySelector("#rule-editor-title");
@@ -107,6 +119,8 @@ const themeMode = document.querySelector("#theme-mode");
 const themeAccent = document.querySelector("#theme-accent");
 const appLogo = document.querySelector("#app-logo");
 const footerIcon = document.querySelector("#footer-icon");
+const favicon = document.querySelector("#favicon");
+const appleTouchIcon = document.querySelector("#apple-touch-icon");
 
 versionLabel.textContent = `UI ${uiVersion}`;
 initThemeControls();
@@ -126,6 +140,9 @@ testPushoverButton.addEventListener("click", () => testNotification("pushover"))
 testTwilioButton.addEventListener("click", () => testNotification("twilio"));
 testWebhookButton.addEventListener("click", () => testNotification("webhook"));
 refreshStatusButton.addEventListener("click", () => loadWorkerStatus());
+recenterMapButton.addEventListener("click", () => recenterDashboardMap());
+fitMapButton.addEventListener("click", () => fitDashboardMap());
+selectedMapButton.addEventListener("click", () => zoomSelectedMatch());
 fields.ruleNotificationProviders.addEventListener("change", handleInput);
 ruleList.addEventListener("click", async (event) => {
   const item = event.target.closest(".rule-item");
@@ -224,6 +241,8 @@ function applyTheme(theme) {
   const assets = themeAssets[theme.accent] || themeAssets.teal;
   appLogo.src = assets.logo;
   footerIcon.src = assets.icon;
+  if (favicon) favicon.href = assets.icon;
+  if (appleTouchIcon) appleTouchIcon.href = assets.icon;
 }
 
 async function loadConfig() {
@@ -333,7 +352,8 @@ function handleInput(event) {
     event.target === fields.ruleName ||
     event.target === fields.ruleEnabled ||
     event.target === fields.ruleRadius ||
-    event.target === fields.ruleCooldown
+    event.target === fields.ruleCooldown ||
+    event.target === fields.ruleIncludeTisb
   ) {
     syncSelectedRuleFromForms();
     renderRuleList();
@@ -385,6 +405,7 @@ function renderAll() {
   renderRuleList();
   renderRuleEditor();
   renderJson();
+  if (latestWorkerStatus) renderDashboardMap(latestWorkerStatus);
 }
 
 async function loadWorkerStatus() {
@@ -401,22 +422,35 @@ async function loadWorkerStatus() {
 }
 
 function renderWorkerStatus(status) {
+  latestWorkerStatus = status;
   workerStatusValue.textContent = status.status || "unknown";
   workerLastPoll.textContent = formatDateTime(status.last_poll_at) || "Never";
   workerAircraftCount.textContent = status.aircraft_count ?? "0";
   workerNotificationCount.textContent = status.notification_count ?? "0";
   workerAdsbSource.textContent = status.adsb_url || "Unknown";
+  const retryAt = formatDateTime(status.rate_limit_retry_at);
+  const backoffSeconds = Number(status.rate_limit_backoff_seconds || 0);
+  workerRateLimitRetry.textContent = retryAt ? `${retryAt} (${backoffSeconds}s)` : "None";
   workerLastError.textContent = status.last_error || "None";
 
   recentMatches.replaceChildren();
   const matches = Array.isArray(status.recent_matches) ? status.recent_matches : [];
   if (matches.length === 0) {
+    selectedRecentMatchKey = null;
     recentMatches.append(emptyState("No recent matches"));
     return;
   }
+  if (selectedRecentMatchKey && !matches.some((match) => matchKey(match) === selectedRecentMatchKey)) {
+    selectedRecentMatchKey = null;
+  }
   matches.slice(0, 10).forEach((match) => {
+    const key = matchKey(match);
     const item = document.createElement("div");
     item.className = "match-item";
+    item.classList.toggle("selected", key === selectedRecentMatchKey);
+    item.role = "button";
+    item.tabIndex = 0;
+    item.dataset.matchKey = key;
     const title = document.createElement("strong");
     title.textContent = `${match.rule_name || "Rule"}: ${match.aircraft_label || match.hex || "Aircraft"}`;
     const meta = document.createElement("span");
@@ -424,9 +458,177 @@ function renderWorkerStatus(status) {
     const distance = match.distance_miles ?? "unknown";
     const altitude = match.altitude_ft === null || match.altitude_ft === undefined ? "unknown altitude" : `${match.altitude_ft} ft`;
     meta.textContent = `${type} · ${distance} mi · ${altitude}`;
-    item.append(title, meta);
+    const time = document.createElement("span");
+    time.className = "match-time";
+    time.textContent = formatDateTime(match.observed_at) || "Unknown time";
+    item.append(title, meta, time, matchExternalLink(match));
     recentMatches.append(item);
   });
+  renderDashboardMap(status);
+}
+
+function renderDashboardMap(status) {
+  if (!alertMap || !alertMapEmpty) return;
+  const home = config?.home || {};
+  const homeLat = Number(home.lat);
+  const homeLon = Number(home.lon);
+  if (!Number.isFinite(homeLat) || !Number.isFinite(homeLon)) {
+    alertMapEmpty.textContent = "Home location is not configured";
+    alertMapEmpty.classList.remove("hidden");
+    return;
+  }
+  if (!window.L) {
+    alertMapEmpty.textContent = "Map library unavailable";
+    alertMapEmpty.classList.remove("hidden");
+    return;
+  }
+
+  const map = ensureDashboardMap(homeLat, homeLon);
+  dashboardMapLayers.clearLayers();
+
+  window.L.circleMarker([homeLat, homeLon], {
+    radius: 7,
+    color: "#17202a",
+    fillColor: currentAccentColor(),
+    fillOpacity: 1,
+    weight: 2,
+  })
+    .bindPopup("Home")
+    .addTo(dashboardMapLayers);
+
+  activeRulesWithRadius().forEach((rule) => {
+    window.L.circle([homeLat, homeLon], {
+      radius: milesToMeters(rule.radius_miles),
+      color: eventColor(rule.event),
+      fillColor: eventColor(rule.event),
+      fillOpacity: 0.04,
+      weight: 1.5,
+    })
+      .bindPopup(`${escapeHtml(rule.name || "Rule")} · ${Number(rule.radius_miles).toFixed(1)} mi`)
+      .addTo(dashboardMapLayers);
+  });
+
+  const matches = (Array.isArray(status.recent_matches) ? status.recent_matches : []).filter((match) =>
+    hasPosition(match)
+  );
+  matches.slice(0, 20).forEach((match) => {
+    const latLng = [Number(match.lat), Number(match.lon)];
+    const isSelected = matchKey(match) === selectedRecentMatchKey;
+    const marker = window.L.circleMarker(latLng, {
+      radius: isSelected ? 10 : 8,
+      color: "#17202a",
+      fillColor: isSelected ? selectedMatchColor() : eventColor(match.event_type),
+      fillOpacity: isSelected ? 1 : 0.88,
+      weight: isSelected ? 2.5 : 1.5,
+    })
+      .bindPopup(matchPopupHtml(match))
+      .addTo(dashboardMapLayers);
+    marker.on("click", () => selectRecentMatch(matchKey(match)));
+
+    if (Number.isFinite(Number(match.track_deg))) {
+      window.L.polyline([latLng, projectedTrackPoint(Number(match.lat), Number(match.lon), Number(match.track_deg), 0.8)], {
+        color: isSelected ? selectedMatchColor() : eventColor(match.event_type),
+        opacity: isSelected ? 1 : 0.78,
+        weight: isSelected ? 3.5 : 2,
+      }).addTo(dashboardMapLayers);
+    }
+  });
+
+  alertMapEmpty.textContent = matches.length === 0 ? "No recent matches with positions" : "";
+  alertMapEmpty.classList.toggle("hidden", matches.length > 0);
+  updateMapActionState();
+  fitDashboardMap({maxZoom: dashboardMapZoom()});
+}
+
+function ensureDashboardMap(homeLat, homeLon) {
+  if (dashboardMap) return dashboardMap;
+  dashboardMap = window.L.map(alertMap, {
+    zoomControl: true,
+    scrollWheelZoom: false,
+  }).setView([homeLat, homeLon], 11);
+  window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  }).addTo(dashboardMap);
+  window.L.control.scale({imperial: true, metric: false}).addTo(dashboardMap);
+  dashboardMapLayers = window.L.layerGroup().addTo(dashboardMap);
+  return dashboardMap;
+}
+
+function recenterDashboardMap() {
+  if (!dashboardMap || !config?.home) return;
+  const homeLat = Number(config.home.lat);
+  const homeLon = Number(config.home.lon);
+  if (!Number.isFinite(homeLat) || !Number.isFinite(homeLon)) return;
+
+  const center = [homeLat, homeLon];
+  const zoom = dashboardMapZoom();
+  dashboardMap.invalidateSize();
+  dashboardMap.setView(center, zoom, {animate: false});
+  requestAnimationFrame(() => {
+    dashboardMap.invalidateSize();
+    dashboardMap.setView(center, zoom, {animate: false});
+  });
+}
+
+function fitDashboardMap({maxZoom = 13} = {}) {
+  if (!dashboardMap || !window.L || !config?.home) return;
+  const homeLat = Number(config.home.lat);
+  const homeLon = Number(config.home.lon);
+  if (!Number.isFinite(homeLat) || !Number.isFinite(homeLon)) return;
+
+  const bounds = window.L.latLngBounds([[homeLat, homeLon]]);
+  activeRulesWithRadius().forEach((rule) => {
+    bounds.extend(radiusBounds(homeLat, homeLon, Number(rule.radius_miles)));
+  });
+  recentMatchesWithPositions().forEach((match) => {
+    bounds.extend([Number(match.lat), Number(match.lon)]);
+  });
+
+  dashboardMap.invalidateSize();
+  dashboardMap.fitBounds(bounds, {padding: [28, 28], maxZoom, animate: false});
+}
+
+function zoomSelectedMatch() {
+  if (!dashboardMap || !window.L || !config?.home) return;
+  const match = selectedMatchWithPosition();
+  if (!match) return;
+  const homeLat = Number(config.home.lat);
+  const homeLon = Number(config.home.lon);
+  if (!Number.isFinite(homeLat) || !Number.isFinite(homeLon)) return;
+
+  const bounds = window.L.latLngBounds([
+    [homeLat, homeLon],
+    [Number(match.lat), Number(match.lon)],
+  ]);
+  dashboardMap.invalidateSize();
+  dashboardMap.fitBounds(bounds, {padding: [42, 42], maxZoom: 12, animate: false});
+}
+
+function updateMapActionState() {
+  selectedMapButton.disabled = !selectedMatchWithPosition();
+}
+
+recentMatches.addEventListener("click", (event) => {
+  if (event.target.closest("a")) return;
+  const item = event.target.closest(".match-item");
+  if (!item?.dataset.matchKey) return;
+  selectRecentMatch(item.dataset.matchKey);
+});
+recentMatches.addEventListener("keydown", (event) => {
+  if (!["Enter", " "].includes(event.key)) return;
+  const item = event.target.closest(".match-item");
+  if (!item?.dataset.matchKey) return;
+  event.preventDefault();
+  selectRecentMatch(item.dataset.matchKey);
+});
+
+function selectRecentMatch(key) {
+  selectedRecentMatchKey = selectedRecentMatchKey === key ? null : key;
+  if (latestWorkerStatus) {
+    renderWorkerStatus(latestWorkerStatus);
+  }
+  updateMapActionState();
 }
 
 function renderForms() {
@@ -442,6 +644,7 @@ function renderForms() {
   fields.homeLon.value = config.home?.lon ?? "";
   fields.pollSeconds.value = config.poll_seconds ?? 30;
   fields.staleAircraftSeconds.value = config.stale_aircraft_seconds ?? 90;
+  fields.recentMatchesWindowHours.value = config.recent_matches_window_hours ?? 24;
 
   fields.emailEnabled.checked = Boolean(email.enabled);
   fields.emailSmtpHost.value = email.smtp_host || "";
@@ -526,7 +729,9 @@ function renderRuleEditor() {
   fields.ruleTailNumbers.value = listToText(rule.tail_numbers);
   fields.ruleAircraftTypes.value = listToText(rule.aircraft_types);
   fields.ruleCategories.value = listToText(rule.categories);
-  fields.ruleMilitary.checked = rule.military !== false;
+  fields.ruleMilitary.checked = (rule.event || "tail") === "military";
+  fields.ruleMilitary.disabled = true;
+  fields.ruleIncludeTisb.checked = rule.include_tisb === true;
   fields.ruleHeadingChange.value = rule.circling_min_heading_change_deg ?? 270;
   fields.ruleWindowMinutes.value = rule.circling_window_minutes ?? 8;
   renderRuleNotificationProviders(rule);
@@ -564,6 +769,7 @@ function syncFromForms() {
   };
   config.poll_seconds = integerValue(fields.pollSeconds, 30);
   config.stale_aircraft_seconds = integerValue(fields.staleAircraftSeconds, 90);
+  config.recent_matches_window_hours = integerValue(fields.recentMatchesWindowHours, 24);
   const notifications = config.notifications || {};
   const existingEmail = notifications.email || {};
   const existingPushover = notifications.pushover || {};
@@ -631,7 +837,8 @@ function syncSelectedRuleFromForms() {
     rule.aircraft_types = textToList(fields.ruleAircraftTypes.value);
     rule.categories = textToList(fields.ruleCategories.value);
     rule.notification_providers = selectedRuleNotificationProviders();
-    rule.military = fields.ruleMilitary.checked;
+    rule.military = rule.event === "military";
+    rule.include_tisb = fields.ruleIncludeTisb.checked;
     rule.circling_min_heading_change_deg = numberValue(fields.ruleHeadingChange);
     rule.circling_window_minutes = integerValue(fields.ruleWindowMinutes);
     pruneRuleForEvent(rule);
@@ -844,6 +1051,7 @@ function normalizeConfig(payload) {
     },
     poll_seconds: payload.poll_seconds ?? 30,
     stale_aircraft_seconds: payload.stale_aircraft_seconds ?? 90,
+    recent_matches_window_hours: payload.recent_matches_window_hours ?? 24,
     notifications: payload.notifications || {},
     rules: normalizeRules(payload.rules),
   });
@@ -857,7 +1065,10 @@ function normalizeRules(rules) {
 function normalizeRuleNotificationProviders(payload) {
   const available = enabledNotificationProviders(payload);
   payload.rules = (payload.rules || []).map((rule) => {
-    const selected = Array.isArray(rule.notification_providers) ? rule.notification_providers : available;
+    const selected =
+      Array.isArray(rule.notification_providers) && rule.notification_providers.length > 0
+        ? rule.notification_providers
+        : available;
     return {
       ...rule,
       notification_providers: selected.filter((provider) => available.includes(provider)),
@@ -925,6 +1136,11 @@ function validateConfig(payload) {
   }
   if (!isRequiredNumber(payload.home?.lat) || !isRequiredNumber(payload.home?.lon)) {
     errors.push(validationError("Home latitude and longitude are required.", [fields.homeLat, fields.homeLon]));
+  }
+  if (!isRequiredNumber(payload.recent_matches_window_hours)) {
+    errors.push(validationError("Recent matches hours is required.", fields.recentMatchesWindowHours));
+  } else if (Number(payload.recent_matches_window_hours) < 1 || Number(payload.recent_matches_window_hours) > 168) {
+    errors.push(validationError("Recent matches hours must be between 1 and 168.", fields.recentMatchesWindowHours));
   }
   if (!Array.isArray(payload.rules) || payload.rules.length === 0) {
     errors.push("At least one rule is required.");
@@ -1025,7 +1241,7 @@ function createRule(eventType) {
     return {...base, tail_numbers: ["N12345"]};
   }
   if (eventType === "military") {
-    return {...base, military: true, max_altitude_ft: 25000};
+    return {...base, military: true, include_tisb: false, max_altitude_ft: 25000};
   }
   if (eventType === "aircraft_type") {
     return {...base, aircraft_types: ["H60"], categories: []};
@@ -1079,7 +1295,10 @@ function pruneRuleForEvent(rule) {
     delete rule.aircraft_types;
     delete rule.categories;
   }
-  if (rule.event !== "military") delete rule.military;
+  if (rule.event !== "military") {
+    delete rule.military;
+    delete rule.include_tisb;
+  }
   if (rule.event !== "circling") {
     delete rule.circling_min_heading_change_deg;
     delete rule.circling_window_minutes;
@@ -1173,6 +1392,133 @@ function emptyState(message) {
   return node;
 }
 
+function activeRulesWithRadius() {
+  return (config?.rules || []).filter((rule) => rule.enabled !== false && Number.isFinite(Number(rule.radius_miles)));
+}
+
+function recentMatchesWithPositions() {
+  const matches = Array.isArray(latestWorkerStatus?.recent_matches) ? latestWorkerStatus.recent_matches : [];
+  return matches.filter((match) => hasPosition(match));
+}
+
+function selectedMatchWithPosition() {
+  if (!selectedRecentMatchKey) return null;
+  return recentMatchesWithPositions().find((match) => matchKey(match) === selectedRecentMatchKey) || null;
+}
+
+function dashboardMapZoom() {
+  const radii = activeRulesWithRadius().map((rule) => Number(rule.radius_miles)).filter((radius) => radius > 0);
+  const largestRadius = radii.length ? Math.max(...radii) : 10;
+  if (largestRadius <= 2) return 13;
+  if (largestRadius <= 5) return 12;
+  if (largestRadius <= 15) return 11;
+  return 10;
+}
+
+function hasPosition(match) {
+  return Number.isFinite(Number(match.lat)) && Number.isFinite(Number(match.lon));
+}
+
+function milesToMeters(miles) {
+  return Number(miles) * 1609.344;
+}
+
+function radiusBounds(lat, lon, radiusMiles) {
+  const latitudeDelta = radiusMiles / 69;
+  const longitudeMilesPerDegree = Math.max(1, 69 * Math.cos((lat * Math.PI) / 180));
+  const longitudeDelta = radiusMiles / longitudeMilesPerDegree;
+  return [
+    [lat - latitudeDelta, lon - longitudeDelta],
+    [lat + latitudeDelta, lon + longitudeDelta],
+  ];
+}
+
+function eventColor(eventType) {
+  return {
+    tail: "#2563eb",
+    military: "#be3455",
+    aircraft_type: "#1f7a6d",
+    circling: "#b45309",
+  }[eventType] || currentAccentColor();
+}
+
+function currentAccentColor() {
+  return getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#1f7a6d";
+}
+
+function selectedMatchColor() {
+  return "#dc2626";
+}
+
+function matchKey(match) {
+  return [
+    match.observed_at || "",
+    match.rule_name || "",
+    match.hex || "",
+    match.aircraft_label || "",
+  ].join("|");
+}
+
+function projectedTrackPoint(lat, lon, headingDeg, distanceMiles) {
+  const earthRadiusMiles = 3958.7613;
+  const angularDistance = distanceMiles / earthRadiusMiles;
+  const heading = (headingDeg * Math.PI) / 180;
+  const lat1 = (lat * Math.PI) / 180;
+  const lon1 = (lon * Math.PI) / 180;
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(angularDistance) + Math.cos(lat1) * Math.sin(angularDistance) * Math.cos(heading)
+  );
+  const lon2 =
+    lon1 +
+    Math.atan2(
+      Math.sin(heading) * Math.sin(angularDistance) * Math.cos(lat1),
+      Math.cos(angularDistance) - Math.sin(lat1) * Math.sin(lat2)
+    );
+  return [(lat2 * 180) / Math.PI, (lon2 * 180) / Math.PI];
+}
+
+function matchPopupHtml(match) {
+  const title = `${match.rule_name || "Rule"}: ${match.aircraft_label || match.hex || "Aircraft"}`;
+  const type = match.aircraft_type || match.category || "unknown type";
+  const altitude = match.altitude_ft === null || match.altitude_ft === undefined ? "unknown altitude" : `${match.altitude_ft} ft`;
+  const observed = formatDateTime(match.observed_at) || "Unknown time";
+  const source = match.source_type ? ` · ${match.source_type}` : "";
+  const link = match.adsb_exchange_url
+    ? `<br /><a href="${escapeHtml(match.adsb_exchange_url)}" target="_blank" rel="noopener noreferrer">ADS-B Exchange</a>`
+    : "";
+  return `
+    <strong>${escapeHtml(title)}</strong><br />
+    ${escapeHtml(type)} · ${escapeHtml(String(match.distance_miles ?? "unknown"))} mi · ${escapeHtml(altitude)}<br />
+    ${escapeHtml(observed)}<br />
+    ${escapeHtml(match.hex || "")}${escapeHtml(source)}
+    ${link}
+  `;
+}
+
+function matchExternalLink(match) {
+  const link = document.createElement("a");
+  link.className = "external-match-link";
+  link.textContent = "ADS-B Exchange";
+  if (match.adsb_exchange_url) {
+    link.href = match.adsb_exchange_url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+  } else {
+    link.href = "#";
+    link.setAttribute("aria-disabled", "true");
+  }
+  return link;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function eventLabel(eventType) {
   return {
     tail: "Tail",
@@ -1194,7 +1540,7 @@ function providerLabel(provider) {
 function ruleSummary(rule) {
   if (rule.event === "tail") return listToText(rule.tail_numbers) || "No tail";
   if (rule.event === "aircraft_type") return listToText([...(rule.aircraft_types || []), ...(rule.categories || [])]) || "No type";
-  if (rule.event === "military") return "Military flag";
+  if (rule.event === "military") return rule.include_tisb ? "Military + TIS-B" : "Military flag";
   if (rule.event === "circling") return `${rule.circling_min_heading_change_deg ?? 270} deg`;
   return `${rule.cooldown_minutes ?? 30} min`;
 }

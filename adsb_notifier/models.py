@@ -11,6 +11,7 @@ class Aircraft:
     registration: str | None = None
     aircraft_type: str | None = None
     category: str | None = None
+    source_type: str | None = None
     lat: float | None = None
     lon: float | None = None
     altitude_ft: int | None = None
@@ -23,6 +24,10 @@ class Aircraft:
     @property
     def label(self) -> str:
         return self.registration or self.flight or self.hex
+
+    @property
+    def is_tisb(self) -> bool:
+        return self.hex.startswith("~") or (self.source_type or "").startswith("tisb")
 
 
 @dataclass(frozen=True)

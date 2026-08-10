@@ -52,7 +52,7 @@ local:
 	@if [ ! -f "$(LOCAL_CONFIG)" ]; then echo "Missing $(LOCAL_CONFIG). Set LOCAL_CONFIG=..."; exit 1; fi
 	@set -e; \
 	pipenv run adsb-notifier-api --config "$(LOCAL_CONFIG)" --host "$(API_HOST)" --port "$(API_PORT)" --status-file "$(STATUS_FILE)" --backup-retention "$(BACKUP_RETENTION)" & api_pid=$$!; \
-	( cd ui && UI_HOST=127.0.0.1 UI_PORT="$(UI_PORT)" python3 dev_server.py ) & ui_pid=$$!; \
+	( cd ui && UI_HOST=127.0.0.1 UI_PORT="$(UI_PORT)" pipenv run python dev_server.py ) & ui_pid=$$!; \
 	trap 'kill $$api_pid $$ui_pid 2>/dev/null || true' INT TERM EXIT; \
 	echo "API: http://$(API_HOST):$(API_PORT)"; \
 	echo "UI:  http://127.0.0.1:$(UI_PORT)/?api=http://$(API_HOST):$(API_PORT)"; \
@@ -63,7 +63,7 @@ local-api:
 	pipenv run adsb-notifier-api --config "$(LOCAL_CONFIG)" --host "$(API_HOST)" --port "$(API_PORT)" --status-file "$(STATUS_FILE)" --backup-retention "$(BACKUP_RETENTION)"
 
 local-ui:
-	cd ui && UI_HOST=127.0.0.1 UI_PORT="$(UI_PORT)" python3 dev_server.py
+	cd ui && UI_HOST=127.0.0.1 UI_PORT="$(UI_PORT)" pipenv run python dev_server.py
 
 worker-once:
 	@if [ ! -f "$(LOCAL_CONFIG)" ]; then echo "Missing $(LOCAL_CONFIG). Set LOCAL_CONFIG=..."; exit 1; fi

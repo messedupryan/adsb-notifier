@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 
 from adsb_notifier.adsb import fetch_aircraft_for_settings
 from adsb_notifier.config import NOTIFICATION_PROVIDERS, parse_settings
+from adsb_notifier.links import adsb_exchange_aircraft_url
 from adsb_notifier.notifiers import NotificationFanout, send_test_notification
 from adsb_notifier.rules import RuleEngine
 from adsb_notifier.status import read_status
@@ -399,6 +400,7 @@ def _sighting_summary(sighting: Any) -> dict[str, Any]:
         "registration": plane.registration,
         "flight": plane.flight,
         "hex": plane.hex,
+        "adsb_exchange_url": adsb_exchange_aircraft_url(plane.hex),
         "aircraft_type": plane.aircraft_type or plane.category,
         "distance_miles": round(sighting.distance_miles, 2),
         "altitude_ft": plane.altitude_ft,
@@ -424,6 +426,9 @@ def _normalize_rule_notification_providers(rule: dict[str, Any], config: dict[st
             for provider in next_rule.get("notification_providers", [])
             if str(provider).strip()
         }
+        if not selected:
+            next_rule["notification_providers"] = sorted(enabled)
+            return next_rule
         next_rule["notification_providers"] = sorted((selected & NOTIFICATION_PROVIDERS) & enabled)
         return next_rule
     next_rule["notification_providers"] = sorted(enabled)
@@ -480,6 +485,7 @@ def _default_config() -> dict[str, Any]:
         "home": {"lat": 40.7608, "lon": -111.8910},
         "poll_seconds": 30,
         "stale_aircraft_seconds": 90,
+        "recent_matches_window_hours": 24,
         "notifications": {},
         "rules": [
             {

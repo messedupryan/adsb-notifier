@@ -25,6 +25,7 @@ def valid_config() -> dict:
         "home": {"lat": 40.7608, "lon": -111.8910},
         "poll_seconds": 30,
         "stale_aircraft_seconds": 90,
+        "recent_matches_window_hours": 24,
         "notifications": {},
         "rules": [
             {
@@ -117,6 +118,15 @@ def test_disabled_global_provider_is_pruned_from_rules():
     assert config["rules"][0]["notification_providers"] == ["email", "webhook"]
 
 
+def test_empty_rule_notification_providers_backfill_when_global_provider_is_enabled():
+    payload = config_with_email()
+    payload["rules"][0]["notification_providers"] = []
+
+    config = _normalize_notification_provider_selections(payload)
+
+    assert config["rules"][0]["notification_providers"] == ["email"]
+
+
 def test_ensure_rule_ids_replaces_duplicate_ids():
     payload = valid_config()
     payload["rules"] = [
@@ -182,6 +192,23 @@ def test_invalid_config_without_rules_is_rejected():
         parse_settings(payload)
 
 
+def test_recent_matches_window_defaults_to_24_hours():
+    payload = valid_config()
+    del payload["recent_matches_window_hours"]
+
+    settings = parse_settings(payload)
+
+    assert settings.recent_matches_window_hours == 24
+
+
+def test_recent_matches_window_rejects_values_above_max():
+    payload = valid_config()
+    payload["recent_matches_window_hours"] = 169
+
+    with pytest.raises(ValueError, match="recent_matches_window_hours cannot exceed 168"):
+        parse_settings(payload)
+
+
 def test_rule_without_radius_is_rejected_with_clear_message():
     payload = valid_config()
     del payload["rules"][0]["radius_miles"]
@@ -196,6 +223,37 @@ def test_rule_without_cooldown_is_rejected_with_clear_message():
 
     with pytest.raises(ValueError, match="target requires cooldown_minutes"):
         parse_settings(payload)
+
+
+def test_military_rule_defaults_military_flag_true():
+    payload = config_with_email()
+    payload["rules"][0] = {
+        "name": "mil",
+        "event": "military",
+        "radius_miles": 25,
+        "cooldown_minutes": 30,
+        "notification_providers": ["email"],
+    }
+
+    settings = parse_settings(payload)
+
+    assert settings.rules[0].military is True
+
+
+def test_military_rule_parses_include_tisb_setting():
+    payload = config_with_email()
+    payload["rules"][0] = {
+        "name": "mil",
+        "event": "military",
+        "radius_miles": 25,
+        "cooldown_minutes": 30,
+        "include_tisb": True,
+        "notification_providers": ["email"],
+    }
+
+    settings = parse_settings(payload)
+
+    assert settings.rules[0].include_tisb is True
 
 
 def test_duplicate_rule_names_are_rejected():
@@ -477,6 +535,7 @@ def test_rule_test_endpoint_sends_when_rule_matches_live_data(tmp_path, monkeypa
     assert response["matched"] is True
     assert response["sent_count"] == 1
     assert response["matches"][0]["aircraft_label"] == "N12345"
+    assert response["matches"][0]["adsb_exchange_url"] == "https://globe.adsbexchange.com/?icao=A12345"
     assert sent == [("target: N12345 (C172) 0.0 mi away at 5500 ft", "ADS-B alert")]
 
 

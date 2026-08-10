@@ -391,8 +391,18 @@ textarea.invalid {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+  align-items: start;
   gap: 14px;
+}
+
+.worker-card {
+  grid-column: 1 / -1;
+}
+
+.map-card {
+  position: sticky;
+  top: 14px;
 }
 
 .status-card {
@@ -407,11 +417,24 @@ textarea.invalid {
   border-bottom: 1px solid var(--soft-border);
 }
 
+.map-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .status-list {
   display: grid;
   gap: 0;
   margin: 0;
   padding: 8px 16px 16px;
+}
+
+.worker-card .status-list {
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  gap: 10px;
+  padding: 12px 16px 16px;
 }
 
 .status-list div {
@@ -422,8 +445,21 @@ textarea.invalid {
   border-bottom: 1px solid var(--soft-border);
 }
 
+.worker-card .status-list div {
+  display: block;
+  min-width: 0;
+  border: 1px solid var(--soft-border);
+  border-radius: 6px;
+  background: var(--panel-muted);
+  padding: 9px 10px;
+}
+
 .status-list div:last-child {
   border-bottom: 0;
+}
+
+.worker-card .status-list div:last-child {
+  border-bottom: 1px solid var(--soft-border);
 }
 
 .status-list dt {
@@ -439,14 +475,37 @@ textarea.invalid {
 
 .recent-matches {
   display: grid;
+  align-content: start;
   gap: 8px;
+  max-height: clamp(460px, calc(100vh - 310px), 760px);
+  min-height: 460px;
+  overflow: auto;
   padding: 12px;
 }
 
 .match-item {
+  width: 100%;
   border: 1px solid var(--soft-border);
   border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
   padding: 10px 12px;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.match-item:hover {
+  border-color: var(--border);
+  background: var(--panel-muted);
+}
+
+.match-item.selected {
+  border-color: #dc2626;
+  background: color-mix(in srgb, #dc2626 10%, var(--panel));
+  box-shadow: inset 3px 0 0 #dc2626;
 }
 
 .match-item strong,
@@ -457,6 +516,57 @@ textarea.invalid {
 .match-item span {
   color: var(--muted);
   font-size: 13px;
+}
+
+.match-time {
+  margin-top: 4px;
+}
+
+.external-match-link {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.external-match-link:hover {
+  text-decoration: underline;
+}
+
+.map-shell {
+  position: relative;
+  min-height: clamp(460px, calc(100vh - 310px), 760px);
+}
+
+.alert-map {
+  min-height: clamp(460px, calc(100vh - 310px), 760px);
+  border-radius: 0 0 8px 8px;
+  background: var(--panel-muted);
+}
+
+.map-empty {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 500;
+  max-width: min(320px, calc(100% - 28px));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  padding: 8px 10px;
+  font-size: 13px;
+  box-shadow: 0 8px 24px var(--shadow);
+}
+
+.leaflet-container {
+  font: inherit;
+}
+
+.leaflet-popup-content {
+  color: #17202a;
 }
 
 .provider,
@@ -683,6 +793,25 @@ textarea {
   .dashboard-grid,
   .rules-layout {
     grid-template-columns: 1fr;
+  }
+
+  .worker-card .status-list {
+    grid-template-columns: 1fr;
+  }
+
+  .map-card {
+    position: static;
+  }
+
+  .recent-matches,
+  .map-shell,
+  .alert-map {
+    max-height: none;
+    min-height: 380px;
+  }
+
+  .recent-matches {
+    overflow: visible;
   }
 
   .app-footer {

@@ -52,7 +52,7 @@ class RuleEngine:
             if not _tail_matches(rule, plane):
                 return None
         elif rule.event == "military":
-            if not plane.military and rule.military is not True:
+            if not plane.military and not (rule.include_tisb and plane.is_tisb):
                 return None
         elif rule.event == "aircraft_type":
             if not _type_matches(rule, plane):

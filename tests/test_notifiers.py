@@ -264,6 +264,15 @@ def test_sms_template_can_be_shorter_than_email():
     )
 
 
+def test_templates_include_adsb_exchange_url():
+    sighting = sample_sighting()
+
+    assert (
+        render_email_body({"body_template": "Track: {adsb_exchange_url}"}, sighting)
+        == "Track: https://globe.adsbexchange.com/?icao=A0B1C2"
+    )
+
+
 def test_pushover_templates_are_independent():
     sighting = sample_sighting()
     config = {

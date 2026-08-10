@@ -1,4 +1,9 @@
-from adsb_notifier.adsb import build_adsb_url, parse_aircraft_payload
+from email.message import Message
+from urllib.error import HTTPError
+
+import pytest
+
+from adsb_notifier.adsb import AdsbRateLimitError, build_adsb_url, fetch_aircraft, parse_aircraft_payload
 from adsb_notifier.config import AdsbSource, Home, Notifications, Rule, Settings
 
 
@@ -57,6 +62,30 @@ def test_parse_airplanes_live_payload():
     assert aircraft[0].military is False
 
 
+def test_parse_airplanes_live_dbflags_military_bit():
+    aircraft = parse_aircraft_payload(
+        {
+            "ac": [
+                {
+                    "hex": "ae21a1",
+                    "flight": "G8524557",
+                    "r": "86-24557",
+                    "t": "H60",
+                    "dbFlags": 1,
+                    "lat": 40.613525,
+                    "lon": -111.99498,
+                    "alt_baro": "ground",
+                }
+            ]
+        }
+    )
+
+    assert len(aircraft) == 1
+    assert aircraft[0].hex == "AE21A1"
+    assert aircraft[0].military is True
+    assert aircraft[0].altitude_ft == 0
+
+
 def test_parse_adsb_lol_payload_with_alt_alias_and_military_flag():
     aircraft = parse_aircraft_payload(
         {
@@ -77,6 +106,27 @@ def test_parse_adsb_lol_payload_with_alt_alias_and_military_flag():
     assert aircraft[0].hex == "AE0001"
     assert aircraft[0].altitude_ft == 9000
     assert aircraft[0].military is True
+
+
+def test_parse_tisb_aircraft_sets_source_type():
+    aircraft = parse_aircraft_payload(
+        {
+            "ac": [
+                {
+                    "hex": "~29e466",
+                    "type": "tisb_other",
+                    "lat": 40.8,
+                    "lon": -111.9,
+                    "alt_baro": 10800,
+                }
+            ]
+        }
+    )
+
+    assert len(aircraft) == 1
+    assert aircraft[0].source_type == "tisb_other"
+    assert aircraft[0].is_tisb is True
+    assert aircraft[0].military is False
 
 
 def test_build_airplanes_live_point_url_uses_configured_radius():
@@ -107,6 +157,22 @@ def test_build_source_specific_lookup_url():
     )
 
     assert build_adsb_url(settings) == "https://api.airplanes.live/v2/reg/N12345"
+
+
+def test_fetch_aircraft_raises_rate_limit_error_with_retry_after(monkeypatch):
+    headers = Message()
+    headers["Retry-After"] = "120"
+
+    def fake_urlopen(request, timeout):
+        del request, timeout
+        raise HTTPError("https://api.example.test/aircraft", 429, "Too Many Requests", headers, None)
+
+    monkeypatch.setattr("adsb_notifier.adsb.urlopen", fake_urlopen)
+
+    with pytest.raises(AdsbRateLimitError) as error:
+        fetch_aircraft("https://api.example.test/aircraft")
+
+    assert error.value.retry_after_seconds == 120
 
 
 def settings_with_source(source: AdsbSource, rules: list[Rule]) -> Settings:

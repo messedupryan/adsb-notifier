@@ -119,6 +119,81 @@ def test_aircraft_type_rule_matches_type_or_category():
     assert len(sightings) == 1
 
 
+def test_military_rule_rejects_civilian_aircraft_even_without_rule_flag():
+    engine = RuleEngine(settings_with(Rule(name="mil", event="military", radius_miles=10, military=None)))
+
+    sightings = engine.evaluate(
+        [
+            Aircraft(
+                hex="A9BCDE",
+                registration="N875DN",
+                flight="DAL123",
+                lat=40.7708,
+                lon=-111.8910,
+                military=False,
+            )
+        ]
+    )
+
+    assert sightings == []
+
+
+def test_military_rule_matches_military_flagged_aircraft():
+    engine = RuleEngine(settings_with(Rule(name="mil", event="military", radius_miles=10, military=None)))
+
+    sightings = engine.evaluate(
+        [
+            Aircraft(
+                hex="AE0001",
+                flight="RCH123",
+                lat=40.7708,
+                lon=-111.8910,
+                military=True,
+            )
+        ]
+    )
+
+    assert len(sightings) == 1
+    assert sightings[0].event_type == "military"
+
+
+def test_military_rule_rejects_tisb_track_by_default():
+    engine = RuleEngine(settings_with(Rule(name="mil", event="military", radius_miles=10, include_tisb=False)))
+
+    sightings = engine.evaluate(
+        [
+            Aircraft(
+                hex="~29E466",
+                source_type="tisb_other",
+                lat=40.7708,
+                lon=-111.8910,
+                military=False,
+            )
+        ]
+    )
+
+    assert sightings == []
+
+
+def test_military_rule_matches_tisb_track_when_enabled():
+    engine = RuleEngine(settings_with(Rule(name="mil", event="military", radius_miles=10, include_tisb=True)))
+
+    sightings = engine.evaluate(
+        [
+            Aircraft(
+                hex="~29E466",
+                source_type="tisb_other",
+                lat=40.7708,
+                lon=-111.8910,
+                military=False,
+            )
+        ]
+    )
+
+    assert len(sightings) == 1
+    assert sightings[0].aircraft.is_tisb is True
+
+
 def test_cooldown_suppresses_duplicate_notifications():
     now = datetime(2026, 7, 23, tzinfo=timezone.utc)
     engine = RuleEngine(

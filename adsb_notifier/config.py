@@ -8,6 +8,8 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 NOTIFICATION_PROVIDERS = {"email", "pushover", "twilio", "webhook"}
+DEFAULT_RECENT_MATCHES_WINDOW_HOURS = 24
+MAX_RECENT_MATCHES_WINDOW_HOURS = 168
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,7 @@ class Rule:
     aircraft_types: set[str] = field(default_factory=set)
     categories: set[str] = field(default_factory=set)
     military: bool | None = None
+    include_tisb: bool = False
     min_altitude_ft: int | None = None
     max_altitude_ft: int | None = None
     cooldown_minutes: int = 30
@@ -62,6 +65,7 @@ class Settings:
     stale_aircraft_seconds: int
     notifications: Notifications
     rules: list[Rule]
+    recent_matches_window_hours: int = DEFAULT_RECENT_MATCHES_WINDOW_HOURS
 
 
 def load_settings(path: str | Path) -> Settings:
@@ -93,6 +97,7 @@ def parse_settings(data: dict[str, Any]) -> Settings:
         home=Home(lat=float(home_data["lat"]), lon=float(home_data["lon"])),
         poll_seconds=int(data.get("poll_seconds", 30)),
         stale_aircraft_seconds=int(data.get("stale_aircraft_seconds", 90)),
+        recent_matches_window_hours=_recent_matches_window_hours(data),
         notifications=Notifications(
             email=notification_data.get("email"),
             twilio=notification_data.get("twilio"),
@@ -102,6 +107,19 @@ def parse_settings(data: dict[str, Any]) -> Settings:
         ),
         rules=rules,
     )
+
+
+def _recent_matches_window_hours(data: dict[str, Any]) -> int:
+    value = data.get("recent_matches_window_hours", DEFAULT_RECENT_MATCHES_WINDOW_HOURS)
+    try:
+        hours = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("recent_matches_window_hours must be numeric") from exc
+    if hours < 1:
+        raise ValueError("recent_matches_window_hours must be at least 1")
+    if hours > MAX_RECENT_MATCHES_WINDOW_HOURS:
+        raise ValueError(f"recent_matches_window_hours cannot exceed {MAX_RECENT_MATCHES_WINDOW_HOURS}")
+    return hours
 
 
 def _validate_notifications(data: dict[str, Any]) -> None:
@@ -133,16 +151,18 @@ def _parse_adsb_source(data: dict[str, Any] | None) -> AdsbSource | None:
 
 def _parse_rule(data: dict[str, Any]) -> Rule:
     name = data.get("name", "unnamed rule")
+    event = data["event"]
     return Rule(
         name=data["name"],
-        event=data["event"],
+        event=event,
         radius_miles=_required_float(data, "radius_miles", name),
         id=data.get("id"),
         enabled=_bool_value(data.get("enabled", True)),
         tail_numbers={value.upper() for value in data.get("tail_numbers", [])},
         aircraft_types={value.upper() for value in data.get("aircraft_types", [])},
         categories={value.upper() for value in data.get("categories", [])},
-        military=data.get("military"),
+        military=True if event == "military" else data.get("military"),
+        include_tisb=_bool_value(data.get("include_tisb", False)),
         min_altitude_ft=data.get("min_altitude_ft"),
         max_altitude_ft=data.get("max_altitude_ft"),
         cooldown_minutes=_required_int(data, "cooldown_minutes", name),

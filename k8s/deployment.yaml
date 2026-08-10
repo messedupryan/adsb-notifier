@@ -21,7 +21,7 @@ spec:
       containers:
         - name: worker
           image: pi-lab-registry.local/adsb-notifier-worker:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           args: ["--config", "http://adsb-notifier-api:8000/config", "--status-file", "/status/status.json"]
           envFrom:
             - secretRef:
@@ -78,7 +78,7 @@ spec:
       containers:
         - name: api
           image: pi-lab-registry.local/adsb-notifier-api:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           args: ["--config", "/config/config.json", "--status-file", "/status/status.json", "--backup-retention", "20"]
           envFrom:
             - secretRef:
@@ -136,7 +136,7 @@ spec:
       containers:
         - name: ui
           image: pi-lab-registry.local/adsb-notifier-ui:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

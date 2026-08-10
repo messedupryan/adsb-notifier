@@ -1,22 +1,41 @@
 # ADS-B Notifier
 
-Containerized ADS-B notification system with three Kubernetes-friendly components:
+ADS-B Notifier watches aircraft near a configured home location and sends alerts when saved rules match live ADS-B data. It is built as three Kubernetes-friendly components:
 
 - Worker service that polls ADS-B aircraft JSON and sends notifications
 - Configuration API that validates and persists runtime config
-- Web UI for editing the shared configuration
+- Web UI for editing the shared configuration and reviewing recent matches on a map
+
+The app can run locally for development or as three containers in Kubernetes. The Kubernetes deployment is managed by Helm and currently uses:
+
+- Namespace: `adsb`
+- Release: `adsb-notifier`
+- Local registry: `pi-lab-registry.local`
+- Test URL: `http://adsb-notifier.10.0.0.100.sslip.io/`
+
+Current UI version: `UI 20260809-12`
 
 ## Supported Events
 
 - Specific tail number, callsign, or ICAO hex near home
 - Optional minimum and maximum altitude filters
-- Military aircraft near home, when the ADS-B source marks `military: true`
+- Military aircraft near home, using explicit military flags or readsb/Airplanes.live `dbFlags`
 - Specific aircraft type or ADS-B category
 - Circling pattern detection based on accumulated heading changes inside a radius
 
-The service works with common `dump1090`, `readsb`, and `tar1090` JSON feeds that expose `aircraft.json`.
+The service works with common `dump1090`, `readsb`, and `tar1090` JSON feeds that expose `aircraft.json`, and can also build online source URLs for Airplanes.live and ADSB.lol.
 
-## Local Run
+## Dashboard
+
+The UI Dashboard shows:
+
+- Worker health, last poll time, aircraft count, notification count, ADS-B source, rate-limit retry status, and last error
+- Recent matches with observed timestamps and ADS-B Exchange links
+- Alert map with home marker, active rule radii, recent match markers, selected-match highlighting, and Home/Fit Alerts/Selected controls
+
+The worker summary spans the top of the dashboard. Recent matches sit to the left of the map and scroll independently on desktop so the map remains visible as the list grows. The site also has a favicon; the default tab icon is teal and the UI swaps it to match the selected accent theme when the app loads.
+
+## Local Development
 
 Common project workflows are wrapped in the root `Makefile`:
 
@@ -29,50 +48,89 @@ make deploy-k8s
 make deploy-helm HELM_CHART=charts/adsb-notifier
 ```
 
+Install dependencies:
+
 ```bash
-cp config.example.json config.json
 pipenv install --dev
-pipenv run adsb-notifier --config config.json
+cp config.example.json config.dev.json
 ```
 
-Run the config API locally:
+Run API and UI together:
 
 ```bash
-pipenv run adsb-notifier-api --config config.json --host 127.0.0.1 --port 8000 --backup-retention 20
+make local LOCAL_CONFIG=config.dev.json
 ```
 
-The API writes config snapshots to a `backups/` directory beside the active config before overwrites. `--backup-retention` controls how many snapshots to keep; use `0` to disable backups.
-
-Run the no-cache UI dev server locally:
-
-```bash
-cd ui
-python3 dev_server.py
-```
-
-Open the UI against a local API:
+Open:
 
 ```text
-http://127.0.0.1:8766/?api=http://127.0.0.1:8000
+http://127.0.0.1:8766/?api=http://127.0.0.1:8765
 ```
 
-Run a single poll:
+Run components separately:
 
 ```bash
-pipenv run adsb-notifier --config config.json --once
+make local-api LOCAL_CONFIG=config.dev.json
+make local-ui
 ```
 
-Run a single poll against a local or port-forwarded ADS-B feed without editing config:
+Run a single worker poll:
 
 ```bash
-pipenv run adsb-notifier --config config.json --adsb-url http://127.0.0.1:8080/tar1090/data/aircraft.json --once
+make worker-once LOCAL_CONFIG=config.dev.json
 ```
 
 Run tests:
 
 ```bash
+make test
+```
+
+Direct commands are also available:
+
+```bash
+pipenv run adsb-notifier-api --config config.dev.json --host 127.0.0.1 --port 8765 --status-file status.json --backup-retention 20
+cd ui && UI_HOST=127.0.0.1 UI_PORT=8766 pipenv run python dev_server.py
+pipenv run adsb-notifier --config config.dev.json --status-file status.json --once
 pipenv run pytest -q
 ```
+
+The API writes config snapshots to a `backups/` directory beside the active config before overwrites. `--backup-retention` controls how many snapshots to keep; use `0` to disable backups.
+
+Run a single poll against a local or port-forwarded ADS-B feed without editing config:
+
+```bash
+pipenv run adsb-notifier --config config.dev.json --adsb-url http://127.0.0.1:8080/tar1090/data/aircraft.json --once
+```
+
+For new changes:
+
+- Use `pipenv run ...` or the Makefile targets so commands run inside the project environment.
+- Bump `uiVersion` in `ui/app.js` when changing UI assets or behavior.
+- Update `ui/index.html` asset query strings when bumping the UI version.
+- Keep `README.md`, `config.example.json`, and Helm `seedConfig` aligned when adding config fields.
+- Run `make test` before building or deploying.
+
+## Browser URLs
+
+Local UI:
+
+```text
+http://127.0.0.1:8766/?api=http://127.0.0.1:8765
+```
+
+Kubernetes UI:
+
+```text
+http://adsb-notifier.10.0.0.100.sslip.io/
+```
+
+Kubernetes status API:
+
+```text
+http://adsb-notifier.10.0.0.100.sslip.io/api/status
+```
+
 
 ## Configuration
 
@@ -104,6 +162,23 @@ Rules can choose which globally enabled notification providers they use with `no
 }
 ```
 
+Military rules default to requiring the ADS-B source to mark the aircraft as military. Airplanes.live/readsb-style payloads can identify this through `dbFlags: 1`; the parser normalizes that into `military: true`. Military rules can optionally include TIS-B/other tracks with `include_tisb: true`.
+
+```json
+{
+  "name": "Military nearby",
+  "event": "military",
+  "military": true,
+  "include_tisb": false,
+  "radius_miles": 40,
+  "max_altitude_ft": 25000,
+  "cooldown_minutes": 30,
+  "notification_providers": ["email"]
+}
+```
+
+`recent_matches_window_hours` controls how long recent matches are retained in worker status. The default is `24`, and the maximum is `168`.
+
 ADS-B data can come from a direct `aircraft.json` URL or from an online source adapter. The direct URL remains available through `adsb_url`; an `adsb_source` block enables provider-specific URL construction:
 
 ```json
@@ -114,7 +189,15 @@ ADS-B data can come from a direct `aircraft.json` URL or from an online source a
 }
 ```
 
-Supported providers are `airplanes_live` and `adsb_lol`. The first supported query is `point`, which uses the configured home latitude/longitude and either `radius_miles` or the largest enabled rule radius. Keep polling at `60-120` seconds for online public APIs.
+Supported providers are `airplanes_live` and `adsb_lol`. Supported query modes are:
+
+- `point`: uses configured home latitude/longitude and either `radius_miles` or the largest enabled rule radius
+- `reg`: searches by registration
+- `type`: searches by aircraft type
+- `hex`: searches by ICAO hex
+- `mil`: uses the provider's military endpoint
+
+Keep polling at `60-120` seconds for online public APIs. The worker treats HTTP `429` responses as rate limits, honors `Retry-After` when present, and otherwise uses capped exponential backoff.
 
 ## Configuration API
 
@@ -129,12 +212,15 @@ Implemented:
 - `PUT /rules/{id}`
 - `DELETE /rules/{id}`
 - `POST /rules/{id}/test`
+- `POST /notifications/test`
 
 The UI uses the rule-specific endpoints for rule create, update, duplicate, and delete workflows. The full-config endpoint remains available for settings, notification blocks, raw JSON edits, and worker config loading.
 
 `POST /rules/{id}/test` fetches the current ADS-B source, evaluates only that saved rule with its real parameters, and sends notifications only when live aircraft match. If no aircraft match, the response reports `matched: false` and no notifications are sent.
 
-The worker writes operational status to `status.json` after each poll. The API serves that file through `GET /status`, and the UI Dashboard tab shows the last poll timestamp, aircraft count, notification count, ADS-B source, last error, and recent matches. In Kubernetes, worker and API mount the same PVC at `/status` and use `/status/status.json`.
+The worker writes operational status to `status.json` after each poll. The API serves that file through `GET /status`, and the UI Dashboard tab shows the last poll timestamp, aircraft count, notification count, ADS-B source, rate-limit retry timing, last error, and recent matches. Recent matches include map metadata, observed timestamps, selected notification providers, and ADS-B Exchange links when an ICAO hex is available.
+
+In Kubernetes, worker and API mount the same PVC at `/status` and use `/status/status.json`.
 
 ## Notifications
 
@@ -158,7 +244,7 @@ For Gmail SMTP, use a Google app password rather than your normal Google passwor
   "from": "yourname@gmail.com",
   "to": ["yourname@gmail.com"],
   "subject_template": "ADS-B alert: {aircraft_label} matched {rule_name}",
-  "body_template": "{message}\n\nAircraft: {aircraft_label}\nRegistration: {registration}\nFlight: {flight}\nType: {aircraft_type}\nDescription: {description}\nOperator: {operator}\nAltitude: {altitude_label}\nDistance: {distance_miles:.1f} mi\nTrack: {track_label}\nSpeed: {ground_speed_label}\nVertical rate: {vertical_rate_label}\nSquawk: {squawk}\nSeen: {seen_label}\nHex: {hex}\nRule: {rule_name}\nObserved: {observed_at}"
+  "body_template": "{message}\n\nAircraft: {aircraft_label}\nRegistration: {registration}\nFlight: {flight}\nType: {aircraft_type}\nDescription: {description}\nOperator: {operator}\nAltitude: {altitude_label}\nDistance: {distance_miles:.1f} mi\nTrack: {track_label}\nSpeed: {ground_speed_label}\nVertical rate: {vertical_rate_label}\nSquawk: {squawk}\nSeen: {seen_label}\nHex: {hex}\nADS-B Exchange: {adsb_exchange_url}\nRule: {rule_name}\nObserved: {observed_at}"
 }
 ```
 
@@ -171,7 +257,7 @@ Useful placeholders:
 - Aircraft identity: `{aircraft_label}`, `{registration}`, `{flight}`, `{hex}`, `{aircraft_type}`, `{category}`
 - Aircraft details: `{description}`, `{operator}`, `{squawk}`, `{emergency}`, `{military}`
 - Position and motion: `{distance_miles:.1f}`, `{distance_miles_1}`, `{altitude_ft}`, `{altitude_label}`, `{ground_speed_kt}`, `{ground_speed_label}`, `{track_deg}`, `{track_label}`, `{vertical_rate_fpm}`, `{vertical_rate_label}`, `{lat}`, `{lon}`, `{seen_seconds}`, `{seen_label}`
-- Alert metadata: `{message}`, `{rule_name}`, `{event_type}`, `{observed_at}`
+- Alert metadata: `{message}`, `{rule_name}`, `{event_type}`, `{observed_at}`, `{adsb_exchange_url}`
 
 Pushover is the recommended phone notification provider for home deployments because it avoids carrier SMS registration and compliance overhead. Create a Pushover application, put its API token in `PUSHOVER_APP_TOKEN`, and put your user key in `PUSHOVER_USER_KEY`.
 
@@ -237,8 +323,14 @@ set +a
 kubectl -n adsb create secret generic adsb-notifier-secrets \
   --from-literal=SMTP_USERNAME="${SMTP_USERNAME:-}" \
   --from-literal=SMTP_PASSWORD="${SMTP_PASSWORD:-}" \
+  --from-literal=TWILIO_ACCOUNT_SID="${TWILIO_ACCOUNT_SID:-}" \
+  --from-literal=TWILIO_API_KEY_SID="${TWILIO_API_KEY_SID:-}" \
+  --from-literal=TWILIO_API_KEY_SECRET="${TWILIO_API_KEY_SECRET:-}" \
+  --from-literal=TWILIO_FROM="${TWILIO_FROM:-}" \
+  --from-literal=TWILIO_TO="${TWILIO_TO:-}" \
   --from-literal=PUSHOVER_APP_TOKEN="${PUSHOVER_APP_TOKEN:-}" \
   --from-literal=PUSHOVER_USER_KEY="${PUSHOVER_USER_KEY:-}" \
+  --from-literal=ALERT_WEBHOOK_URL="${ALERT_WEBHOOK_URL:-}" \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
@@ -255,6 +347,7 @@ kubectl -n adsb create secret generic adsb-notifier-secrets \
   --from-literal=TWILIO_TO='+15557654321' \
   --from-literal=PUSHOVER_APP_TOKEN='your-pushover-app-token' \
   --from-literal=PUSHOVER_USER_KEY='your-pushover-user-key' \
+  --from-literal=ALERT_WEBHOOK_URL='https://example.test/adsb-webhook' \
   --dry-run=client -o yaml > k8s/secret.yaml
 ```
 
