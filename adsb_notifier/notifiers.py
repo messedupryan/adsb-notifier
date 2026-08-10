@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import base64
+import html
 import logging
 import os
 import smtplib
+from dataclasses import dataclass
 from email.message import EmailMessage
+from importlib import resources
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -13,6 +16,109 @@ from adsb_notifier.links import adsb_exchange_aircraft_url
 from adsb_notifier.models import Aircraft, Sighting
 
 LOGGER = logging.getLogger(__name__)
+EMAIL_BRAND_THEMES = {"amber", "blue", "rose", "teal", "violet"}
+EMAIL_LOGO_CID = "adsb-notifier-logo"
+EMAIL_ICON_CID = "adsb-notifier-icon"
+LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE = (
+    '<p>{message_html}</p><p><a href="{adsb_exchange_url_html}">ADS-B Exchange</a></p>'
+    '<table><tr><th align="left">Aircraft</th><td>{aircraft_label_html}</td></tr>'
+    '<tr><th align="left">Registration</th><td>{registration_html}</td></tr>'
+    '<tr><th align="left">Flight</th><td>{flight_html}</td></tr>'
+    '<tr><th align="left">Type</th><td>{aircraft_type_html}</td></tr>'
+    '<tr><th align="left">Description</th><td>{description_html}</td></tr>'
+    '<tr><th align="left">Operator</th><td>{operator_html}</td></tr>'
+    '<tr><th align="left">Altitude</th><td>{altitude_label_html}</td></tr>'
+    '<tr><th align="left">Distance</th><td>{distance_miles:.1f} mi</td></tr>'
+    '<tr><th align="left">Track</th><td>{track_label_html}</td></tr>'
+    '<tr><th align="left">Speed</th><td>{ground_speed_label_html}</td></tr>'
+    '<tr><th align="left">Vertical rate</th><td>{vertical_rate_label_html}</td></tr>'
+    '<tr><th align="left">Squawk</th><td>{squawk_html}</td></tr>'
+    '<tr><th align="left">Seen</th><td>{seen_label_html}</td></tr>'
+    '<tr><th align="left">Hex</th><td>{hex_html}</td></tr>'
+    '<tr><th align="left">Rule</th><td>{rule_name_html}</td></tr>'
+    '<tr><th align="left">Observed</th><td>{observed_at_html}</td></tr></table>'
+)
+DEFAULT_EMAIL_HTML_BODY_TEMPLATE = """\
+<p>{message_html}</p>
+
+<p>
+  <a href="{adsb_exchange_url_html}">ADS-B Exchange</a>
+</p>
+
+<table>
+  <tr>
+    <th align="left">Aircraft</th>
+    <td>{aircraft_label_html}</td>
+  </tr>
+  <tr>
+    <th align="left">Registration</th>
+    <td>{registration_html}</td>
+  </tr>
+  <tr>
+    <th align="left">Flight</th>
+    <td>{flight_html}</td>
+  </tr>
+  <tr>
+    <th align="left">Type</th>
+    <td>{aircraft_type_html}</td>
+  </tr>
+  <tr>
+    <th align="left">Description</th>
+    <td>{description_html}</td>
+  </tr>
+  <tr>
+    <th align="left">Operator</th>
+    <td>{operator_html}</td>
+  </tr>
+  <tr>
+    <th align="left">Altitude</th>
+    <td>{altitude_label_html}</td>
+  </tr>
+  <tr>
+    <th align="left">Distance</th>
+    <td>{distance_miles:.1f} mi</td>
+  </tr>
+  <tr>
+    <th align="left">Track</th>
+    <td>{track_label_html}</td>
+  </tr>
+  <tr>
+    <th align="left">Speed</th>
+    <td>{ground_speed_label_html}</td>
+  </tr>
+  <tr>
+    <th align="left">Vertical rate</th>
+    <td>{vertical_rate_label_html}</td>
+  </tr>
+  <tr>
+    <th align="left">Squawk</th>
+    <td>{squawk_html}</td>
+  </tr>
+  <tr>
+    <th align="left">Seen</th>
+    <td>{seen_label_html}</td>
+  </tr>
+  <tr>
+    <th align="left">Hex</th>
+    <td>{hex_html}</td>
+  </tr>
+  <tr>
+    <th align="left">Rule</th>
+    <td>{rule_name_html}</td>
+  </tr>
+  <tr>
+    <th align="left">Observed</th>
+    <td>{observed_at_html}</td>
+  </tr>
+</table>
+""".strip()
+
+
+@dataclass(frozen=True)
+class InlineEmailImage:
+    cid: str
+    data: bytes
+    subtype: str = "png"
 
 
 class NotificationFanout:
@@ -28,6 +134,8 @@ class NotificationFanout:
                 self.config.email,
                 render_email_body(self.config.email, sighting, message),
                 subject=render_email_subject(self.config.email, sighting, message),
+                html_message=render_email_html_body(self.config.email, sighting, message),
+                inline_images=email_inline_images(self.config.email),
             )
             sent = True
         if self._should_send_provider("twilio", selected_providers):
@@ -38,6 +146,8 @@ class NotificationFanout:
                 self.config.pushover,
                 render_pushover_message(self.config.pushover, sighting, message),
                 title=render_pushover_title(self.config.pushover, sighting, message),
+                url=render_pushover_url(self.config.pushover, sighting),
+                url_title=render_pushover_url_title(self.config.pushover, sighting),
             )
             sent = True
         if not sent:
@@ -89,6 +199,8 @@ def send_test_notification(config: Notifications, provider: str) -> None:
             config.email,
             render_email_body(config.email, sighting, message),
             subject=render_email_subject(config.email, sighting, message),
+            html_message=render_email_html_body(config.email, sighting, message),
+            inline_images=email_inline_images(config.email),
         )
         return
     if provider == "twilio":
@@ -103,6 +215,8 @@ def send_test_notification(config: Notifications, provider: str) -> None:
             config.pushover,
             render_pushover_message(config.pushover, sighting, message),
             title=render_pushover_title(config.pushover, sighting, message),
+            url=render_pushover_url(config.pushover, sighting),
+            url_title=render_pushover_url_title(config.pushover, sighting),
         )
         return
     raise ValueError(f"unsupported notification provider: {provider}")
@@ -130,6 +244,25 @@ def render_email_body(config: dict, sighting: Sighting, fallback_message: str | 
     return fallback_message or format_sighting(sighting)
 
 
+def render_email_html_body(config: dict, sighting: Sighting, fallback_message: str | None = None) -> str | None:
+    if not config.get("html_enabled"):
+        return None
+    body = render_template(config["html_body_template"], sighting, fallback_message)
+    return _wrap_email_html_body(config, body)
+
+
+def _wrap_email_html_body(config: dict, body: str) -> str:
+    if config.get("include_brand_images") is False:
+        return body
+    return (
+        '<div style="font-family:Arial,sans-serif;line-height:1.4;color:#17202a;">'
+        f'<div style="text-align:center;margin:0 0 18px 0;"><img src="cid:{EMAIL_LOGO_CID}" alt="ADS-B Notifier" width="260" style="max-width:100%;height:auto;" /></div>'
+        f"{body}"
+        f'<div style="text-align:center;margin:24px 0 0 0;"><img src="cid:{EMAIL_ICON_CID}" alt="" width="48" height="48" /></div>'
+        "</div>"
+    )
+
+
 def render_sms_message(config: dict, sighting: Sighting, fallback_message: str | None = None) -> str:
     template = config.get("body_template") or config.get("message_template") or config.get("template")
     if template:
@@ -150,6 +283,22 @@ def render_pushover_message(config: dict, sighting: Sighting, fallback_message: 
     return fallback_message or format_sighting(sighting)
 
 
+def render_pushover_url(config: dict, sighting: Sighting) -> str:
+    if config.get("include_adsb_exchange_link") is False:
+        return ""
+    if config.get("url_template"):
+        return render_template(config["url_template"], sighting)
+    return adsb_exchange_aircraft_url(sighting.aircraft.hex)
+
+
+def render_pushover_url_title(config: dict, sighting: Sighting) -> str:
+    if config.get("include_adsb_exchange_link") is False:
+        return ""
+    if config.get("url_title_template"):
+        return render_template(config["url_title_template"], sighting)
+    return "ADS-B Exchange"
+
+
 def render_template(template: str, sighting: Sighting, fallback_message: str | None = None) -> str:
     return template.format_map(_TemplateContext(template_context(sighting, fallback_message)))
 
@@ -164,7 +313,7 @@ def template_context(sighting: Sighting, fallback_message: str | None = None) ->
     ground_speed_label = f"{ground_speed} kt" if ground_speed not in (None, "") else "unknown"
     seen_label = f"{plane.seen_seconds:.1f}s ago" if plane.seen_seconds is not None else "unknown"
 
-    return {
+    context = {
         "message": fallback_message or format_sighting(sighting),
         "rule_name": sighting.rule_name,
         "event_type": sighting.event_type,
@@ -196,14 +345,27 @@ def template_context(sighting: Sighting, fallback_message: str | None = None) ->
         "seen_seconds": plane.seen_seconds if plane.seen_seconds is not None else "",
         "seen_label": seen_label,
     }
+    context.update({f"{key}_html": html.escape(str(value), quote=True) for key, value in context.items()})
+    return context
 
 
-def send_email(config: dict, message: str, subject: str | None = None) -> None:
+def send_email(
+    config: dict,
+    message: str,
+    subject: str | None = None,
+    html_message: str | None = None,
+    inline_images: list[InlineEmailImage] | None = None,
+) -> None:
     email = EmailMessage()
     email["Subject"] = subject or config.get("subject", "ADS-B alert")
     email["From"] = _secret_or_value(config["from"])
     email["To"] = ", ".join(_secret_or_value(value) for value in config["to"]) if isinstance(config["to"], list) else _secret_or_value(config["to"])
     email.set_content(message)
+    if html_message:
+        email.add_alternative(html_message, subtype="html")
+        html_part = email.get_payload()[-1]
+        for image in inline_images or []:
+            html_part.add_related(image.data, maintype="image", subtype=image.subtype, cid=f"<{image.cid}>")
 
     host = config["smtp_host"]
     port = int(config.get("smtp_port", 587))
@@ -216,6 +378,25 @@ def send_email(config: dict, message: str, subject: str | None = None) -> None:
         if username and password:
             smtp.login(username, password)
         smtp.send_message(email)
+
+
+def email_inline_images(config: dict) -> list[InlineEmailImage]:
+    if not config.get("html_enabled") or config.get("include_brand_images") is False:
+        return []
+    theme = _email_brand_theme(config)
+    return [
+        InlineEmailImage(cid=EMAIL_LOGO_CID, data=_email_asset_bytes(f"logo_{theme}.png")),
+        InlineEmailImage(cid=EMAIL_ICON_CID, data=_email_asset_bytes(f"icon_{theme}.png")),
+    ]
+
+
+def _email_brand_theme(config: dict) -> str:
+    theme = str(config.get("brand_theme") or "teal").strip().lower()
+    return theme if theme in EMAIL_BRAND_THEMES else "teal"
+
+
+def _email_asset_bytes(name: str) -> bytes:
+    return resources.files("adsb_notifier").joinpath("assets", "email", name).read_bytes()
 
 
 def send_twilio_sms(config: dict, message: str) -> None:
@@ -246,7 +427,7 @@ def _twilio_auth_credentials(config: dict, account_sid: str) -> tuple[str, str]:
     raise ValueError("twilio requires api_key_sid/api_key_secret or auth_token")
 
 
-def send_pushover(config: dict, message: str, title: str | None = None) -> None:
+def send_pushover(config: dict, message: str, title: str | None = None, url: str | None = None, url_title: str | None = None) -> None:
     payload: dict[str, object] = {
         "token": _secret_or_value(config["app_token"]),
         "user": _secret_or_value(config["user_key"]),
@@ -255,6 +436,8 @@ def send_pushover(config: dict, message: str, title: str | None = None) -> None:
     optional_values = {
         "device": config.get("device"),
         "title": title or config.get("title"),
+        "url": url,
+        "url_title": url_title,
         "priority": config.get("priority"),
         "sound": config.get("sound"),
     }

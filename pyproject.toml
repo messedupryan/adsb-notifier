@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adsb-notifier"
-version = "0.1.0"
+version = "0.0.4"
 description = "Containerized ADS-B event monitor with configurable notifications."
 requires-python = ">=3.11"
 dependencies = []
@@ -19,3 +19,6 @@ pythonpath = ["."]
 
 [tool.setuptools.packages.find]
 include = ["adsb_notifier*"]
+
+[tool.setuptools.package-data]
+adsb_notifier = ["assets/email/*.png"]

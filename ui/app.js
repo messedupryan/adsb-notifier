@@ -1,9 +1,10 @@
 let config = null;
 let savedConfig = null;
 let isDirty = false;
+let isJsonDirty = false;
 let selectedRuleId = null;
 let activeTab = "dashboard";
-const uiVersion = "20260810-1";
+const uiVersion = "0.0.4";
 const redactedSecret = "********";
 const notificationProviderOrder = ["pushover", "email", "twilio"];
 const apiBase = new URLSearchParams(window.location.search).get("api") || "/api";
@@ -39,8 +40,12 @@ const fields = {
   emailPassword: document.querySelector("#email-password"),
   emailFrom: document.querySelector("#email-from"),
   emailTo: document.querySelector("#email-to"),
+  emailHtmlEnabled: document.querySelector("#email-html-enabled"),
+  emailBrandTheme: document.querySelector("#email-brand-theme"),
+  emailIncludeBrandImages: document.querySelector("#email-include-brand-images"),
   emailSubjectTemplate: document.querySelector("#email-subject-template"),
   emailBodyTemplate: document.querySelector("#email-body-template"),
+  emailHtmlBodyTemplate: document.querySelector("#email-html-body-template"),
   pushoverEnabled: document.querySelector("#pushover-enabled"),
   pushoverAppToken: document.querySelector("#pushover-app-token"),
   pushoverUserKey: document.querySelector("#pushover-user-key"),
@@ -48,6 +53,8 @@ const fields = {
   pushoverPriority: document.querySelector("#pushover-priority"),
   pushoverSound: document.querySelector("#pushover-sound"),
   pushoverTitleTemplate: document.querySelector("#pushover-title-template"),
+  pushoverUrlTemplate: document.querySelector("#pushover-url-template"),
+  pushoverUrlTitleTemplate: document.querySelector("#pushover-url-title-template"),
   pushoverMessageTemplate: document.querySelector("#pushover-message-template"),
   twilioEnabled: document.querySelector("#twilio-enabled"),
   twilioAccountSid: document.querySelector("#twilio-account-sid"),
@@ -262,6 +269,7 @@ async function loadConfig() {
     }
     savedConfig = normalizeConfig(payload);
     config = cloneConfig(savedConfig);
+    isJsonDirty = false;
     selectedRuleId = selectExistingRuleId(selectedRuleId);
     setDirty(false);
     renderAll();
@@ -315,6 +323,7 @@ async function saveConfig(options = {}) {
       config = normalizeConfig(saved);
     }
     savedConfig = cloneConfig(config);
+    isJsonDirty = false;
     selectedRuleId = selectExistingRuleId(selectedRuleId);
     setDirty(false);
     renderAll();
@@ -334,11 +343,13 @@ function handleInput(event) {
   if (!config) return;
   if (event.target === newRuleType) return;
   if (event.target === fields.json) {
+    isJsonDirty = true;
     setDirty(true);
     clearMessage();
     return;
   }
 
+  isJsonDirty = false;
   if (event.target === fields.ruleEvent) {
     syncSelectedRuleFromForms();
     renderRuleEditor();
@@ -375,7 +386,6 @@ async function requestTabChange(tabName) {
 }
 
 function activateTab(tabName) {
-  const previousTab = activeTab;
   activeTab = tabName;
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.tab === tabName);
@@ -383,16 +393,10 @@ function activateTab(tabName) {
   document.querySelectorAll(".tab-panel").forEach((panel) => {
     panel.classList.toggle("active", panel.id === tabName);
   });
-  if (tabName === "json") {
-    commitForms();
-    renderJson();
-  } else if (tabName === "dashboard") {
+  if (tabName === "dashboard") {
     loadWorkerStatus();
-  } else if (previousTab === "json" && fields.json.value.trim()) {
-    if (syncFromJson()) {
-      renderForms();
-      renderRuleList();
-    }
+  } else if (tabName === "settings" && !isJsonDirty) {
+    renderJson();
   }
 }
 
@@ -653,8 +657,12 @@ function renderForms() {
   fields.emailPassword.value = secretFieldValue(email.password);
   fields.emailFrom.value = email.from || "";
   fields.emailTo.value = listToText(email.to);
+  fields.emailHtmlEnabled.checked = Boolean(email.html_enabled);
+  fields.emailBrandTheme.value = email.brand_theme || "teal";
+  fields.emailIncludeBrandImages.checked = email.include_brand_images !== false;
   fields.emailSubjectTemplate.value = email.subject_template || "";
   fields.emailBodyTemplate.value = email.body_template || "";
+  fields.emailHtmlBodyTemplate.value = email.html_body_template || "";
 
   fields.pushoverEnabled.checked = Boolean(pushover.enabled);
   fields.pushoverAppToken.value = secretFieldValue(pushover.app_token);
@@ -663,6 +671,8 @@ function renderForms() {
   fields.pushoverPriority.value = pushover.priority ?? "";
   fields.pushoverSound.value = pushover.sound || "";
   fields.pushoverTitleTemplate.value = pushover.title_template || pushover.title || "";
+  fields.pushoverUrlTemplate.value = pushover.url_template || "";
+  fields.pushoverUrlTitleTemplate.value = pushover.url_title_template || "";
   fields.pushoverMessageTemplate.value = pushover.message_template || pushover.body_template || pushover.template || "";
 
   fields.twilioEnabled.checked = Boolean(twilio.enabled);
@@ -752,6 +762,7 @@ function renderRuleNotificationProviders(rule) {
 
 function renderJson() {
   if (!config) return;
+  if (isJsonDirty) return;
   fields.json.value = JSON.stringify(config, null, 2);
 }
 
@@ -781,8 +792,12 @@ function syncFromForms() {
       password: fields.emailPassword.value.trim(),
       from: fields.emailFrom.value.trim(),
       to: textToList(fields.emailTo.value),
+      html_enabled: fields.emailHtmlEnabled.checked,
+      brand_theme: fields.emailBrandTheme.value,
+      include_brand_images: fields.emailIncludeBrandImages.checked,
       subject_template: fields.emailSubjectTemplate.value.trim(),
       body_template: fields.emailBodyTemplate.value.trim(),
+      html_body_template: fields.emailHtmlBodyTemplate.value.trim(),
     },
     pushover: {
       ...existingPushover,
@@ -793,6 +808,8 @@ function syncFromForms() {
       priority: optionalIntegerValue(fields.pushoverPriority),
       sound: fields.pushoverSound.value.trim(),
       title_template: fields.pushoverTitleTemplate.value.trim(),
+      url_template: fields.pushoverUrlTemplate.value.trim(),
+      url_title_template: fields.pushoverUrlTitleTemplate.value.trim(),
       message_template: fields.pushoverMessageTemplate.value.trim(),
     },
     twilio: {
@@ -844,6 +861,7 @@ function syncFromJson() {
   try {
     config = normalizeConfig(JSON.parse(fields.json.value));
     selectedRuleId = selectExistingRuleId(selectedRuleId);
+    isJsonDirty = false;
     return true;
   } catch {
     showErrors(["JSON has a syntax error."]);
@@ -895,6 +913,7 @@ async function deleteSelectedRule() {
     config.rules = config.rules.filter((rule) => rule.id !== ruleId);
     config.config_revision = payload.config_revision ?? config.config_revision;
     savedConfig = cloneConfig(config);
+    isJsonDirty = false;
     selectedRuleId = selectExistingRuleId(null);
     setDirty(false);
     renderAll();
@@ -997,6 +1016,7 @@ async function createRuleOnServer(rule, action) {
     config.rules.push(savedRule);
     config.config_revision = payload.config_revision ?? config.config_revision;
     savedConfig = cloneConfig(config);
+    isJsonDirty = false;
     selectedRuleId = savedRule.id;
     setDirty(false);
     renderAll();
@@ -1022,6 +1042,7 @@ async function discardChanges() {
     return;
   }
   config = cloneConfig(savedConfig);
+  isJsonDirty = false;
   selectedRuleId = selectExistingRuleId(selectedRuleId);
   setDirty(false);
   renderAll();
@@ -1098,7 +1119,7 @@ function closeConfirm(result) {
 }
 
 function commitCurrentView() {
-  if (activeTab === "json") {
+  if (isJsonDirty) {
     return syncFromJson();
   }
   commitForms();

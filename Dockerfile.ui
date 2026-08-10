@@ -1,5 +1,9 @@
 FROM nginx:1.27-alpine
 
+ARG APP_VERSION=0.0.0
+LABEL org.opencontainers.image.title="adsb-notifier-ui" \
+      org.opencontainers.image.version="${APP_VERSION}"
+
 COPY ui/nginx.conf /etc/nginx/conf.d/default.conf
 COPY ui /usr/share/nginx/html
 

@@ -44,11 +44,11 @@ Useful overrides:
 
 ```bash
 LOCAL_CONFIG=config.dev.json
-API_HOST=127.0.0.1
+API_HOST=127.0.0.4
 API_PORT=8765
 UI_PORT=8766
 REGISTRY=registry.example.test
-IMAGE_TAG=latest
+IMAGE_TAG=0.0.4
 NAMESPACE=adsb
 RELEASE=adsb-notifier
 HELM_VALUES=charts/adsb-notifier/values.yaml
@@ -65,7 +65,7 @@ make local LOCAL_CONFIG=config.dev.json
 Open:
 
 ```text
-http://127.0.0.1:8766/?api=http://127.0.0.1:8765
+http://127.0.0.4:8766/?api=http://127.0.0.4:8765
 ```
 
 Run components separately:
@@ -78,8 +78,8 @@ make local-ui
 Direct commands:
 
 ```bash
-pipenv run adsb-notifier-api --config config.dev.json --host 127.0.0.1 --port 8765 --status-file status.json --backup-retention 20
-cd ui && UI_HOST=127.0.0.1 UI_PORT=8766 pipenv run python dev_server.py
+pipenv run adsb-notifier-api --config config.dev.json --host 127.0.0.4 --port 8765 --status-file status.json --backup-retention 20
+cd ui && UI_HOST=127.0.0.4 UI_PORT=8766 pipenv run python dev_server.py
 ```
 
 Run one worker poll:
@@ -91,7 +91,7 @@ make worker-once LOCAL_CONFIG=config.dev.json
 Run one worker poll against a local or port-forwarded ADS-B feed:
 
 ```bash
-pipenv run adsb-notifier --config config.dev.json --adsb-url http://127.0.0.1:8080/tar1090/data/aircraft.json --once
+pipenv run adsb-notifier --config config.dev.json --adsb-url http://127.0.0.4:8080/tar1090/data/aircraft.json --once
 ```
 
 ## Testing
@@ -115,14 +115,20 @@ pipenv run pytest -q
 helm lint charts/adsb-notifier
 ```
 
+## Versioning
+
+Run `make version` to see the beta project version and image tags for the worker, API, and UI.
+
+Versioning and promotion rules live in [Versioning and Promotion](VERSIONING.md).
+
 ## UI Development Notes
 
 The UI is static HTML, CSS, and JavaScript served by `ui/dev_server.py` locally and by nginx in the UI container.
 
 When changing UI assets or behavior:
 
-- Bump `uiVersion` in `ui/app.js`.
-- Update `ui/index.html` asset query strings to the same version.
+- Keep the UI version in `ui/app.js` aligned with `VERSION`.
+- Update `ui/index.html` asset query strings and footer text to the same version.
 - Keep the footer version visible.
 - Verify the dashboard still renders recent matches and the map.
 
@@ -152,27 +158,27 @@ The API redacts notification secret fields when serving configuration to the UI.
 Build all images:
 
 ```bash
-make build REGISTRY=registry.example.test IMAGE_TAG=latest
+make build REGISTRY=registry.example.test
 ```
 
 Push all images:
 
 ```bash
-make push REGISTRY=registry.example.test IMAGE_TAG=latest
+make push REGISTRY=registry.example.test
 ```
 
 Or build and push:
 
 ```bash
-make build-push REGISTRY=registry.example.test IMAGE_TAG=latest
+make build-push REGISTRY=registry.example.test
 ```
 
 Individual images:
 
 ```bash
-make build-worker REGISTRY=registry.example.test IMAGE_TAG=latest
-make build-api REGISTRY=registry.example.test IMAGE_TAG=latest
-make build-ui REGISTRY=registry.example.test IMAGE_TAG=latest
+make build-worker REGISTRY=registry.example.test
+make build-api REGISTRY=registry.example.test
+make build-ui REGISTRY=registry.example.test
 ```
 
 ## Kubernetes Secrets
@@ -206,7 +212,6 @@ Install or upgrade:
 ```bash
 make deploy-helm \
   REGISTRY=registry.example.test \
-  IMAGE_TAG=latest \
   NAMESPACE=adsb \
   RELEASE=adsb-notifier \
   HELM_VALUES=charts/adsb-notifier/values.yaml

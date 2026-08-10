@@ -1,7 +1,8 @@
 SHELL := /bin/bash
 
+PROJECT_VERSION := $(shell tr -d '[:space:]' < VERSION)
 REGISTRY ?= registry.example.test
-IMAGE_TAG ?= latest
+IMAGE_TAG ?= $(PROJECT_VERSION)
 NAMESPACE ?= adsb
 RELEASE ?= adsb-notifier
 HELM_CHART ?= charts/adsb-notifier
@@ -10,7 +11,7 @@ HELM_ADOPT ?= false
 HELM_ARGS ?=
 
 LOCAL_CONFIG ?= config.dev.json
-API_HOST ?= 127.0.0.1
+API_HOST ?= 127.0.0.4
 API_PORT ?= 8765
 UI_PORT ?= 8766
 STATUS_FILE ?= status.json
@@ -20,7 +21,7 @@ WORKER_IMAGE := $(REGISTRY)/adsb-notifier-worker:$(IMAGE_TAG)
 API_IMAGE := $(REGISTRY)/adsb-notifier-api:$(IMAGE_TAG)
 UI_IMAGE := $(REGISTRY)/adsb-notifier-ui:$(IMAGE_TAG)
 
-.PHONY: help test local local-api local-ui worker-once build build-worker build-api build-ui push build-push k8s-secret deploy-k8s deploy-helm rollout status
+.PHONY: help version test local local-api local-ui worker-once build build-worker build-api build-ui push build-push k8s-secret deploy-k8s deploy-helm rollout status
 
 help:
 	@printf '%s\n' \
@@ -38,12 +39,20 @@ help:
 		'  make deploy-helm   Deploy Helm chart with helm upgrade --install' \
 		'  make rollout       Wait for Kubernetes deployments to roll out' \
 		'  make status        Show Kubernetes resources' \
+		'  make version       Show project/component version and image tags' \
 		'' \
 		'Common overrides:' \
-		'  REGISTRY=registry.example.test IMAGE_TAG=latest NAMESPACE=adsb' \
+		'  REGISTRY=registry.example.test IMAGE_TAG=$(PROJECT_VERSION) NAMESPACE=adsb' \
 		'  LOCAL_CONFIG=config.dev.json API_PORT=8765 UI_PORT=8766' \
 		'  HELM_CHART=charts/adsb-notifier HELM_VALUES=charts/adsb-notifier/values.yaml' \
-		'  HELM_ADOPT=true HELM_ARGS="--set image.tag=latest"'
+		'  HELM_ADOPT=true HELM_ARGS="--set image.tag=$(PROJECT_VERSION)"'
+
+version:
+	@printf '%s\n' \
+		'Project version: $(PROJECT_VERSION)' \
+		'Worker image:    $(WORKER_IMAGE)' \
+		'API image:       $(API_IMAGE)' \
+		'UI image:        $(UI_IMAGE)'
 
 test:
 	pipenv run pytest -q
@@ -52,10 +61,10 @@ local:
 	@if [ ! -f "$(LOCAL_CONFIG)" ]; then echo "Missing $(LOCAL_CONFIG). Set LOCAL_CONFIG=..."; exit 1; fi
 	@set -e; \
 	pipenv run adsb-notifier-api --config "$(LOCAL_CONFIG)" --host "$(API_HOST)" --port "$(API_PORT)" --status-file "$(STATUS_FILE)" --backup-retention "$(BACKUP_RETENTION)" & api_pid=$$!; \
-	( cd ui && UI_HOST=127.0.0.1 UI_PORT="$(UI_PORT)" pipenv run python dev_server.py ) & ui_pid=$$!; \
+	( cd ui && UI_HOST=127.0.0.4 UI_PORT="$(UI_PORT)" pipenv run python dev_server.py ) & ui_pid=$$!; \
 	trap 'kill $$api_pid $$ui_pid 2>/dev/null || true' INT TERM EXIT; \
 	echo "API: http://$(API_HOST):$(API_PORT)"; \
-	echo "UI:  http://127.0.0.1:$(UI_PORT)/?api=http://$(API_HOST):$(API_PORT)"; \
+	echo "UI:  http://127.0.0.4:$(UI_PORT)/?api=http://$(API_HOST):$(API_PORT)"; \
 	wait
 
 local-api:
@@ -63,7 +72,7 @@ local-api:
 	pipenv run adsb-notifier-api --config "$(LOCAL_CONFIG)" --host "$(API_HOST)" --port "$(API_PORT)" --status-file "$(STATUS_FILE)" --backup-retention "$(BACKUP_RETENTION)"
 
 local-ui:
-	cd ui && UI_HOST=127.0.0.1 UI_PORT="$(UI_PORT)" pipenv run python dev_server.py
+	cd ui && UI_HOST=127.0.0.4 UI_PORT="$(UI_PORT)" pipenv run python dev_server.py
 
 worker-once:
 	@if [ ! -f "$(LOCAL_CONFIG)" ]; then echo "Missing $(LOCAL_CONFIG). Set LOCAL_CONFIG=..."; exit 1; fi
@@ -72,13 +81,13 @@ worker-once:
 build: build-worker build-api build-ui
 
 build-worker:
-	docker build -f Dockerfile -t "$(WORKER_IMAGE)" .
+	docker build --build-arg APP_VERSION="$(PROJECT_VERSION)" -f Dockerfile -t "$(WORKER_IMAGE)" .
 
 build-api:
-	docker build -f Dockerfile.api -t "$(API_IMAGE)" .
+	docker build --build-arg APP_VERSION="$(PROJECT_VERSION)" -f Dockerfile.api -t "$(API_IMAGE)" .
 
 build-ui:
-	docker build -f Dockerfile.ui -t "$(UI_IMAGE)" .
+	docker build --build-arg APP_VERSION="$(PROJECT_VERSION)" -f Dockerfile.ui -t "$(UI_IMAGE)" .
 
 push:
 	docker push "$(WORKER_IMAGE)"
@@ -113,7 +122,7 @@ deploy-helm:
 	@test ! -f "$(HELM_VALUES)" || values_arg="--values $(HELM_VALUES)"; \
 	adopt_arg=""; \
 	if [ "$(HELM_ADOPT)" = "true" ]; then adopt_arg="--take-ownership"; fi; \
-	helm upgrade --install "$(RELEASE)" "$(HELM_CHART)" --namespace "$(NAMESPACE)" --create-namespace $$values_arg $$adopt_arg $(HELM_ARGS)
+	helm upgrade --install "$(RELEASE)" "$(HELM_CHART)" --namespace "$(NAMESPACE)" --create-namespace $$values_arg --set image.tag="$(IMAGE_TAG)" $$adopt_arg $(HELM_ARGS)
 
 rollout:
 	kubectl -n "$(NAMESPACE)" rollout status deployment/adsb-notifier-api --timeout=120s

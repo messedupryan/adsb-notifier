@@ -690,6 +690,10 @@ textarea.invalid {
   border-bottom: 1px solid var(--soft-border);
 }
 
+.settings-json {
+  margin-top: 14px;
+}
+
 .app-footer {
   display: flex;
   align-items: center;

@@ -8,6 +8,7 @@ import pytest
 
 from adsb_notifier.api import (
     ConfigApiHandler,
+    DEFAULT_NOTIFICATION_CONFIG_FIELDS,
     _backup_config,
     _ensure_revision,
     _ensure_rule_ids,
@@ -19,6 +20,7 @@ from adsb_notifier.api import (
 )
 from adsb_notifier.config import load_settings_data, parse_settings
 from adsb_notifier.models import Aircraft
+from adsb_notifier.notifiers import DEFAULT_EMAIL_HTML_BODY_TEMPLATE, LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE
 
 
 def valid_config() -> dict:
@@ -107,6 +109,49 @@ def test_read_config_backfills_rule_notification_providers(tmp_path):
     config = _read_config(path)
 
     assert config["rules"][0]["notification_providers"] == ["email", "pushover"]
+
+
+def test_read_config_backfills_new_notification_defaults(tmp_path):
+    path = tmp_path / "config.json"
+    payload = config_with_email()
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    config = _read_config(path)
+
+    assert config["notifications"]["email"]["html_enabled"] is False
+    assert config["notifications"]["email"]["brand_theme"] == "teal"
+    assert config["notifications"]["email"]["include_brand_images"] is True
+    assert config["notifications"]["email"]["html_body_template"] == DEFAULT_NOTIFICATION_CONFIG_FIELDS["email"]["html_body_template"]
+    assert json.loads(path.read_text(encoding="utf-8"))["notifications"]["email"]["html_enabled"] is False
+
+
+def test_read_config_preserves_existing_notification_defaults(tmp_path):
+    path = tmp_path / "config.json"
+    payload = config_with_email()
+    payload["notifications"]["email"]["html_enabled"] = True
+    payload["notifications"]["email"]["brand_theme"] = "amber"
+    payload["notifications"]["email"]["include_brand_images"] = False
+    payload["notifications"]["email"]["html_body_template"] = "<p>custom</p>"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    config = _read_config(path)
+
+    assert config["notifications"]["email"]["html_enabled"] is True
+    assert config["notifications"]["email"]["brand_theme"] == "amber"
+    assert config["notifications"]["email"]["include_brand_images"] is False
+    assert config["notifications"]["email"]["html_body_template"] == "<p>custom</p>"
+
+
+def test_read_config_reformats_legacy_default_email_html_template(tmp_path):
+    path = tmp_path / "config.json"
+    payload = config_with_email()
+    payload["notifications"]["email"]["html_body_template"] = LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    config = _read_config(path)
+
+    assert config["notifications"]["email"]["html_body_template"] == DEFAULT_EMAIL_HTML_BODY_TEMPLATE
+    assert "\n  <tr>\n" in config["notifications"]["email"]["html_body_template"]
 
 
 def test_disabled_global_provider_is_pruned_from_rules():
@@ -462,8 +507,8 @@ def test_notification_test_endpoint_sends_provider(tmp_path, monkeypatch):
     _write_config(path, config_with_email())
     sent = []
 
-    def fake_send_email(config, message, subject=None):
-        sent.append((config, message, subject))
+    def fake_send_email(config, message, subject=None, html_message=None, inline_images=None):
+        sent.append((config, message, subject, html_message, inline_images))
 
     monkeypatch.setattr("adsb_notifier.notifiers.send_email", fake_send_email)
 
@@ -516,7 +561,7 @@ def test_notification_test_endpoint_returns_error_when_send_fails(tmp_path, monk
     path = tmp_path / "config.json"
     _write_config(path, config_with_email())
 
-    def fake_send_email(config, message, subject=None):
+    def fake_send_email(config, message, subject=None, html_message=None, inline_images=None):
         raise RuntimeError("smtp auth failed")
 
     monkeypatch.setattr("adsb_notifier.notifiers.send_email", fake_send_email)
@@ -533,8 +578,8 @@ def test_notification_test_endpoint_sends_pushover(tmp_path, monkeypatch):
     _write_config(path, config_with_pushover())
     sent = []
 
-    def fake_send_pushover(config, message, title=None):
-        sent.append((config, message, title))
+    def fake_send_pushover(config, message, title=None, url=None, url_title=None):
+        sent.append((config, message, title, url, url_title))
 
     monkeypatch.setattr("adsb_notifier.notifiers.send_pushover", fake_send_pushover)
 
@@ -568,7 +613,10 @@ def test_rule_test_endpoint_sends_when_rule_matches_live_data(tmp_path, monkeypa
             )
         ],
     )
-    monkeypatch.setattr("adsb_notifier.notifiers.send_pushover", lambda config, message, title=None: sent.append((message, title)))
+    monkeypatch.setattr(
+        "adsb_notifier.notifiers.send_pushover",
+        lambda config, message, title=None, url=None, url_title=None: sent.append((message, title, url, url_title)),
+    )
 
     with api_server(path) as base_url:
         response = request_json(f"{base_url}/rules/rule-target/test", method="POST")
@@ -578,7 +626,14 @@ def test_rule_test_endpoint_sends_when_rule_matches_live_data(tmp_path, monkeypa
     assert response["sent_count"] == 1
     assert response["matches"][0]["aircraft_label"] == "N12345"
     assert response["matches"][0]["adsb_exchange_url"] == "https://globe.adsbexchange.com/?icao=A12345"
-    assert sent == [("target: N12345 (C172) 0.0 mi away at 5500 ft", "ADS-B alert")]
+    assert sent == [
+        (
+            "target: N12345 (C172) 0.0 mi away at 5500 ft",
+            "ADS-B alert",
+            "https://globe.adsbexchange.com/?icao=A12345",
+            "ADS-B Exchange",
+        )
+    ]
 
 
 def test_rule_test_endpoint_does_not_send_when_rule_has_no_live_match(tmp_path, monkeypatch):
@@ -600,7 +655,10 @@ def test_rule_test_endpoint_does_not_send_when_rule_has_no_live_match(tmp_path, 
             )
         ],
     )
-    monkeypatch.setattr("adsb_notifier.notifiers.send_pushover", lambda config, message, title=None: sent.append((message, title)))
+    monkeypatch.setattr(
+        "adsb_notifier.notifiers.send_pushover",
+        lambda config, message, title=None, url=None, url_title=None: sent.append((message, title, url, url_title)),
+    )
 
     with api_server(path) as base_url:
         response = request_json(f"{base_url}/rules/rule-target/test", method="POST")

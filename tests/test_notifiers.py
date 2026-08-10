@@ -4,9 +4,13 @@ from adsb_notifier.models import Aircraft, Sighting
 from adsb_notifier.notifiers import (
     NotificationFanout,
     render_email_body,
+    render_email_html_body,
     render_email_subject,
+    email_inline_images,
     render_pushover_message,
     render_pushover_title,
+    render_pushover_url,
+    render_pushover_url_title,
     render_sms_message,
     send_email,
     send_pushover,
@@ -54,11 +58,14 @@ def test_send_email_expands_env_values(monkeypatch):
             "to": ["env:SMTP_USERNAME"],
         },
         "ADS-B Notifier test notification",
+        html_message='<p><a href="https://example.test">ADS-B Exchange</a></p>',
     )
 
     assert login_calls == [("pilot@example.test", "app-password")]
     assert sent_messages[0]["From"] == "pilot@example.test"
     assert sent_messages[0]["To"] == "pilot@example.test"
+    assert sent_messages[0].is_multipart()
+    assert sent_messages[0].get_body(("html",)).get_content().strip() == '<p><a href="https://example.test">ADS-B Exchange</a></p>'
 
 
 def test_send_twilio_sms_uses_api_key_credentials(monkeypatch):
@@ -167,6 +174,8 @@ def test_send_pushover_posts_expected_payload(monkeypatch):
         },
         "ADS-B Pushover test",
         title="ADS-B alert",
+        url="https://globe.adsbexchange.com/?icao=A0B1C2",
+        url_title="Track aircraft",
     )
 
     request, timeout = requests[0]
@@ -177,6 +186,8 @@ def test_send_pushover_posts_expected_payload(monkeypatch):
     assert "user=user-key" in body
     assert "message=ADS-B+Pushover+test" in body
     assert "title=ADS-B+alert" in body
+    assert "url=https%3A%2F%2Fglobe.adsbexchange.com%2F%3Ficao%3DA0B1C2" in body
+    assert "url_title=Track+aircraft" in body
     assert "device=phone" in body
     assert "priority=1" in body
     assert "sound=pushover" in body
@@ -185,9 +196,12 @@ def test_send_pushover_posts_expected_payload(monkeypatch):
 def test_fanout_sends_only_selected_rule_providers(monkeypatch):
     sent = []
 
-    monkeypatch.setattr("adsb_notifier.notifiers.send_email", lambda config, message, subject=None: sent.append("email"))
+    monkeypatch.setattr(
+        "adsb_notifier.notifiers.send_email",
+        lambda config, message, subject=None, html_message=None, inline_images=None: sent.append("email"),
+    )
     monkeypatch.setattr("adsb_notifier.notifiers.send_twilio_sms", lambda config, message: sent.append("twilio"))
-    monkeypatch.setattr("adsb_notifier.notifiers.send_pushover", lambda config, message, title=None: sent.append("pushover"))
+    monkeypatch.setattr("adsb_notifier.notifiers.send_pushover", lambda config, message, title=None, url=None, url_title=None: sent.append("pushover"))
 
     sighting = sample_sighting()
     sighting = Sighting(
@@ -217,8 +231,11 @@ def test_fanout_sends_only_selected_rule_providers(monkeypatch):
 def test_fanout_defaults_missing_rule_providers_to_all_enabled(monkeypatch):
     sent = []
 
-    monkeypatch.setattr("adsb_notifier.notifiers.send_email", lambda config, message, subject=None: sent.append("email"))
-    monkeypatch.setattr("adsb_notifier.notifiers.send_pushover", lambda config, message, title=None: sent.append("pushover"))
+    monkeypatch.setattr(
+        "adsb_notifier.notifiers.send_email",
+        lambda config, message, subject=None, html_message=None, inline_images=None: sent.append("email"),
+    )
+    monkeypatch.setattr("adsb_notifier.notifiers.send_pushover", lambda config, message, title=None, url=None, url_title=None: sent.append("pushover"))
 
     NotificationFanout(
         config=type(
@@ -240,6 +257,9 @@ def test_email_templates_render_rich_aircraft_fields():
     config = {
         "subject_template": "ADS-B: {aircraft_label} matched {rule_name}",
         "body_template": "Aircraft {registration} / {flight}\nType {aircraft_type}\n{distance_miles:.1f} mi, {altitude_label}, {vertical_rate_label}",
+        "html_enabled": True,
+        "html_body_template": '<p><a href="{adsb_exchange_url_html}">ADS-B Exchange</a></p>',
+        "include_brand_images": False,
     }
 
     assert render_email_subject(config, sighting) == "ADS-B: N123AB matched TEST TAIL NUMBER"
@@ -248,6 +268,31 @@ def test_email_templates_render_rich_aircraft_fields():
         "Type BCS1\n"
         "27.0 mi, 10850 ft, descending 640 ft/min"
     )
+    assert render_email_html_body(config, sighting) == '<p><a href="https://globe.adsbexchange.com/?icao=A0B1C2">ADS-B Exchange</a></p>'
+
+
+def test_email_html_body_wraps_with_inline_brand_images_by_default():
+    html = render_email_html_body({"html_enabled": True, "html_body_template": "<p>{aircraft_label_html}</p>"}, sample_sighting())
+
+    assert 'src="cid:adsb-notifier-logo"' in html
+    assert 'src="cid:adsb-notifier-icon"' in html
+    assert "<p>N123AB</p>" in html
+
+
+def test_email_html_body_is_explicitly_enabled():
+    assert render_email_html_body({"html_body_template": "<p>{aircraft_label_html}</p>"}, sample_sighting()) is None
+
+
+def test_email_inline_images_use_selected_theme():
+    images = email_inline_images({"html_enabled": True, "html_body_template": "<p>body</p>", "brand_theme": "amber"})
+
+    assert [image.cid for image in images] == ["adsb-notifier-logo", "adsb-notifier-icon"]
+    assert all(image.data.startswith(b"\x89PNG") for image in images)
+
+
+def test_email_inline_images_can_be_disabled():
+    assert email_inline_images({"html_enabled": True, "html_body_template": "<p>body</p>", "include_brand_images": False}) == []
+    assert email_inline_images({"html_body_template": "<p>body</p>"}) == []
 
 
 def test_sms_template_can_be_shorter_than_email():
@@ -273,10 +318,28 @@ def test_pushover_templates_are_independent():
     config = {
         "title_template": "{aircraft_label} near home",
         "message_template": "{rule_name}: {aircraft_label} {distance_miles_1} mi {altitude_label}",
+        "url_template": "{adsb_exchange_url}",
+        "url_title_template": "Track {aircraft_label}",
     }
 
     assert render_pushover_title(config, sighting) == "N123AB near home"
     assert render_pushover_message(config, sighting) == "TEST TAIL NUMBER: N123AB 27.0 mi 10850 ft"
+    assert render_pushover_url(config, sighting) == "https://globe.adsbexchange.com/?icao=A0B1C2"
+    assert render_pushover_url_title(config, sighting) == "Track N123AB"
+
+
+def test_pushover_defaults_to_adsb_exchange_link():
+    sighting = sample_sighting()
+
+    assert render_pushover_url({}, sighting) == "https://globe.adsbexchange.com/?icao=A0B1C2"
+    assert render_pushover_url_title({}, sighting) == "ADS-B Exchange"
+
+
+def test_pushover_adsb_exchange_link_can_be_disabled():
+    sighting = sample_sighting()
+
+    assert render_pushover_url({"include_adsb_exchange_link": False}, sighting) == ""
+    assert render_pushover_url_title({"include_adsb_exchange_link": False}, sighting) == ""
 
 
 def test_template_missing_placeholder_renders_empty():

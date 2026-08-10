@@ -119,6 +119,9 @@ def _recent_matches_window_hours(data: dict[str, Any]) -> int:
 
 
 def _validate_notifications(data: dict[str, Any]) -> None:
+    email = data.get("email")
+    if isinstance(email, dict) and email.get("enabled") and email.get("html_enabled"):
+        _require_provider_fields(email, "email HTML", ["html_body_template"])
     pushover = data.get("pushover")
     if isinstance(pushover, dict) and pushover.get("enabled"):
         _require_provider_fields(pushover, "pushover", ["app_token", "user_key"])

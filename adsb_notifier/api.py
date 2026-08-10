@@ -16,7 +16,12 @@ from urllib.parse import urlparse
 from adsb_notifier.adsb import fetch_aircraft_for_settings
 from adsb_notifier.config import NOTIFICATION_PROVIDERS, parse_settings
 from adsb_notifier.links import adsb_exchange_aircraft_url
-from adsb_notifier.notifiers import NotificationFanout, send_test_notification
+from adsb_notifier.notifiers import (
+    DEFAULT_EMAIL_HTML_BODY_TEMPLATE,
+    LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE,
+    NotificationFanout,
+    send_test_notification,
+)
 from adsb_notifier.rules import RuleEngine
 from adsb_notifier.status import read_status
 
@@ -26,6 +31,18 @@ SECRET_NOTIFICATION_FIELDS = {
     "email": {"password"},
     "pushover": {"app_token", "user_key"},
     "twilio": {"api_key_secret", "auth_token"},
+}
+DEFAULT_NOTIFICATION_CONFIG_FIELDS = {
+    "email": {
+        "html_enabled": False,
+        "brand_theme": "teal",
+        "include_brand_images": True,
+        "html_body_template": DEFAULT_EMAIL_HTML_BODY_TEMPLATE,
+    },
+    "pushover": {
+        "url_template": "{adsb_exchange_url}",
+        "url_title_template": "ADS-B Exchange",
+    },
 }
 
 
@@ -320,7 +337,11 @@ def main() -> None:
 
 def _read_config(path: Path) -> dict[str, Any]:
     config = json.loads(path.read_text(encoding="utf-8"))
-    normalized = _normalize_notification_provider_selections(_normalize_notification_blocks(_ensure_revision(_ensure_rule_ids(config))))
+    normalized = _ensure_rule_ids(config)
+    normalized = _ensure_revision(normalized)
+    normalized = _normalize_notification_blocks(normalized)
+    normalized = _apply_notification_defaults(normalized)
+    normalized = _normalize_notification_provider_selections(normalized)
     if normalized != config:
         _write_config(path, normalized)
     return normalized
@@ -432,6 +453,28 @@ def _normalize_notification_blocks(config: dict[str, Any]) -> dict[str, Any]:
             for provider, provider_config in notifications.items()
             if provider in NOTIFICATION_PROVIDERS
         }
+    return normalized
+
+
+def _apply_notification_defaults(config: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(config)
+    notifications = normalized.get("notifications", {})
+    if not isinstance(notifications, dict):
+        return normalized
+
+    normalized_notifications = dict(notifications)
+    for provider, defaults in DEFAULT_NOTIFICATION_CONFIG_FIELDS.items():
+        provider_config = normalized_notifications.get(provider)
+        if not isinstance(provider_config, dict):
+            continue
+        next_provider_config = {
+            **defaults,
+            **provider_config,
+        }
+        if provider == "email" and next_provider_config.get("html_body_template") == LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE:
+            next_provider_config["html_body_template"] = DEFAULT_EMAIL_HTML_BODY_TEMPLATE
+        normalized_notifications[provider] = next_provider_config
+    normalized["notifications"] = normalized_notifications
     return normalized
 
 

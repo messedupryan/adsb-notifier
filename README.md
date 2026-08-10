@@ -23,6 +23,7 @@ The app can run locally during development or as containers in Kubernetes. See [
 - [Project Layout](#project-layout)
 - [Configuration Overview](#configuration-overview)
 - [Dashboard](#dashboard)
+- [Versioning](#versioning)
 - [Development](#development)
 - [Status](#status)
 
@@ -146,6 +147,12 @@ The map is centered around the configured home location and can show:
 - Recent alert markers
 - Track direction hints
 - Selected match highlighting
+
+## Versioning
+
+The project is currently in beta and uses SemVer-style `0.0.x` versions. The worker, API, UI, Helm chart, Python package, and container images share the project version during beta.
+
+See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, and promotion checklist.
 
 ## Development
 
