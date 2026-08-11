@@ -2,7 +2,7 @@
   <img src="ui/images/logo_amber.png" alt="ADS-B Notifier" width="520" />
 </p>
 
-# ADS-B Notifier
+# 📡 ADS-B Notifier
 
 ADS-B Notifier watches live aircraft data near a configured home location and sends notifications when saved rules match. It is intended for small personal or homelab deployments where you want to know when specific aircraft, aircraft types, or categories appear nearby.
 
@@ -14,20 +14,24 @@ The project is organized as three deployable components:
 
 The app can run locally during development or as containers in Kubernetes. See [Development Guide](docs/DEVELOPMENT.md) for setup, testing, container builds, and deployment commands.
 
-## Contents
+<a id="contents"></a>
 
-- [Features](#features)
-- [UI](#ui)
-- [Notification Providers](#notification-providers)
-- [Architecture](#architecture)
-- [Project Layout](#project-layout)
-- [Configuration Overview](#configuration-overview)
-- [Dashboard](#dashboard)
-- [Versioning](#versioning)
-- [Development](#development)
-- [Status](#status)
+## 🧭 Contents
 
-## Features
+- [✨ Features](#features)
+- [🖥️ UI](#ui)
+- [🔔 Notification Providers](#notification-providers)
+- [🏗️ Architecture](#architecture)
+- [🗂️ Project Layout](#project-layout)
+- [⚙️ Configuration Overview](#configuration-overview)
+- [🗺️ Dashboard](#dashboard)
+- [🏷️ Versioning](#versioning)
+- [🛠️ Development](#development)
+- [🚧 Status](#status)
+
+<a id="features"></a>
+
+## ✨ Features
 
 - Rule matching for tail numbers, callsigns, ICAO hex IDs, military aircraft, aircraft types, ADS-B categories, and circling behavior.
 - Radius, minimum altitude, maximum altitude, stale-aircraft, and cooldown filters.
@@ -43,20 +47,30 @@ The app can run locally during development or as containers in Kubernetes. See [
 - Dashboard map with home location, active rule radii, recent match markers, selected-match highlighting, and ADS-B Exchange aircraft links.
 - Light/dark UI modes, accent themes, themed logo assets, and theme-aware favicon.
 
-## UI
+<a id="ui"></a>
 
-Screenshots will be added as the UI stabilizes. Useful examples to capture:
+## 🖥️ UI
+The UI is broken into sections by tabs. Below are example screenshots of each tab showing the variety of themes.
 
-| View | What to Show |
-| --- | --- |
-| Dashboard overview | Worker summary across the top, recent matches on the left, and the alert map on the right. |
-| Selected match map | A selected recent match highlighted in the list and on the map, with home location still visible. |
-| Rule editor | A configured alert rule with radius, altitude, notification provider selection, and live rule test button. |
-| Notification settings | Email, Pushover, and SMS provider sections with template fields visible but secrets hidden or redacted. |
-| Appearance settings | Light/dark mode and accent theme controls showing the themed logo/icon behavior. |
-| Mobile dashboard | Stacked dashboard layout on a narrow viewport. |
+#### Dashboard overview
+![amber_dashboard](docs/images/amber_dashboard.png)
 
-## Notification Providers
+#### General Settings
+![blue_settingsd](docs/images/blue_settings.png)
+
+#### Notification settings
+![violet_notifications](docs/images/violet_notifications.png)
+
+
+#### Rule editor
+![teal_rule](docs/images/teal_rules_page.png)
+
+![amber_light_rule](docs/images/amber_light.png)
+
+
+<a id="notification-providers"></a>
+
+## 🔔 Notification Providers
 
 Current notification support includes:
 
@@ -66,7 +80,9 @@ Current notification support includes:
 
 Pushover is the recommended phone notification path for a small personal deployment because it avoids carrier SMS registration and compliance overhead. Twilio remains useful when actual SMS delivery is required.
 
-## Architecture
+<a id="architecture"></a>
+
+## 🏗️ Architecture
 
 ```text
 ADS-B source
@@ -85,7 +101,9 @@ Configuration API <---- Web UI
 
 In Kubernetes, the API owns persistence of the live configuration file and serves a redacted configuration view to the UI. The worker reads the live configuration file from shared storage and writes status so the UI can display operational state and recent matches.
 
-## Project Layout
+<a id="project-layout"></a>
+
+## 🗂️ Project Layout
 
 ```text
 adsb_notifier/        Python package for worker, API, parsing, rules, status, and notifiers
@@ -98,7 +116,9 @@ config.example.json   Example configuration
 Makefile              Common local, test, build, and deploy commands
 ```
 
-## Configuration Overview
+<a id="configuration-overview"></a>
+
+## ⚙️ Configuration Overview
 
 Configuration is JSON. The checked-in [config.example.json](config.example.json) shows the main structure:
 
@@ -136,7 +156,9 @@ Example rule:
 }
 ```
 
-## Dashboard
+<a id="dashboard"></a>
+
+## 🗺️ Dashboard
 
 The dashboard shows worker health, recent matches, and a map view. Recent matches include observed timestamps, aircraft metadata, notification provider selections, map positions when available, and ADS-B Exchange links.
 
@@ -148,13 +170,17 @@ The map is centered around the configured home location and can show:
 - Track direction hints
 - Selected match highlighting
 
-## Versioning
+<a id="versioning"></a>
+
+## 🏷️ Versioning
 
 The project is currently in beta and uses SemVer-style `0.0.x` versions. The worker, API, UI, Helm chart, Python package, and container images share the project version during beta.
 
 See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, and promotion checklist.
 
-## Development
+<a id="development"></a>
+
+## 🛠️ Development
 
 See [Development Guide](docs/DEVELOPMENT.md) for:
 
@@ -165,6 +191,8 @@ See [Development Guide](docs/DEVELOPMENT.md) for:
 - Deploying with Helm
 - Managing runtime secrets
 
-## Status
+<a id="status"></a>
+
+## 🚧 Status
 
 This project is under active development. The current focus is turning the prototype into a reliable Kubernetes-hosted notifier with a practical dashboard, robust configuration handling, and a small set of notification providers that fit personal use.
