@@ -1,7 +1,7 @@
 {
   "adsb_url": "http://readsb.default.svc.cluster.local/tar1090/data/aircraft.json",
   "adsb_source": {
-    "provider": "airplanes_live",
+    "provider": "adsb_lol",
     "query": "point",
     "radius_miles": 40
   },

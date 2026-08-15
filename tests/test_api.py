@@ -296,6 +296,34 @@ def test_recent_matches_window_rejects_values_above_max():
         parse_settings(payload)
 
 
+def test_adsb_lol_source_config_is_supported():
+    payload = valid_config()
+    payload["adsb_source"] = {"provider": "adsb_lol", "query": "point", "radius_miles": 40}
+
+    settings = parse_settings(payload)
+
+    assert settings.adsb_source is not None
+    assert settings.adsb_source.provider == "adsb_lol"
+    assert settings.adsb_source.query == "point"
+    assert settings.adsb_source.radius_miles == 40
+
+
+def test_adsb_source_rejects_unknown_provider():
+    payload = valid_config()
+    payload["adsb_source"] = {"provider": "example_flights", "query": "point"}
+
+    with pytest.raises(ValueError, match="unsupported adsb_source provider: example_flights"):
+        parse_settings(payload)
+
+
+def test_adsb_lookup_source_requires_value():
+    payload = valid_config()
+    payload["adsb_source"] = {"provider": "adsb_lol", "query": "reg"}
+
+    with pytest.raises(ValueError, match="adsb_source query reg requires value"):
+        parse_settings(payload)
+
+
 def test_rule_without_radius_is_rejected_with_clear_message():
     payload = valid_config()
     del payload["rules"][0]["radius_miles"]

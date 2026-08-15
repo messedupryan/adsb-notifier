@@ -12,6 +12,7 @@ class InputParser(HTMLParser):
     def __init__(self):
         super().__init__()
         self.inputs: dict[str, dict[str, str]] = {}
+        self.selects: set[str] = set()
         self.tabs: set[str] = set()
         self.textareas: set[str] = set()
         self.scripts: list[str] = []
@@ -24,6 +25,9 @@ class InputParser(HTMLParser):
             return
         if tag == "textarea" and attributes.get("id"):
             self.textareas.add(attributes["id"])
+            return
+        if tag == "select" and attributes.get("id"):
+            self.selects.add(attributes["id"])
             return
         if tag == "script" and attributes.get("src"):
             self.scripts.append(attributes["src"])
@@ -108,3 +112,17 @@ def test_json_editor_lives_under_settings_not_top_level_tabs():
     assert parser.tabs == {"dashboard", "settings", "notifications", "rules"}
     assert "config-json" in parser.textareas
     assert 'id="json" class="tab-panel"' not in INDEX_HTML
+
+
+def test_adsb_source_controls_are_available_in_settings():
+    parser = InputParser()
+    parser.feed(INDEX_HTML)
+
+    assert "adsb-source-provider" in parser.selects
+    assert "adsb-source-query" in parser.selects
+    assert "adsb-source-radius" in parser.inputs
+    assert "adsb-source-value" in parser.inputs
+    assert "adsb-source-base-url" in parser.inputs
+    assert "adsb_lol" in INDEX_HTML
+    assert "airplanes_live" in INDEX_HTML
+    assert "Direct aircraft.json" in INDEX_HTML

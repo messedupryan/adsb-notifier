@@ -86,7 +86,7 @@ I found Twilio to be overly cumbersome, and not worth the cost. I am using email
 ## 🏗️ Architecture
 
 ```text
-ADS-B source (airplanes.live)
+ADS-B source (ADSB.lol, Airplanes.live, or direct aircraft.json)
     |
     v
 Worker service
@@ -127,7 +127,7 @@ Configuration is JSON. The checked-in [config.example.json](config.example.json)
 - `poll_seconds`: worker polling interval
 - `stale_aircraft_seconds`: ignore aircraft that have not been seen recently
 - `recent_matches_window_hours`: how long recent matches remain in status history
-- `adsb_url` or `adsb_source`: ADS-B source configuration
+- `adsb_url` or `adsb_source`: ADS-B source configuration. The current example defaults to ADSB.lol; Airplanes.live and direct `aircraft.json` endpoints are also supported.
 - `notifications`: provider configuration and templates
 - `rules`: alert rules
 

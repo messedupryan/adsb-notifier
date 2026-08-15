@@ -8,6 +8,8 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 NOTIFICATION_PROVIDERS = {"email", "pushover", "twilio"}
+ADSB_SOURCE_PROVIDERS = {"direct", "airplanes_live", "adsb_lol"}
+ADSB_SOURCE_QUERIES = {"point", "mil", "reg", "type", "hex"}
 DEFAULT_RECENT_MATCHES_WINDOW_HOURS = 24
 MAX_RECENT_MATCHES_WINDOW_HOURS = 168
 
@@ -139,9 +141,16 @@ def _parse_adsb_source(data: dict[str, Any] | None) -> AdsbSource | None:
     provider = str(data.get("provider", "")).strip().lower()
     if not provider:
         raise ValueError("adsb_source requires provider")
+    if provider not in ADSB_SOURCE_PROVIDERS:
+        raise ValueError(f"unsupported adsb_source provider: {provider}")
+    query = str(data.get("query", "point")).strip().lower()
+    if query not in ADSB_SOURCE_QUERIES:
+        raise ValueError(f"unsupported adsb_source query: {query}")
+    if query in {"reg", "type", "hex"} and not str(data.get("value", "")).strip():
+        raise ValueError(f"adsb_source query {query} requires value")
     return AdsbSource(
         provider=provider,
-        query=str(data.get("query", "point")).strip().lower(),
+        query=query,
         base_url=_optional_env_or_value(data.get("base_url")),
         radius_miles=None if data.get("radius_miles") in (None, "") else float(data["radius_miles"]),
         value=_optional_env_or_value(data.get("value")),

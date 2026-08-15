@@ -4,8 +4,15 @@ function renderForms() {
   const email = notifications.email || {};
   const pushover = notifications.pushover || {};
   const twilio = notifications.twilio || {};
+  const source = normalizeAdsbSource(config.adsb_source, config.adsb_url);
 
   fields.adsbUrl.value = config.adsb_url || "";
+  fields.adsbSourceProvider.value = source.provider;
+  fields.adsbSourceQuery.value = source.query;
+  fields.adsbSourceRadius.value = source.radius_miles ?? "";
+  fields.adsbSourceValue.value = source.value || "";
+  fields.adsbSourceBaseUrl.value = source.base_url || "";
+  updateAdsbSourceFieldVisibility();
   fields.homeLat.value = config.home?.lat ?? "";
   fields.homeLon.value = config.home?.lon ?? "";
   fields.pollSeconds.value = config.poll_seconds ?? 30;
@@ -132,6 +139,7 @@ function renderJson() {
 function syncFromForms() {
   if (!config) return;
   config.adsb_url = fields.adsbUrl.value.trim();
+  config.adsb_source = adsbSourceFromForms();
   config.home = {
     lat: numberValue(fields.homeLat),
     lon: numberValue(fields.homeLon),
@@ -230,4 +238,58 @@ function syncFromJson() {
     showErrors(["JSON has a syntax error."]);
     return false;
   }
+}
+
+function normalizeAdsbSource(source, adsbUrl = "") {
+  if (!source || source.provider === "direct") {
+    return {
+      provider: adsbUrl ? "direct" : "adsb_lol",
+      query: "point",
+      radius_miles: "",
+      value: "",
+      base_url: "",
+    };
+  }
+  return {
+    provider: adsbSourceProviders.includes(source.provider) ? source.provider : "adsb_lol",
+    query: adsbSourceQueries.includes(source.query) ? source.query : "point",
+    radius_miles: source.radius_miles ?? "",
+    value: source.value || "",
+    base_url: source.base_url || "",
+  };
+}
+
+function adsbSourceFromForms() {
+  const provider = fields.adsbSourceProvider.value;
+  if (provider === "direct") {
+    return {provider: "direct", query: "point"};
+  }
+
+  const source = {
+    provider,
+    query: fields.adsbSourceQuery.value,
+  };
+  const radius = optionalNumberValue(fields.adsbSourceRadius);
+  const value = fields.adsbSourceValue.value.trim();
+  const baseUrl = fields.adsbSourceBaseUrl.value.trim();
+  if (radius !== null) source.radius_miles = radius;
+  if (value) source.value = value;
+  if (baseUrl) source.base_url = baseUrl;
+  return source;
+}
+
+function updateAdsbSourceFieldVisibility() {
+  const provider = fields.adsbSourceProvider.value;
+  const query = fields.adsbSourceQuery.value;
+  fields.adsbUrl.closest("label").classList.toggle("hidden", provider !== "direct");
+  fields.adsbSourceQuery.disabled = provider === "direct";
+  fields.adsbSourceRadius.disabled = provider === "direct" || query !== "point";
+  fields.adsbSourceValue.disabled = provider === "direct" || !["reg", "type", "hex"].includes(query);
+  fields.adsbSourceBaseUrl.disabled = provider === "direct";
+}
+
+function optionalNumberValue(field) {
+  const value = field.value.trim();
+  if (value === "") return null;
+  return Number.parseFloat(value);
 }

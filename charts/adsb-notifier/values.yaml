@@ -3,7 +3,7 @@ fullnameOverride: ""
 
 image:
   registry: registry.example.test
-  tag: 0.0.8
+  tag: 0.0.9
   pullPolicy: Always
 
 secret:
@@ -29,7 +29,7 @@ config:
 seedConfig:
   adsb_url: http://readsb.default.svc.cluster.local/tar1090/data/aircraft.json
   adsb_source:
-    provider: airplanes_live
+    provider: adsb_lol
     query: point
     radius_miles: 40
   home:

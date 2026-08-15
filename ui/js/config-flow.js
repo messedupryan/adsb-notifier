@@ -100,7 +100,11 @@ function handleInput(event) {
   }
 
   isJsonDirty = false;
-  if (event.target === fields.ruleEvent) {
+  if (event.target === fields.adsbSourceProvider || event.target === fields.adsbSourceQuery) {
+    updateAdsbSourceFieldVisibility();
+    syncFromForms();
+    renderJson();
+  } else if (event.target === fields.ruleEvent) {
     syncSelectedRuleFromForms();
     renderRuleEditor();
     renderRuleList();

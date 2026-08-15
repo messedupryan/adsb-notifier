@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adsb-notifier"
-version = "0.0.8"
+version = "0.0.9"
 description = "Containerized ADS-B event monitor with configurable notifications."
 requires-python = ">=3.11"
 dependencies = []

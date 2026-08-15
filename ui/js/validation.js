@@ -1,7 +1,26 @@
 function validateConfig(payload) {
   const errors = [];
-  if (!payload.adsb_url) {
+  const source = payload.adsb_source || {};
+  const sourceProvider = source.provider || "direct";
+  if (!adsbSourceProviders.includes(sourceProvider)) {
+    errors.push(validationError("ADS-B source provider is not supported.", fields.adsbSourceProvider));
+  }
+  if (sourceProvider === "direct" && !payload.adsb_url) {
     errors.push(validationError("ADS-B endpoint is required.", fields.adsbUrl));
+  }
+  if (sourceProvider !== "direct") {
+    if (!adsbSourceQueries.includes(source.query)) {
+      errors.push(validationError("ADS-B source query is not supported.", fields.adsbSourceQuery));
+    }
+    if (source.query === "point" && source.radius_miles !== undefined && !isRequiredNumber(source.radius_miles)) {
+      errors.push(validationError("ADS-B source radius must be numeric when set.", fields.adsbSourceRadius));
+    }
+    if (source.query === "point" && Number(source.radius_miles) > 250) {
+      errors.push(validationError("ADS-B source radius cannot exceed 250 miles.", fields.adsbSourceRadius));
+    }
+    if (["reg", "type", "hex"].includes(source.query) && !source.value) {
+      errors.push(validationError("ADS-B source lookup value is required for this query.", fields.adsbSourceValue));
+    }
   }
   if (!isRequiredNumber(payload.home?.lat) || !isRequiredNumber(payload.home?.lon)) {
     errors.push(validationError("Home latitude and longitude are required.", [fields.homeLat, fields.homeLon]));

@@ -4,9 +4,11 @@ let isDirty = false;
 let isJsonDirty = false;
 let selectedRuleId = null;
 let activeTab = "dashboard";
-const uiVersion = "0.0.8";
+const uiVersion = "0.0.9";
 const redactedSecret = "********";
 const notificationProviderOrder = ["pushover", "email", "twilio"];
+const adsbSourceProviders = ["adsb_lol", "airplanes_live", "direct"];
+const adsbSourceQueries = ["point", "mil", "reg", "type", "hex"];
 const apiBase = new URLSearchParams(window.location.search).get("api") || "/api";
 const assetVersion = `v=${uiVersion}`;
 const themeStorageKey = "adsb-notifier-theme";
@@ -27,6 +29,11 @@ let selectedRecentMatchKey = null;
 
 const fields = {
   adsbUrl: document.querySelector("#adsb-url"),
+  adsbSourceProvider: document.querySelector("#adsb-source-provider"),
+  adsbSourceQuery: document.querySelector("#adsb-source-query"),
+  adsbSourceRadius: document.querySelector("#adsb-source-radius"),
+  adsbSourceValue: document.querySelector("#adsb-source-value"),
+  adsbSourceBaseUrl: document.querySelector("#adsb-source-base-url"),
   homeLat: document.querySelector("#home-lat"),
   homeLon: document.querySelector("#home-lon"),
   pollSeconds: document.querySelector("#poll-seconds"),
