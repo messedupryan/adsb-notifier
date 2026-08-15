@@ -77,3 +77,15 @@ def test_makefile_bump_version_target_covers_version_managed_files():
     assert "NEW_VERSION" in makefile
     for path in VERSION_MANAGED_FILES:
         assert path in makefile
+
+
+def test_python_dockerfiles_use_pipenv_with_python_314():
+    for name in ["Dockerfile", "Dockerfile.api"]:
+        dockerfile = (ROOT / name).read_text(encoding="utf-8")
+
+        assert "FROM python:3.14-slim AS builder" in dockerfile
+        assert "FROM python:3.14-slim" in dockerfile
+        assert "COPY Pipfile Pipfile.lock pyproject.toml ./" in dockerfile
+        assert "RUN pipenv verify && pipenv sync" in dockerfile
+        assert "PATH=\"/app/.venv/bin:${PATH}\"" in dockerfile
+        assert "pip install" not in dockerfile

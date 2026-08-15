@@ -48,7 +48,7 @@ API_HOST=127.0.0.1
 API_PORT=8765
 UI_PORT=8766
 REGISTRY=registry.example.test
-IMAGE_TAG=0.0.7
+IMAGE_TAG=0.0.8
 NAMESPACE=adsb
 RELEASE=adsb-notifier
 HELM_VALUES=charts/adsb-notifier/values.yaml
@@ -154,6 +154,8 @@ Use `0` to disable backups.
 The API redacts notification secret fields when serving configuration to the UI. In Kubernetes, the worker reads the live config file from shared storage so notification secrets remain available to the worker without exposing them through the browser-facing config response.
 
 ## Container Builds
+
+The worker and API images use `python:3.14-slim` and install the application from `Pipfile.lock` with Pipenv during a builder stage. The runtime images copy the project virtualenv into `/app/.venv` and run the console scripts from that environment. The UI image is nginx-only and does not install Python dependencies.
 
 Build all images:
 
