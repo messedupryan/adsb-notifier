@@ -63,7 +63,7 @@ def test_write_poll_status_records_worker_summary(tmp_path):
     assert status["recent_matches"][0]["lon"] == -111.9
     assert status["recent_matches"][0]["track_deg"] == 183
     assert status["recent_matches"][0]["source_type"] == "adsb_icao"
-    assert status["recent_matches"][0]["adsb_exchange_url"] == "https://globe.adsbexchange.com/?icao=ABC123"
+    assert status["recent_matches"][0]["airplanes_live_url"] == "https://globe.airplanes.live/?icao=ABC123"
     assert status["recent_matches_window_hours"] == 24
 
 
@@ -83,6 +83,7 @@ def test_write_poll_status_preserves_recent_match_history(tmp_path):
         "event_type": "tail",
         "aircraft_label": "NOLD",
         "hex": "ABC123",
+        "adsb_exchange_url": "https://globe.adsbexchange.com/?icao=ABC123",
         "observed_at": (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat(),
     }
     too_old = {
@@ -106,7 +107,8 @@ def test_write_poll_status_preserves_recent_match_history(tmp_path):
     status = read_status(status_path)
     labels = [match["aircraft_label"] for match in status["recent_matches"]]
     assert labels == ["NFRESH", "NOLD"]
-    assert status["recent_matches"][1]["adsb_exchange_url"] == "https://globe.adsbexchange.com/?icao=ABC123"
+    assert status["recent_matches"][1]["airplanes_live_url"] == "https://globe.airplanes.live/?icao=ABC123"
+    assert status["recent_matches"][1]["adsb_exchange_url"] == "https://globe.airplanes.live/?icao=ABC123"
 
 
 def test_write_error_status_preserves_previous_poll_summary(tmp_path):

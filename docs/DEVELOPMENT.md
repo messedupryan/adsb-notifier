@@ -44,11 +44,11 @@ Useful overrides:
 
 ```bash
 LOCAL_CONFIG=config.dev.json
-API_HOST=127.0.0.5
+API_HOST=127.0.0.6
 API_PORT=8765
 UI_PORT=8766
 REGISTRY=registry.example.test
-IMAGE_TAG=0.0.5
+IMAGE_TAG=0.0.6
 NAMESPACE=adsb
 RELEASE=adsb-notifier
 HELM_VALUES=charts/adsb-notifier/values.yaml
@@ -65,7 +65,7 @@ make local LOCAL_CONFIG=config.dev.json
 Open:
 
 ```text
-http://127.0.0.5:8766/?api=http://127.0.0.5:8765
+http://127.0.0.6:8766/?api=http://127.0.0.6:8765
 ```
 
 Run components separately:
@@ -78,8 +78,8 @@ make local-ui
 Direct commands:
 
 ```bash
-pipenv run adsb-notifier-api --config config.dev.json --host 127.0.0.5 --port 8765 --status-file status.json --backup-retention 20
-cd ui && UI_HOST=127.0.0.5 UI_PORT=8766 pipenv run python dev_server.py
+pipenv run adsb-notifier-api --config config.dev.json --host 127.0.0.6 --port 8765 --status-file status.json --backup-retention 20
+cd ui && UI_HOST=127.0.0.6 UI_PORT=8766 pipenv run python dev_server.py
 ```
 
 Run one worker poll:
@@ -91,7 +91,7 @@ make worker-once LOCAL_CONFIG=config.dev.json
 Run one worker poll against a local or port-forwarded ADS-B feed:
 
 ```bash
-pipenv run adsb-notifier --config config.dev.json --adsb-url http://127.0.0.5:8080/tar1090/data/aircraft.json --once
+pipenv run adsb-notifier --config config.dev.json --adsb-url http://127.0.0.6:8080/tar1090/data/aircraft.json --once
 ```
 
 ## Testing

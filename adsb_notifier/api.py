@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 
 from adsb_notifier.adsb import fetch_aircraft_for_settings
 from adsb_notifier.config import NOTIFICATION_PROVIDERS, parse_settings
-from adsb_notifier.links import adsb_exchange_aircraft_url
+from adsb_notifier.links import airplanes_live_aircraft_url
 from adsb_notifier.notifiers import (
     DEFAULT_EMAIL_HTML_BODY_TEMPLATE,
     LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE,
@@ -40,8 +40,8 @@ DEFAULT_NOTIFICATION_CONFIG_FIELDS = {
         "html_body_template": DEFAULT_EMAIL_HTML_BODY_TEMPLATE,
     },
     "pushover": {
-        "url_template": "{adsb_exchange_url}",
-        "url_title_template": "ADS-B Exchange",
+        "url_template": "{airplanes_live_url}",
+        "url_title_template": "Airplanes.live",
     },
 }
 
@@ -427,7 +427,8 @@ def _sighting_summary(sighting: Any) -> dict[str, Any]:
         "registration": plane.registration,
         "flight": plane.flight,
         "hex": plane.hex,
-        "adsb_exchange_url": adsb_exchange_aircraft_url(plane.hex),
+        "airplanes_live_url": airplanes_live_aircraft_url(plane.hex),
+        "adsb_exchange_url": airplanes_live_aircraft_url(plane.hex),
         "aircraft_type": plane.aircraft_type or plane.category,
         "distance_miles": round(sighting.distance_miles, 2),
         "altitude_ft": plane.altitude_ft,

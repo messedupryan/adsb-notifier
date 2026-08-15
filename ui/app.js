@@ -4,7 +4,7 @@ let isDirty = false;
 let isJsonDirty = false;
 let selectedRuleId = null;
 let activeTab = "dashboard";
-const uiVersion = "0.0.5";
+const uiVersion = "0.0.6";
 const redactedSecret = "********";
 const notificationProviderOrder = ["pushover", "email", "twilio"];
 const apiBase = new URLSearchParams(window.location.search).get("api") || "/api";
@@ -1496,8 +1496,9 @@ function matchPopupHtml(match) {
   const altitude = match.altitude_ft === null || match.altitude_ft === undefined ? "unknown altitude" : `${match.altitude_ft} ft`;
   const observed = formatDateTime(match.observed_at) || "Unknown time";
   const source = match.source_type ? ` · ${match.source_type}` : "";
-  const link = match.adsb_exchange_url
-    ? `<br /><a href="${escapeHtml(match.adsb_exchange_url)}" target="_blank" rel="noopener noreferrer">ADS-B Exchange</a>`
+  const airplanesLiveUrl = match.airplanes_live_url || match.adsb_exchange_url || "";
+  const link = airplanesLiveUrl
+    ? `<br /><a href="${escapeHtml(airplanesLiveUrl)}" target="_blank" rel="noopener noreferrer">Airplanes.live</a>`
     : "";
   return `
     <strong>${escapeHtml(title)}</strong><br />
@@ -1510,10 +1511,11 @@ function matchPopupHtml(match) {
 
 function matchExternalLink(match) {
   const link = document.createElement("a");
+  const airplanesLiveUrl = match.airplanes_live_url || match.adsb_exchange_url || "";
   link.className = "external-match-link";
-  link.textContent = "ADS-B Exchange";
-  if (match.adsb_exchange_url) {
-    link.href = match.adsb_exchange_url;
+  link.textContent = "Airplanes.live";
+  if (airplanesLiveUrl) {
+    link.href = airplanesLiveUrl;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
   } else {

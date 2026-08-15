@@ -625,13 +625,13 @@ def test_rule_test_endpoint_sends_when_rule_matches_live_data(tmp_path, monkeypa
     assert response["matched"] is True
     assert response["sent_count"] == 1
     assert response["matches"][0]["aircraft_label"] == "N12345"
-    assert response["matches"][0]["adsb_exchange_url"] == "https://globe.adsbexchange.com/?icao=A12345"
+    assert response["matches"][0]["airplanes_live_url"] == "https://globe.airplanes.live/?icao=A12345"
     assert sent == [
         (
             "target: N12345 (C172) 0.0 mi away at 5500 ft",
             "ADS-B alert",
-            "https://globe.adsbexchange.com/?icao=A12345",
-            "ADS-B Exchange",
+            "https://globe.airplanes.live/?icao=A12345",
+            "Airplanes.live",
         )
     ]
 

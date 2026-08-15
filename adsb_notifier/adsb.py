@@ -11,25 +11,31 @@ from urllib.request import Request, urlopen
 
 from adsb_notifier.config import Settings
 from adsb_notifier.models import Aircraft
+from adsb_notifier.version import __version__
 
 LOGGER = logging.getLogger(__name__)
+USER_AGENT = f"adsb-notifier/{__version__} (+https://github.com/messedUpRyan/adsb-notifier)"
 
 
 class AdsbRateLimitError(RuntimeError):
-    def __init__(self, url: str, retry_after_seconds: int | None = None):
-        super().__init__("ADS-B source rate limit reached")
+    def __init__(self, url: str, retry_after_seconds: int | None = None, status_code: int = 429):
+        message = "ADS-B source rate limit reached"
+        if status_code == 403:
+            message = "ADS-B source returned 403 Forbidden; backing off"
+        super().__init__(message)
         self.url = url
         self.retry_after_seconds = retry_after_seconds
+        self.status_code = status_code
 
 
 def fetch_aircraft(url: str, timeout_seconds: int = 10) -> list[Aircraft]:
-    request = Request(url, headers={"User-Agent": "adsb-notifier/0.1"})
+    request = Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urlopen(request, timeout=timeout_seconds) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
-        if exc.code == 429:
-            raise AdsbRateLimitError(url, _retry_after_seconds(exc.headers.get("Retry-After"))) from exc
+        if exc.code in {403, 429}:
+            raise AdsbRateLimitError(url, _retry_after_seconds(exc.headers.get("Retry-After")), exc.code) from exc
         raise
     return parse_aircraft_payload(payload)
 

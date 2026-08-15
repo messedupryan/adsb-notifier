@@ -3,7 +3,7 @@ fullnameOverride: ""
 
 image:
   registry: registry.example.test
-  tag: 0.0.5
+  tag: 0.0.6
   pullPolicy: Always
 
 secret:
@@ -53,12 +53,12 @@ seedConfig:
       brand_theme: teal
       include_brand_images: true
       subject_template: "ADS-B alert: {aircraft_label} matched {rule_name}"
-      body_template: "{message}\n\nAircraft: {aircraft_label}\nRegistration: {registration}\nFlight: {flight}\nType: {aircraft_type}\nDescription: {description}\nOperator: {operator}\nAltitude: {altitude_label}\nDistance: {distance_miles:.1f} mi\nTrack: {track_label}\nSpeed: {ground_speed_label}\nVertical rate: {vertical_rate_label}\nSquawk: {squawk}\nSeen: {seen_label}\nHex: {hex}\nADS-B Exchange: {adsb_exchange_url}\nRule: {rule_name}\nObserved: {observed_at}"
+      body_template: "{message}\n\nAircraft: {aircraft_label}\nRegistration: {registration}\nFlight: {flight}\nType: {aircraft_type}\nDescription: {description}\nOperator: {operator}\nAltitude: {altitude_label}\nDistance: {distance_miles:.1f} mi\nTrack: {track_label}\nSpeed: {ground_speed_label}\nVertical rate: {vertical_rate_label}\nSquawk: {squawk}\nSeen: {seen_label}\nHex: {hex}\nAirplanes.live: {airplanes_live_url}\nRule: {rule_name}\nObserved: {observed_at}"
       html_body_template: |-
         <p>{message_html}</p>
 
         <p>
-          <a href="{adsb_exchange_url_html}">ADS-B Exchange</a>
+          <a href="{airplanes_live_url_html}">Airplanes.live</a>
         </p>
 
         <table>
@@ -143,8 +143,8 @@ seedConfig:
       priority: 0
       sound: pushover
       title_template: "ADS-B: {aircraft_label}"
-      url_template: "{adsb_exchange_url}"
-      url_title_template: "ADS-B Exchange"
+      url_template: "{airplanes_live_url}"
+      url_title_template: "Airplanes.live"
       message_template: "{rule_name}: {aircraft_label} ({aircraft_type}) {distance_miles_1} mi away at {altitude_label}"
   rules:
     - name: Tail number near home

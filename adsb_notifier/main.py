@@ -78,7 +78,7 @@ def main() -> None:
             )
             rate_limit_attempts += 1
             write_rate_limit_status(args.status_file, settings, exc, sleep_seconds)
-            LOGGER.warning("ADS-B source rate limited; backing off for %ss", sleep_seconds)
+            LOGGER.warning("ADS-B source unavailable status=%s; backing off for %ss", exc.status_code, sleep_seconds)
         except Exception as exc:
             rate_limit_attempts = 0
             write_error_status(args.status_file, exc)

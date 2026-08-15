@@ -4,7 +4,7 @@
 
 # 📡 ADS-B Notifier
 
-ADS-B Notifier watches live aircraft data near a configured home location and sends notifications when saved rules match. It is intended for small personal or homelab deployments where you want to know when specific aircraft, aircraft types, or categories appear nearby.
+ADS-B Notifier watches live aircraft data near a configured home location and sends notifications when saved rules match. I created this app to run on my home kube (k3s) cluster so that I can watch military traffic, figure out what loud helicopters just flew over me and to get warnings when cool planes fly over that I can snap photos of.
 
 The project is organized as three deployable components:
 
@@ -27,6 +27,7 @@ The app can run locally during development or as containers in Kubernetes. See [
 - [🗺️ Dashboard](#dashboard)
 - [🏷️ Versioning](#versioning)
 - [🛠️ Development](#development)
+- [🙏 Credits and Disclaimer](#credits-and-disclaimer)
 - [🚧 Status](#status)
 
 <a id="features"></a>
@@ -44,7 +45,7 @@ The app can run locally during development or as containers in Kubernetes. See [
 - Live rule testing against the configured ADS-B source.
 - Provider-specific notification templates.
 - Worker status and recent match history.
-- Dashboard map with home location, active rule radii, recent match markers, selected-match highlighting, and ADS-B Exchange aircraft links.
+- Dashboard map with home location, active rule radii, recent match markers, selected-match highlighting, and Airplanes.live aircraft links.
 - Light/dark UI modes, accent themes, themed logo assets, and theme-aware favicon.
 
 <a id="ui"></a>
@@ -78,14 +79,14 @@ Current notification support includes:
 - Pushover push notifications
 - Twilio SMS
 
-Pushover is the recommended phone notification path for a small personal deployment because it avoids carrier SMS registration and compliance overhead. Twilio remains useful when actual SMS delivery is required.
+I found Twilio to be overly cumbersome, and not worth the cost. I am using email and Pushover notifications. I left Twilio support in the app, in case I ever do want to leverage SMS, but I doubt I ever will.
 
 <a id="architecture"></a>
 
 ## 🏗️ Architecture
 
 ```text
-ADS-B source
+ADS-B source (airplanes.live)
     |
     v
 Worker service
@@ -160,7 +161,7 @@ Example rule:
 
 ## 🗺️ Dashboard
 
-The dashboard shows worker health, recent matches, and a map view. Recent matches include observed timestamps, aircraft metadata, notification provider selections, map positions when available, and ADS-B Exchange links.
+The dashboard shows worker health, recent matches, and a map view. Recent matches include observed timestamps, aircraft metadata, notification provider selections, map positions when available, and Airplanes.live links.
 
 The map is centered around the configured home location and can show:
 
@@ -191,8 +192,18 @@ See [Development Guide](docs/DEVELOPMENT.md) for:
 - Deploying with Helm
 - Managing runtime secrets
 
+<a id="credits-and-disclaimer"></a>
+
+## 🙏 Credits and Disclaimer
+
+ADS-B Notifier is an independent personal project and is not affiliated with, endorsed by, or sponsored by Airplanes.live, ADSB.lol, OpenStreetMap, Leaflet, Pushover, Twilio, or any aircraft tracking service or notification provider.
+
+When configured to use Airplanes.live, aircraft data and aircraft detail links may come from Airplanes.live. Please be a good neighbor: follow their API guide and terms, keep polling reasonable, and remember that public access can change. If this project is useful to you, consider becoming an Airplanes.live feeder and contributing ADS-B coverage back to the community.
+
+Dashboard maps are rendered with Leaflet and OpenStreetMap tiles. OpenStreetMap attribution is displayed in the map UI.
+
 <a id="status"></a>
 
 ## 🚧 Status
 
-This project is under active development. The current focus is turning the prototype into a reliable Kubernetes-hosted notifier with a practical dashboard, robust configuration handling, and a small set of notification providers that fit personal use.
+This project is under active development. I haven't really focused on making this something for public consumption. I am sharing this so that my friends (Tom and Matt) can see what I am working on.

@@ -58,14 +58,14 @@ def test_send_email_expands_env_values(monkeypatch):
             "to": ["env:SMTP_USERNAME"],
         },
         "ADS-B Notifier test notification",
-        html_message='<p><a href="https://example.test">ADS-B Exchange</a></p>',
+        html_message='<p><a href="https://example.test">Airplanes.live</a></p>',
     )
 
     assert login_calls == [("pilot@example.test", "app-password")]
     assert sent_messages[0]["From"] == "pilot@example.test"
     assert sent_messages[0]["To"] == "pilot@example.test"
     assert sent_messages[0].is_multipart()
-    assert sent_messages[0].get_body(("html",)).get_content().strip() == '<p><a href="https://example.test">ADS-B Exchange</a></p>'
+    assert sent_messages[0].get_body(("html",)).get_content().strip() == '<p><a href="https://example.test">Airplanes.live</a></p>'
 
 
 def test_send_twilio_sms_uses_api_key_credentials(monkeypatch):
@@ -174,7 +174,7 @@ def test_send_pushover_posts_expected_payload(monkeypatch):
         },
         "ADS-B Pushover test",
         title="ADS-B alert",
-        url="https://globe.adsbexchange.com/?icao=A0B1C2",
+        url="https://globe.airplanes.live/?icao=A0B1C2",
         url_title="Track aircraft",
     )
 
@@ -186,7 +186,7 @@ def test_send_pushover_posts_expected_payload(monkeypatch):
     assert "user=user-key" in body
     assert "message=ADS-B+Pushover+test" in body
     assert "title=ADS-B+alert" in body
-    assert "url=https%3A%2F%2Fglobe.adsbexchange.com%2F%3Ficao%3DA0B1C2" in body
+    assert "url=https%3A%2F%2Fglobe.airplanes.live%2F%3Ficao%3DA0B1C2" in body
     assert "url_title=Track+aircraft" in body
     assert "device=phone" in body
     assert "priority=1" in body
@@ -258,7 +258,7 @@ def test_email_templates_render_rich_aircraft_fields():
         "subject_template": "ADS-B: {aircraft_label} matched {rule_name}",
         "body_template": "Aircraft {registration} / {flight}\nType {aircraft_type}\n{distance_miles:.1f} mi, {altitude_label}, {vertical_rate_label}",
         "html_enabled": True,
-        "html_body_template": '<p><a href="{adsb_exchange_url_html}">ADS-B Exchange</a></p>',
+        "html_body_template": '<p><a href="{airplanes_live_url_html}">Airplanes.live</a></p>',
         "include_brand_images": False,
     }
 
@@ -268,7 +268,7 @@ def test_email_templates_render_rich_aircraft_fields():
         "Type BCS1\n"
         "27.0 mi, 10850 ft, descending 640 ft/min"
     )
-    assert render_email_html_body(config, sighting) == '<p><a href="https://globe.adsbexchange.com/?icao=A0B1C2">ADS-B Exchange</a></p>'
+    assert render_email_html_body(config, sighting) == '<p><a href="https://globe.airplanes.live/?icao=A0B1C2">Airplanes.live</a></p>'
 
 
 def test_email_html_body_wraps_with_inline_brand_images_by_default():
@@ -304,12 +304,21 @@ def test_sms_template_can_be_shorter_than_email():
     )
 
 
-def test_templates_include_adsb_exchange_url():
+def test_templates_include_airplanes_live_url():
+    sighting = sample_sighting()
+
+    assert (
+        render_email_body({"body_template": "Track: {airplanes_live_url}"}, sighting)
+        == "Track: https://globe.airplanes.live/?icao=A0B1C2"
+    )
+
+
+def test_legacy_adsb_exchange_template_variable_points_to_airplanes_live():
     sighting = sample_sighting()
 
     assert (
         render_email_body({"body_template": "Track: {adsb_exchange_url}"}, sighting)
-        == "Track: https://globe.adsbexchange.com/?icao=A0B1C2"
+        == "Track: https://globe.airplanes.live/?icao=A0B1C2"
     )
 
 
@@ -318,28 +327,28 @@ def test_pushover_templates_are_independent():
     config = {
         "title_template": "{aircraft_label} near home",
         "message_template": "{rule_name}: {aircraft_label} {distance_miles_1} mi {altitude_label}",
-        "url_template": "{adsb_exchange_url}",
+        "url_template": "{airplanes_live_url}",
         "url_title_template": "Track {aircraft_label}",
     }
 
     assert render_pushover_title(config, sighting) == "N123AB near home"
     assert render_pushover_message(config, sighting) == "TEST TAIL NUMBER: N123AB 27.0 mi 10850 ft"
-    assert render_pushover_url(config, sighting) == "https://globe.adsbexchange.com/?icao=A0B1C2"
+    assert render_pushover_url(config, sighting) == "https://globe.airplanes.live/?icao=A0B1C2"
     assert render_pushover_url_title(config, sighting) == "Track N123AB"
 
 
-def test_pushover_defaults_to_adsb_exchange_link():
+def test_pushover_defaults_to_airplanes_live_link():
     sighting = sample_sighting()
 
-    assert render_pushover_url({}, sighting) == "https://globe.adsbexchange.com/?icao=A0B1C2"
-    assert render_pushover_url_title({}, sighting) == "ADS-B Exchange"
+    assert render_pushover_url({}, sighting) == "https://globe.airplanes.live/?icao=A0B1C2"
+    assert render_pushover_url_title({}, sighting) == "Airplanes.live"
 
 
-def test_pushover_adsb_exchange_link_can_be_disabled():
+def test_pushover_airplanes_live_link_can_be_disabled():
     sighting = sample_sighting()
 
-    assert render_pushover_url({"include_adsb_exchange_link": False}, sighting) == ""
-    assert render_pushover_url_title({"include_adsb_exchange_link": False}, sighting) == ""
+    assert render_pushover_url({"include_airplanes_live_link": False}, sighting) == ""
+    assert render_pushover_url_title({"include_airplanes_live_link": False}, sighting) == ""
 
 
 def test_template_missing_placeholder_renders_empty():

@@ -9,7 +9,7 @@ from typing import Any
 
 from adsb_notifier.adsb import build_adsb_url
 from adsb_notifier.config import Settings
-from adsb_notifier.links import adsb_exchange_aircraft_url
+from adsb_notifier.links import airplanes_live_aircraft_url
 from adsb_notifier.models import Sighting
 
 MAX_RECENT_MATCHES = 200
@@ -91,7 +91,8 @@ def _sighting_summary(sighting: Sighting) -> dict[str, Any]:
         "registration": plane.registration,
         "flight": plane.flight,
         "hex": plane.hex,
-        "adsb_exchange_url": adsb_exchange_aircraft_url(plane.hex),
+        "airplanes_live_url": airplanes_live_aircraft_url(plane.hex),
+        "adsb_exchange_url": airplanes_live_aircraft_url(plane.hex),
         "aircraft_type": plane.aircraft_type or plane.category,
         "category": plane.category,
         "source_type": plane.source_type,
@@ -143,9 +144,14 @@ def _match_is_recent(match: dict[str, Any], cutoff: datetime) -> bool:
 
 
 def _backfill_match_links(match: dict[str, Any]) -> dict[str, Any]:
-    if match.get("adsb_exchange_url"):
+    url = airplanes_live_aircraft_url(match.get("hex"))
+    if match.get("airplanes_live_url"):
+        if match["airplanes_live_url"] != url:
+            return {**match, "airplanes_live_url": url, "adsb_exchange_url": url}
+        if match.get("adsb_exchange_url") != url:
+            return {**match, "adsb_exchange_url": url}
         return match
-    return {**match, "adsb_exchange_url": adsb_exchange_aircraft_url(match.get("hex"))}
+    return {**match, "airplanes_live_url": url, "adsb_exchange_url": url}
 
 
 def _observed_at(match: dict[str, Any]) -> datetime | None:

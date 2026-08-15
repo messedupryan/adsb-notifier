@@ -12,7 +12,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from adsb_notifier.config import Notifications
-from adsb_notifier.links import adsb_exchange_aircraft_url
+from adsb_notifier.links import airplanes_live_aircraft_url
 from adsb_notifier.models import Aircraft, Sighting
 
 LOGGER = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ EMAIL_BRAND_THEMES = {"amber", "blue", "rose", "teal", "violet"}
 EMAIL_LOGO_CID = "adsb-notifier-logo"
 EMAIL_ICON_CID = "adsb-notifier-icon"
 LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE = (
-    '<p>{message_html}</p><p><a href="{adsb_exchange_url_html}">ADS-B Exchange</a></p>'
+    '<p>{message_html}</p><p><a href="{airplanes_live_url_html}">Airplanes.live</a></p>'
     '<table><tr><th align="left">Aircraft</th><td>{aircraft_label_html}</td></tr>'
     '<tr><th align="left">Registration</th><td>{registration_html}</td></tr>'
     '<tr><th align="left">Flight</th><td>{flight_html}</td></tr>'
@@ -42,7 +42,7 @@ DEFAULT_EMAIL_HTML_BODY_TEMPLATE = """\
 <p>{message_html}</p>
 
 <p>
-  <a href="{adsb_exchange_url_html}">ADS-B Exchange</a>
+  <a href="{airplanes_live_url_html}">Airplanes.live</a>
 </p>
 
 <table>
@@ -284,19 +284,19 @@ def render_pushover_message(config: dict, sighting: Sighting, fallback_message: 
 
 
 def render_pushover_url(config: dict, sighting: Sighting) -> str:
-    if config.get("include_adsb_exchange_link") is False:
+    if config.get("include_airplanes_live_link") is False or config.get("include_adsb_exchange_link") is False:
         return ""
     if config.get("url_template"):
         return render_template(config["url_template"], sighting)
-    return adsb_exchange_aircraft_url(sighting.aircraft.hex)
+    return airplanes_live_aircraft_url(sighting.aircraft.hex)
 
 
 def render_pushover_url_title(config: dict, sighting: Sighting) -> str:
-    if config.get("include_adsb_exchange_link") is False:
+    if config.get("include_airplanes_live_link") is False or config.get("include_adsb_exchange_link") is False:
         return ""
     if config.get("url_title_template"):
         return render_template(config["url_title_template"], sighting)
-    return "ADS-B Exchange"
+    return "Airplanes.live"
 
 
 def render_template(template: str, sighting: Sighting, fallback_message: str | None = None) -> str:
@@ -324,7 +324,8 @@ def template_context(sighting: Sighting, fallback_message: str | None = None) ->
         "registration": plane.registration or "",
         "flight": plane.flight or "",
         "hex": plane.hex,
-        "adsb_exchange_url": adsb_exchange_aircraft_url(plane.hex),
+        "airplanes_live_url": airplanes_live_aircraft_url(plane.hex),
+        "adsb_exchange_url": airplanes_live_aircraft_url(plane.hex),
         "aircraft_type": plane.aircraft_type or plane.category or "unknown type",
         "category": plane.category or "",
         "description": raw.get("desc") or "",
