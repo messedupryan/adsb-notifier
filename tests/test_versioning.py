@@ -11,7 +11,7 @@ VERSION_MANAGED_FILES = [
     "VERSION",
     "pyproject.toml",
     "charts/adsb-notifier/Chart.yaml",
-    "charts/adsb-notifier/values.yaml",
+    "charts/adsb-notifier/values.example.yaml",
     "ui/index.html",
     "ui/js/bootstrap.js",
     "ui/js/config-flow.js",
@@ -32,7 +32,7 @@ VERSION_MANAGED_FILES = [
     "Dockerfile",
     "Dockerfile.api",
     "Dockerfile.ui",
-    "Makefile",
+    "Makefile.example",
     "tests/test_versioning.py",
 ]
 
@@ -65,18 +65,26 @@ def test_helm_chart_version_matches_project_version():
 
 
 def test_default_image_tag_matches_project_version():
-    values = (ROOT / "charts" / "adsb-notifier" / "values.yaml").read_text(encoding="utf-8")
+    values = (ROOT / "charts" / "adsb-notifier" / "values.example.yaml").read_text(encoding="utf-8")
 
     assert f"  tag: {project_version()}" in values
 
 
 def test_makefile_bump_version_target_covers_version_managed_files():
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    makefile = (ROOT / "Makefile.example").read_text(encoding="utf-8")
 
     assert "bump-version:" in makefile
     assert "NEW_VERSION" in makefile
     for path in VERSION_MANAGED_FILES:
         assert path in makefile
+
+
+def test_local_deploy_files_are_ignored():
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+
+    assert "\nMakefile\n" in gitignore
+    assert "charts/*/values.yaml" in gitignore
+    assert "!charts/*/values.example.yaml" in gitignore
 
 
 def test_python_dockerfiles_use_pipenv_with_python_314():

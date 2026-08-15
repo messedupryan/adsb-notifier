@@ -126,3 +126,13 @@ def test_adsb_source_controls_are_available_in_settings():
     assert "adsb_lol" in INDEX_HTML
     assert "airplanes_live" in INDEX_HTML
     assert "Direct aircraft.json" in INDEX_HTML
+
+
+def test_ui_bootstrap_helpers_are_defined():
+    for helper in [
+        "normalizeConfig",
+        "cloneConfig",
+        "normalizeRuleNotificationProviders",
+        "selectExistingRuleId",
+    ]:
+        assert f"function {helper}" in UI_JS

@@ -6,7 +6,7 @@ IMAGE_TAG ?= $(PROJECT_VERSION)
 NAMESPACE ?= adsb
 RELEASE ?= adsb-notifier
 HELM_CHART ?= charts/adsb-notifier
-HELM_VALUES ?= charts/adsb-notifier/values.yaml
+HELM_VALUES ?= charts/adsb-notifier/values.example.yaml
 HELM_ADOPT ?= false
 HELM_ARGS ?=
 
@@ -21,7 +21,7 @@ WORKER_IMAGE := $(REGISTRY)/adsb-notifier-worker:$(IMAGE_TAG)
 API_IMAGE := $(REGISTRY)/adsb-notifier-api:$(IMAGE_TAG)
 UI_IMAGE := $(REGISTRY)/adsb-notifier-ui:$(IMAGE_TAG)
 
-VERSION_FILES := VERSION pyproject.toml charts/adsb-notifier/Chart.yaml charts/adsb-notifier/values.yaml ui/index.html ui/js/bootstrap.js ui/js/config-flow.js ui/js/dashboard.js ui/js/forms.js ui/js/map-utils.js ui/js/modal.js ui/js/rule-actions.js ui/js/rule-model.js ui/js/state.js ui/js/theme.js ui/js/ui-utils.js ui/js/validation.js adsb_notifier/version.py docs/DEVELOPMENT.md docs/VERSIONING.md README.md Dockerfile Dockerfile.api Dockerfile.ui Makefile tests/test_versioning.py
+VERSION_FILES := VERSION pyproject.toml charts/adsb-notifier/Chart.yaml charts/adsb-notifier/values.example.yaml ui/index.html ui/js/bootstrap.js ui/js/config-flow.js ui/js/dashboard.js ui/js/forms.js ui/js/map-utils.js ui/js/modal.js ui/js/rule-actions.js ui/js/rule-model.js ui/js/state.js ui/js/theme.js ui/js/ui-utils.js ui/js/validation.js adsb_notifier/version.py docs/DEVELOPMENT.md docs/VERSIONING.md README.md Dockerfile Dockerfile.api Dockerfile.ui Makefile.example tests/test_versioning.py
 
 .PHONY: help version bump-version test local local-api local-ui worker-once build build-worker build-api build-ui push build-push k8s-secret deploy-k8s deploy-helm rollout status
 
@@ -42,12 +42,12 @@ help:
 		'  make rollout       Wait for Kubernetes deployments to roll out' \
 		'  make status        Show Kubernetes resources' \
 		'  make version       Show project/component version and image tags' \
-		'  make bump-version NEW_VERSION=0.0.9  Bump project/component version files' \
+		'  make bump-version NEW_VERSION=0.0.10  Bump project/component version files' \
 		'' \
 		'Common overrides:' \
 		'  REGISTRY=registry.example.test IMAGE_TAG=$(PROJECT_VERSION) NAMESPACE=adsb' \
 		'  LOCAL_CONFIG=config.dev.json API_PORT=8765 UI_PORT=8766' \
-		'  HELM_CHART=charts/adsb-notifier HELM_VALUES=charts/adsb-notifier/values.yaml' \
+		'  HELM_CHART=charts/adsb-notifier HELM_VALUES=charts/adsb-notifier/values.example.yaml' \
 		'  HELM_ADOPT=true HELM_ARGS="--set image.tag=$(PROJECT_VERSION)"'
 
 version:
@@ -58,7 +58,7 @@ version:
 		'UI image:        $(UI_IMAGE)'
 
 bump-version:
-	@test -n "$(NEW_VERSION)" || { echo "Usage: make bump-version NEW_VERSION=0.0.9"; exit 1; }
+	@test -n "$(NEW_VERSION)" || { echo "Usage: make bump-version NEW_VERSION=0.0.10"; exit 1; }
 	@echo "$(NEW_VERSION)" | grep -Eq '^0\.0\.[0-9]+$$' || { echo "NEW_VERSION must match beta semver pattern 0.0.x"; exit 1; }
 	@old_version="$(PROJECT_VERSION)"; \
 	if [ "$$old_version" = "$(NEW_VERSION)" ]; then \

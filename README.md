@@ -114,7 +114,7 @@ charts/adsb-notifier/ Helm chart for Kubernetes deployment
 k8s/                  Raw Kubernetes manifests
 docs/                 Development and operational documentation
 config.example.json   Example configuration
-Makefile              Common local, test, build, and deploy commands
+Makefile.example      Example Make targets for local, test, build, and deploy commands
 ```
 
 <a id="configuration-overview"></a>

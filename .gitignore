@@ -5,6 +5,9 @@
 k8s/secret.yaml
 k8s/secret.*.yaml
 !k8s/secret.example.yaml
+Makefile
+charts/*/values.yaml
+!charts/*/values.example.yaml
 
 # Local runtime config and generated state
 config.dev.json

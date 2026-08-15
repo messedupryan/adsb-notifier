@@ -16,9 +16,11 @@ Install Python dependencies:
 ```bash
 pipenv install --dev
 cp config.example.json config.dev.json
+cp Makefile.example Makefile
+cp charts/adsb-notifier/values.example.yaml charts/adsb-notifier/values.yaml
 ```
 
-Use `pipenv run ...` or the Makefile targets so commands run inside the project environment.
+Use `pipenv run ...` or the Makefile targets so commands run inside the project environment. The repo tracks `Makefile.example`; copy it to ignored local `Makefile` when setting up a development checkout.
 
 ## Makefile Targets
 
@@ -48,11 +50,13 @@ API_HOST=127.0.0.1
 API_PORT=8765
 UI_PORT=8766
 REGISTRY=registry.example.test
-IMAGE_TAG=0.0.9
+IMAGE_TAG=0.0.10
 NAMESPACE=adsb
 RELEASE=adsb-notifier
 HELM_VALUES=charts/adsb-notifier/values.yaml
 ```
+
+The public example defaults live in `Makefile.example` and `charts/adsb-notifier/values.example.yaml`. Local deploy-ready files live at `Makefile` and `charts/adsb-notifier/values.yaml`; both local files are ignored by Git so registry names, ingress hosts, namespaces, and other environment-specific values do not leak into commits.
 
 ## Running Locally
 
@@ -139,7 +143,8 @@ The UI uses Leaflet from a CDN for dashboard maps.
 Keep these files aligned when adding configuration fields:
 
 - `config.example.json`
-- `charts/adsb-notifier/values.yaml` under `seedConfig`
+- `charts/adsb-notifier/values.example.yaml` under `seedConfig`
+- local `charts/adsb-notifier/values.yaml`, if you keep one for deployment
 - `README.md`
 - this development guide, when commands or deployment behavior change
 
@@ -216,7 +221,7 @@ make deploy-helm \
   REGISTRY=registry.example.test \
   NAMESPACE=adsb \
   RELEASE=adsb-notifier \
-  HELM_VALUES=charts/adsb-notifier/values.yaml
+  HELM_VALUES=charts/adsb-notifier/values.example.yaml
 ```
 
 Wait for rollout:

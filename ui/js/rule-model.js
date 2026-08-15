@@ -60,6 +60,48 @@ function duplicateRuleNames(rules) {
   return duplicates;
 }
 
+function normalizeConfig(payload) {
+  return normalizeRuleNotificationProviders({
+    ...payload,
+    config_revision: Number(payload.config_revision) || 1,
+    adsb_url: payload.adsb_url || "",
+    adsb_source: payload.adsb_source || null,
+    home: {
+      lat: payload.home?.lat ?? "",
+      lon: payload.home?.lon ?? "",
+    },
+    poll_seconds: payload.poll_seconds ?? 30,
+    stale_aircraft_seconds: payload.stale_aircraft_seconds ?? 90,
+    recent_matches_window_hours: payload.recent_matches_window_hours ?? 24,
+    notifications: payload.notifications || {},
+    rules: normalizeRules(payload.rules),
+  });
+}
+
+function normalizeRules(rules) {
+  if (!Array.isArray(rules)) return [];
+  return rules.map((rule) => ({...rule, id: rule.id || createClientRuleId(), enabled: rule.enabled !== false}));
+}
+
+function normalizeRuleNotificationProviders(payload) {
+  const available = enabledNotificationProviders(payload);
+  payload.rules = (payload.rules || []).map((rule) => {
+    const selected =
+      Array.isArray(rule.notification_providers) && rule.notification_providers.length > 0
+        ? rule.notification_providers
+        : available;
+    return {
+      ...rule,
+      notification_providers: selected.filter((provider) => available.includes(provider)),
+    };
+  });
+  return payload;
+}
+
+function cloneConfig(payload) {
+  return JSON.parse(JSON.stringify(payload));
+}
+
 function pruneRuleForEvent(rule) {
   if (rule.event !== "tail") delete rule.tail_numbers;
   if (rule.event !== "aircraft_type") {
