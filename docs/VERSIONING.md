@@ -9,7 +9,7 @@ The root `VERSION` file is the project version source of truth.
 The current beta version is:
 
 ```text
-0.0.6
+0.0.7
 ```
 
 For now, the worker, API, UI, Python package, Helm chart, and container images all share the project version. Split component versions only when the components need independent release cadence.
@@ -19,7 +19,7 @@ Version-aligned files:
 - `VERSION`
 - `pyproject.toml`
 - `adsb_notifier/version.py`
-- `ui/app.js`
+- `ui/js/state.js`
 - `ui/index.html`
 - `charts/adsb-notifier/Chart.yaml`
 - `charts/adsb-notifier/values.yaml`
@@ -31,7 +31,7 @@ Run `make version` to display the project version and image tags that will be bu
 - Use `0.0.x` while the project is still changing quickly.
 - Increment the patch version for each stable batch of work that should be deployable or eligible for promotion.
 - Keep all components on the same version during beta unless there is a strong reason to split them.
-- Avoid deploying `latest` for normal testing. Use the explicit version tag, such as `0.0.6`.
+- Avoid deploying `latest` for normal testing. Use the explicit version tag, such as `0.0.7`.
 
 ## Branch Flow
 
@@ -68,9 +68,9 @@ make deploy-helm REGISTRY=registry.example.test
 This builds and deploys:
 
 ```text
-registry.example.test/adsb-notifier-worker:0.0.6
-registry.example.test/adsb-notifier-api:0.0.6
-registry.example.test/adsb-notifier-ui:0.0.6
+registry.example.test/adsb-notifier-worker:0.0.7
+registry.example.test/adsb-notifier-api:0.0.7
+registry.example.test/adsb-notifier-ui:0.0.7
 ```
 
 Use `IMAGE_TAG=...` only when intentionally testing a nonstandard tag.

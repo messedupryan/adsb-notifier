@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 INDEX_HTML = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
-APP_JS = (ROOT / "ui" / "app.js").read_text(encoding="utf-8")
+UI_JS = "\n".join(path.read_text(encoding="utf-8") for path in sorted((ROOT / "ui" / "js").glob("*.js")))
 PROJECT_VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
 
@@ -14,6 +14,7 @@ class InputParser(HTMLParser):
         self.inputs: dict[str, dict[str, str]] = {}
         self.tabs: set[str] = set()
         self.textareas: set[str] = set()
+        self.scripts: list[str] = []
 
     def handle_starttag(self, tag, attrs):
         attributes = dict(attrs)
@@ -24,6 +25,9 @@ class InputParser(HTMLParser):
         if tag == "textarea" and attributes.get("id"):
             self.textareas.add(attributes["id"])
             return
+        if tag == "script" and attributes.get("src"):
+            self.scripts.append(attributes["src"])
+            return
         if tag != "input":
             return
         if attributes.get("id"):
@@ -33,18 +37,42 @@ class InputParser(HTMLParser):
 def test_ui_asset_versions_match_visible_version():
     expected_version = f'const uiVersion = "{PROJECT_VERSION}";'
 
-    assert expected_version in APP_JS
+    assert expected_version in UI_JS
     assert f"ADS-B Notifier {PROJECT_VERSION}" in INDEX_HTML
     assert f"UI {PROJECT_VERSION}" in INDEX_HTML
     assert f"?v={PROJECT_VERSION}" in INDEX_HTML
+    assert f"/js/bootstrap.js?v={PROJECT_VERSION}" in INDEX_HTML
     assert "20260810-2" not in INDEX_HTML
     assert "20260810-1" not in INDEX_HTML
     assert "20260809-12" not in INDEX_HTML
 
 
+def test_ui_javascript_is_split_into_ordered_scripts():
+    parser = InputParser()
+    parser.feed(INDEX_HTML)
+
+    expected_scripts = [
+        f"/js/state.js?v={PROJECT_VERSION}",
+        f"/js/theme.js?v={PROJECT_VERSION}",
+        f"/js/config-flow.js?v={PROJECT_VERSION}",
+        f"/js/dashboard.js?v={PROJECT_VERSION}",
+        f"/js/forms.js?v={PROJECT_VERSION}",
+        f"/js/rule-actions.js?v={PROJECT_VERSION}",
+        f"/js/modal.js?v={PROJECT_VERSION}",
+        f"/js/validation.js?v={PROJECT_VERSION}",
+        f"/js/rule-model.js?v={PROJECT_VERSION}",
+        f"/js/map-utils.js?v={PROJECT_VERSION}",
+        f"/js/ui-utils.js?v={PROJECT_VERSION}",
+        f"/js/bootstrap.js?v={PROJECT_VERSION}",
+    ]
+
+    assert "/app.js" not in INDEX_HTML
+    assert parser.scripts[-len(expected_scripts) :] == expected_scripts
+
+
 def test_removed_webhook_provider_is_not_in_ui():
     assert "webhook" not in INDEX_HTML.lower()
-    assert '"webhook"' not in APP_JS
+    assert '"webhook"' not in UI_JS
 
 
 def test_secret_notification_fields_are_password_inputs():
