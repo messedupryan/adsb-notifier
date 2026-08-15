@@ -1,8 +1,14 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from adsb_notifier.config import Home, Notifications, Settings
-from adsb_notifier.main import MAX_RATE_LIMIT_BACKOFF_SECONDS, _apply_overrides, _rate_limit_backoff_seconds
+from adsb_notifier.config import Home, Notifications, Settings, SourceErrorAlerts
+from adsb_notifier.main import (
+    MAX_RATE_LIMIT_BACKOFF_SECONDS,
+    SourceFailureState,
+    _apply_overrides,
+    _maybe_send_source_error_alert,
+    _rate_limit_backoff_seconds,
+)
 from adsb_notifier.models import Aircraft, Sighting
 from adsb_notifier.status import read_status, write_error_status, write_poll_status, write_rate_limit_status
 
@@ -121,6 +127,7 @@ def test_write_error_status_preserves_previous_poll_summary(tmp_path):
     assert status["status"] == "error"
     assert status["aircraft_count"] == 12
     assert status["last_error"] == "provider failed"
+    assert status["consecutive_source_errors"] == 1
 
 
 def test_rate_limit_backoff_honors_retry_after():
@@ -152,3 +159,34 @@ def test_write_rate_limit_status_records_retry_details(tmp_path):
     assert status["rate_limit_backoff_seconds"] == 120
     assert status["rate_limit_retry_at"]
     assert status["last_error"] == "ADS-B source rate limit reached"
+    assert status["consecutive_source_errors"] == 1
+
+
+def test_source_error_alert_waits_for_threshold_and_respects_cooldown():
+    settings = Settings(
+        adsb_url="http://example.test/aircraft.json",
+        adsb_source=None,
+        home=Home(lat=40.7608, lon=-111.8910),
+        poll_seconds=30,
+        stale_aircraft_seconds=90,
+        notifications=Notifications(),
+        rules=[],
+        source_error_alerts=SourceErrorAlerts(enabled=True, failure_threshold=3, cooldown_minutes=60),
+    )
+    sent = []
+
+    class NotificationsStub:
+        def send_operational_alert(self, title, message):
+            sent.append((title, message))
+
+    state = SourceFailureState()
+    now = datetime(2026, 8, 15, 12, 0, tzinfo=timezone.utc)
+
+    assert _maybe_send_source_error_alert(state, settings, NotificationsStub(), RuntimeError("boom 1"), now=now) is False
+    assert _maybe_send_source_error_alert(state, settings, NotificationsStub(), RuntimeError("boom 2"), now=now) is False
+    assert _maybe_send_source_error_alert(state, settings, NotificationsStub(), RuntimeError("boom 3"), now=now) is True
+    assert _maybe_send_source_error_alert(state, settings, NotificationsStub(), RuntimeError("boom 4"), now=now + timedelta(minutes=10)) is False
+    assert _maybe_send_source_error_alert(state, settings, NotificationsStub(), RuntimeError("boom 5"), now=now + timedelta(minutes=61)) is True
+
+    assert [title for title, _ in sent] == ["ADS-B source unhealthy", "ADS-B source unhealthy"]
+    assert "5 consecutive times" in sent[-1][1]

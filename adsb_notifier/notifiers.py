@@ -153,6 +153,27 @@ class NotificationFanout:
         if not sent:
             LOGGER.info("Notification: %s", message)
 
+    def send_operational_alert(self, title: str, message: str) -> None:
+        sent = False
+        if self._should_send_provider("email", None):
+            html_message = _operational_email_html(self.config.email, message)
+            send_email(
+                self.config.email,
+                message,
+                subject=title,
+                html_message=html_message,
+                inline_images=email_inline_images(self.config.email) if html_message else [],
+            )
+            sent = True
+        if self._should_send_provider("twilio", None):
+            send_twilio_sms(self.config.twilio, f"{title}: {message}")
+            sent = True
+        if self._should_send_provider("pushover", None):
+            send_pushover(self.config.pushover, message, title=title)
+            sent = True
+        if not sent:
+            LOGGER.warning("Operational alert: %s: %s", title, message)
+
     def _should_send_provider(self, provider: str, selected_providers: set[str] | None) -> bool:
         provider_config = getattr(self.config, provider)
         if not provider_config or not provider_config.get("enabled", True):
@@ -249,6 +270,13 @@ def render_email_html_body(config: dict, sighting: Sighting, fallback_message: s
         return None
     body = render_template(config["html_body_template"], sighting, fallback_message)
     return _wrap_email_html_body(config, body)
+
+
+def _operational_email_html(config: dict, message: str) -> str | None:
+    if not config.get("html_enabled"):
+        return None
+    escaped = html.escape(message, quote=True).replace("\n", "<br />")
+    return _wrap_email_html_body(config, f"<p>{escaped}</p>")
 
 
 def _wrap_email_html_body(config: dict, body: str) -> str:

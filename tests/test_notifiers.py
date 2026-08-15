@@ -252,6 +252,37 @@ def test_fanout_defaults_missing_rule_providers_to_all_enabled(monkeypatch):
     assert sent == ["email", "pushover"]
 
 
+def test_fanout_sends_operational_alert_to_enabled_providers(monkeypatch):
+    sent = []
+
+    monkeypatch.setattr(
+        "adsb_notifier.notifiers.send_email",
+        lambda config, message, subject=None, html_message=None, inline_images=None: sent.append(("email", subject, message)),
+    )
+    monkeypatch.setattr("adsb_notifier.notifiers.send_twilio_sms", lambda config, message: sent.append(("twilio", None, message)))
+    monkeypatch.setattr(
+        "adsb_notifier.notifiers.send_pushover",
+        lambda config, message, title=None, url=None, url_title=None: sent.append(("pushover", title, message)),
+    )
+
+    NotificationFanout(
+        config=type(
+            "Notifications",
+            (),
+            {
+                "email": {"enabled": True, "from": "from@example.test", "to": "to@example.test"},
+                "twilio": {"enabled": False},
+                "pushover": {"enabled": True, "app_token": "token", "user_key": "user"},
+            },
+        )()
+    ).send_operational_alert("ADS-B source unhealthy", "The source failed repeatedly.")
+
+    assert sent == [
+        ("email", "ADS-B source unhealthy", "The source failed repeatedly."),
+        ("pushover", "ADS-B source unhealthy", "The source failed repeatedly."),
+    ]
+
+
 def test_email_templates_render_rich_aircraft_fields():
     sighting = sample_sighting()
     config = {

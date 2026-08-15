@@ -296,6 +296,25 @@ def test_recent_matches_window_rejects_values_above_max():
         parse_settings(payload)
 
 
+def test_source_error_alerts_default_to_enabled():
+    settings = parse_settings(valid_config())
+
+    assert settings.source_error_alerts.enabled is True
+    assert settings.source_error_alerts.failure_threshold == 3
+    assert settings.source_error_alerts.cooldown_minutes == 60
+
+
+def test_source_error_alerts_parse_overrides():
+    payload = valid_config()
+    payload["source_error_alerts"] = {"enabled": False, "failure_threshold": 5, "cooldown_minutes": 120}
+
+    settings = parse_settings(payload)
+
+    assert settings.source_error_alerts.enabled is False
+    assert settings.source_error_alerts.failure_threshold == 5
+    assert settings.source_error_alerts.cooldown_minutes == 120
+
+
 def test_adsb_lol_source_config_is_supported():
     payload = valid_config()
     payload["adsb_source"] = {"provider": "adsb_lol", "query": "point", "radius_miles": 40}

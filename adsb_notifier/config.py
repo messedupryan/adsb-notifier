@@ -37,6 +37,13 @@ class AdsbSource:
 
 
 @dataclass(frozen=True)
+class SourceErrorAlerts:
+    enabled: bool = True
+    failure_threshold: int = 3
+    cooldown_minutes: int = 60
+
+
+@dataclass(frozen=True)
 class Rule:
     name: str
     event: str
@@ -66,6 +73,7 @@ class Settings:
     notifications: Notifications
     rules: list[Rule]
     recent_matches_window_hours: int = DEFAULT_RECENT_MATCHES_WINDOW_HOURS
+    source_error_alerts: SourceErrorAlerts = field(default_factory=SourceErrorAlerts)
 
 
 def load_settings(path: str | Path) -> Settings:
@@ -98,6 +106,7 @@ def parse_settings(data: dict[str, Any]) -> Settings:
         poll_seconds=int(data.get("poll_seconds", 30)),
         stale_aircraft_seconds=int(data.get("stale_aircraft_seconds", 90)),
         recent_matches_window_hours=_recent_matches_window_hours(data),
+        source_error_alerts=_parse_source_error_alerts(data.get("source_error_alerts")),
         notifications=Notifications(
             email=notification_data.get("email"),
             twilio=notification_data.get("twilio"),
@@ -118,6 +127,16 @@ def _recent_matches_window_hours(data: dict[str, Any]) -> int:
     if hours > MAX_RECENT_MATCHES_WINDOW_HOURS:
         raise ValueError(f"recent_matches_window_hours cannot exceed {MAX_RECENT_MATCHES_WINDOW_HOURS}")
     return hours
+
+
+def _parse_source_error_alerts(data: dict[str, Any] | None) -> SourceErrorAlerts:
+    if not isinstance(data, dict):
+        return SourceErrorAlerts()
+    return SourceErrorAlerts(
+        enabled=_bool_value(data.get("enabled", True)),
+        failure_threshold=max(1, int(data.get("failure_threshold", 3))),
+        cooldown_minutes=max(1, int(data.get("cooldown_minutes", 60))),
+    )
 
 
 def _validate_notifications(data: dict[str, Any]) -> None:

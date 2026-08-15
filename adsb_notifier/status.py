@@ -26,6 +26,7 @@ def write_poll_status(path: str | Path, settings: Settings, aircraft_count: int,
         "recent_matches_window_hours": settings.recent_matches_window_hours,
         "recent_matches": recent_matches,
         "last_error": None,
+        "consecutive_source_errors": 0,
         "rate_limit_retry_at": None,
         "rate_limit_backoff_seconds": 0,
     }
@@ -39,6 +40,7 @@ def write_error_status(path: str | Path, error: BaseException) -> None:
             "status": "error",
             "last_error": str(error),
             "last_error_at": _now_iso(),
+            "consecutive_source_errors": _next_source_error_count(existing),
         }
     )
     write_status(path, existing)
@@ -58,6 +60,7 @@ def write_rate_limit_status(
             "adsb_url": build_adsb_url(settings),
             "last_error": str(error),
             "last_error_at": now.isoformat(),
+            "consecutive_source_errors": _next_source_error_count(existing),
             "rate_limit_backoff_seconds": backoff_seconds,
             "rate_limit_retry_at": (now + timedelta(seconds=backoff_seconds)).isoformat(),
         }
@@ -80,6 +83,13 @@ def write_status(path: str | Path, payload: dict[str, Any]) -> None:
         temp_file.write(serialized)
         temp_name = temp_file.name
     os.replace(temp_name, status_path)
+
+
+def _next_source_error_count(status: dict[str, Any]) -> int:
+    try:
+        return int(status.get("consecutive_source_errors") or 0) + 1
+    except (TypeError, ValueError):
+        return 1
 
 
 def _sighting_summary(sighting: Sighting) -> dict[str, Any]:

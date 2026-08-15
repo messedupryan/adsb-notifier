@@ -18,6 +18,7 @@ function renderWorkerStatus(status) {
   workerAircraftCount.textContent = status.aircraft_count ?? "0";
   workerNotificationCount.textContent = status.notification_count ?? "0";
   workerAdsbSource.textContent = status.adsb_url || "Unknown";
+  workerSourceErrors.textContent = status.consecutive_source_errors ?? "0";
   const retryAt = formatDateTime(status.rate_limit_retry_at);
   const backoffSeconds = Number(status.rate_limit_backoff_seconds || 0);
   workerRateLimitRetry.textContent = retryAt ? `${retryAt} (${backoffSeconds}s)` : "None";
