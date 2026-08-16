@@ -8,7 +8,9 @@ from adsb_notifier.main import (
     _apply_overrides,
     _maybe_send_source_error_alert,
     _rate_limit_backoff_seconds,
+    _source_error_log_label,
 )
+from adsb_notifier.adsb import AdsbAccessDeniedError, AdsbRateLimitError, AdsbSourceUnavailableError
 from adsb_notifier.models import Aircraft, Sighting
 from adsb_notifier.status import read_status, write_error_status, write_poll_status, write_rate_limit_status
 
@@ -140,6 +142,19 @@ def test_rate_limit_backoff_uses_exponential_delay_with_cap():
     assert _rate_limit_backoff_seconds(retry_after_seconds=None, poll_seconds=30, attempts=10) == MAX_RATE_LIMIT_BACKOFF_SECONDS
 
 
+def test_source_unavailable_timeout_uses_exponential_backoff():
+    error = AdsbSourceUnavailableError("https://api.example.test/aircraft", message="ADS-B source timed out; backing off")
+
+    assert _rate_limit_backoff_seconds(error.retry_after_seconds, poll_seconds=30, attempts=0) == 60
+    assert _rate_limit_backoff_seconds(error.retry_after_seconds, poll_seconds=30, attempts=1) == 120
+
+
+def test_source_error_log_label_exposes_failure_type():
+    assert _source_error_log_label(AdsbAccessDeniedError("https://api.example.test/aircraft")) == "access denied"
+    assert _source_error_log_label(AdsbRateLimitError("https://api.example.test/aircraft")) == "rate limited"
+    assert _source_error_log_label(AdsbSourceUnavailableError("https://api.example.test/aircraft")) == "unavailable"
+
+
 def test_write_rate_limit_status_records_retry_details(tmp_path):
     settings = Settings(
         adsb_url="http://example.test/aircraft.json",
@@ -152,13 +167,54 @@ def test_write_rate_limit_status_records_retry_details(tmp_path):
     )
     status_path = tmp_path / "status.json"
 
-    write_rate_limit_status(status_path, settings, RuntimeError("ADS-B source rate limit reached"), 120)
+    write_rate_limit_status(status_path, settings, AdsbRateLimitError("https://api.example.test/aircraft"), 120)
 
     status = read_status(status_path)
     assert status["status"] == "rate_limited"
     assert status["rate_limit_backoff_seconds"] == 120
     assert status["rate_limit_retry_at"]
     assert status["last_error"] == "ADS-B source rate limit reached"
+    assert status["consecutive_source_errors"] == 1
+
+
+def test_write_source_status_records_access_denied(tmp_path):
+    settings = Settings(
+        adsb_url="http://example.test/aircraft.json",
+        adsb_source=None,
+        home=Home(lat=40.7608, lon=-111.8910),
+        poll_seconds=30,
+        stale_aircraft_seconds=90,
+        notifications=Notifications(),
+        rules=[],
+    )
+    status_path = tmp_path / "status.json"
+
+    write_rate_limit_status(status_path, settings, AdsbAccessDeniedError("https://api.example.test/aircraft"), 120)
+
+    status = read_status(status_path)
+    assert status["status"] == "access_denied"
+    assert status["rate_limit_backoff_seconds"] == 120
+    assert status["last_error"] == "ADS-B source access denied; backing off"
+    assert status["consecutive_source_errors"] == 1
+
+
+def test_write_source_unavailable_status_records_network_failure(tmp_path):
+    settings = Settings(
+        adsb_url="http://example.test/aircraft.json",
+        adsb_source=None,
+        home=Home(lat=40.7608, lon=-111.8910),
+        poll_seconds=30,
+        stale_aircraft_seconds=90,
+        notifications=Notifications(),
+        rules=[],
+    )
+    status_path = tmp_path / "status.json"
+
+    write_rate_limit_status(status_path, settings, AdsbSourceUnavailableError("https://api.example.test/aircraft"), 60)
+
+    status = read_status(status_path)
+    assert status["status"] == "source_unavailable"
+    assert status["rate_limit_backoff_seconds"] == 60
     assert status["consecutive_source_errors"] == 1
 
 

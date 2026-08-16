@@ -15,8 +15,8 @@ function validateConfig(payload) {
     if (source.query === "point" && source.radius_miles !== undefined && !isRequiredNumber(source.radius_miles)) {
       errors.push(validationError("ADS-B source radius must be numeric when set.", fields.adsbSourceRadius));
     }
-    if (source.query === "point" && Number(source.radius_miles) > 250) {
-      errors.push(validationError("ADS-B source radius cannot exceed 250 miles.", fields.adsbSourceRadius));
+    if (source.query === "point" && Number(source.radius_miles) > MAX_ADSB_POINT_RADIUS_MILES) {
+      errors.push(validationError(`ADS-B source radius cannot exceed ${MAX_ADSB_POINT_RADIUS_MILES} miles.`, fields.adsbSourceRadius));
     }
     if (["reg", "type", "hex"].includes(source.query) && !source.value) {
       errors.push(validationError("ADS-B source lookup value is required for this query.", fields.adsbSourceValue));
@@ -27,8 +27,13 @@ function validateConfig(payload) {
   }
   if (!isRequiredNumber(payload.recent_matches_window_hours)) {
     errors.push(validationError("Recent matches hours is required.", fields.recentMatchesWindowHours));
-  } else if (Number(payload.recent_matches_window_hours) < 1 || Number(payload.recent_matches_window_hours) > 168) {
-    errors.push(validationError("Recent matches hours must be between 1 and 168.", fields.recentMatchesWindowHours));
+  } else if (
+    Number(payload.recent_matches_window_hours) < 1 ||
+    Number(payload.recent_matches_window_hours) > MAX_RECENT_MATCHES_WINDOW_HOURS
+  ) {
+    errors.push(
+      validationError(`Recent matches hours must be between 1 and ${MAX_RECENT_MATCHES_WINDOW_HOURS}.`, fields.recentMatchesWindowHours)
+    );
   }
   if (!Array.isArray(payload.rules) || payload.rules.length === 0) {
     errors.push("At least one rule is required.");

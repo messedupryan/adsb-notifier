@@ -15,9 +15,9 @@ function renderForms() {
   updateAdsbSourceFieldVisibility();
   fields.homeLat.value = config.home?.lat ?? "";
   fields.homeLon.value = config.home?.lon ?? "";
-  fields.pollSeconds.value = config.poll_seconds ?? 30;
-  fields.staleAircraftSeconds.value = config.stale_aircraft_seconds ?? 90;
-  fields.recentMatchesWindowHours.value = config.recent_matches_window_hours ?? 24;
+  fields.pollSeconds.value = config.poll_seconds ?? DEFAULT_POLL_SECONDS;
+  fields.staleAircraftSeconds.value = config.stale_aircraft_seconds ?? DEFAULT_STALE_AIRCRAFT_SECONDS;
+  fields.recentMatchesWindowHours.value = config.recent_matches_window_hours ?? DEFAULT_RECENT_MATCHES_WINDOW_HOURS;
 
   fields.emailEnabled.checked = Boolean(email.enabled);
   fields.emailSmtpHost.value = email.smtp_host || "";
@@ -98,7 +98,7 @@ function renderRuleEditor() {
   fields.ruleEvent.value = rule.event || "tail";
   fields.ruleEnabled.checked = rule.enabled !== false;
   fields.ruleRadius.value = rule.radius_miles ?? "";
-  fields.ruleCooldown.value = rule.cooldown_minutes ?? 30;
+  fields.ruleCooldown.value = rule.cooldown_minutes ?? DEFAULT_RULE_COOLDOWN_MINUTES;
   fields.ruleMinAltitude.value = rule.min_altitude_ft ?? "";
   fields.ruleMaxAltitude.value = rule.max_altitude_ft ?? "";
   fields.ruleTailNumbers.value = listToText(rule.tail_numbers);
@@ -107,8 +107,8 @@ function renderRuleEditor() {
   fields.ruleMilitary.checked = (rule.event || "tail") === "military";
   fields.ruleMilitary.disabled = true;
   fields.ruleIncludeTisb.checked = rule.include_tisb === true;
-  fields.ruleHeadingChange.value = rule.circling_min_heading_change_deg ?? 270;
-  fields.ruleWindowMinutes.value = rule.circling_window_minutes ?? 8;
+  fields.ruleHeadingChange.value = rule.circling_min_heading_change_deg ?? DEFAULT_CIRCLING_HEADING_CHANGE_DEG;
+  fields.ruleWindowMinutes.value = rule.circling_window_minutes ?? DEFAULT_CIRCLING_WINDOW_MINUTES;
   renderRuleNotificationProviders(rule);
   updateRuleFieldVisibility(rule.event || "tail");
 }
@@ -144,9 +144,9 @@ function syncFromForms() {
     lat: numberValue(fields.homeLat),
     lon: numberValue(fields.homeLon),
   };
-  config.poll_seconds = integerValue(fields.pollSeconds, 30);
-  config.stale_aircraft_seconds = integerValue(fields.staleAircraftSeconds, 90);
-  config.recent_matches_window_hours = integerValue(fields.recentMatchesWindowHours, 24);
+  config.poll_seconds = integerValue(fields.pollSeconds, DEFAULT_POLL_SECONDS);
+  config.stale_aircraft_seconds = integerValue(fields.staleAircraftSeconds, DEFAULT_STALE_AIRCRAFT_SECONDS);
+  config.recent_matches_window_hours = integerValue(fields.recentMatchesWindowHours, DEFAULT_RECENT_MATCHES_WINDOW_HOURS);
   const notifications = config.notifications || {};
   const existingEmail = notifications.email || {};
   const existingPushover = notifications.pushover || {};

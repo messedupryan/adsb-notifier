@@ -4,8 +4,8 @@ function createRule(eventType) {
     name: uniqueRuleName(`New ${eventLabel(eventType).toLowerCase()} rule`),
     event: eventType,
     enabled: true,
-    radius_miles: 25,
-    cooldown_minutes: 30,
+    radius_miles: DEFAULT_RULE_RADIUS_MILES,
+    cooldown_minutes: DEFAULT_RULE_COOLDOWN_MINUTES,
     notification_providers: enabledNotificationProviders(),
   };
   if (eventType === "tail") {
@@ -21,8 +21,8 @@ function createRule(eventType) {
     return {
       ...base,
       max_altitude_ft: 10000,
-      circling_min_heading_change_deg: 270,
-      circling_window_minutes: 8,
+      circling_min_heading_change_deg: DEFAULT_CIRCLING_HEADING_CHANGE_DEG,
+      circling_window_minutes: DEFAULT_CIRCLING_WINDOW_MINUTES,
     };
   }
   return base;
@@ -70,9 +70,9 @@ function normalizeConfig(payload) {
       lat: payload.home?.lat ?? "",
       lon: payload.home?.lon ?? "",
     },
-    poll_seconds: payload.poll_seconds ?? 30,
-    stale_aircraft_seconds: payload.stale_aircraft_seconds ?? 90,
-    recent_matches_window_hours: payload.recent_matches_window_hours ?? 24,
+    poll_seconds: payload.poll_seconds ?? DEFAULT_POLL_SECONDS,
+    stale_aircraft_seconds: payload.stale_aircraft_seconds ?? DEFAULT_STALE_AIRCRAFT_SECONDS,
+    recent_matches_window_hours: payload.recent_matches_window_hours ?? DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
     notifications: payload.notifications || {},
     rules: normalizeRules(payload.rules),
   });

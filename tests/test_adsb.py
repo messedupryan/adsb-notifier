@@ -1,9 +1,17 @@
 from email.message import Message
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 import pytest
 
-from adsb_notifier.adsb import AdsbRateLimitError, USER_AGENT, build_adsb_url, fetch_aircraft, parse_aircraft_payload
+from adsb_notifier.adsb import (
+    AdsbAccessDeniedError,
+    AdsbRateLimitError,
+    AdsbSourceUnavailableError,
+    USER_AGENT,
+    build_adsb_url,
+    fetch_aircraft,
+    parse_aircraft_payload,
+)
 from adsb_notifier.version import __version__
 from adsb_notifier.config import AdsbSource, Home, Notifications, Rule, Settings
 
@@ -183,11 +191,40 @@ def test_fetch_aircraft_raises_backoff_error_for_forbidden(monkeypatch):
 
     monkeypatch.setattr("adsb_notifier.adsb.urlopen", fake_urlopen)
 
-    with pytest.raises(AdsbRateLimitError) as error:
+    with pytest.raises(AdsbAccessDeniedError) as error:
         fetch_aircraft("https://api.example.test/aircraft")
 
     assert error.value.status_code == 403
-    assert str(error.value) == "ADS-B source returned 403 Forbidden; backing off"
+    assert str(error.value) == "ADS-B source access denied; backing off"
+
+
+def test_fetch_aircraft_raises_source_unavailable_for_timeout(monkeypatch):
+    def fake_urlopen(request, timeout):
+        del request, timeout
+        raise TimeoutError("The read operation timed out")
+
+    monkeypatch.setattr("adsb_notifier.adsb.urlopen", fake_urlopen)
+
+    with pytest.raises(AdsbSourceUnavailableError) as error:
+        fetch_aircraft("https://api.example.test/aircraft")
+
+    assert error.value.status_code is None
+    assert error.value.retry_after_seconds is None
+    assert str(error.value) == "ADS-B source timed out; backing off"
+
+
+def test_fetch_aircraft_raises_source_unavailable_for_url_error(monkeypatch):
+    def fake_urlopen(request, timeout):
+        del request, timeout
+        raise URLError("connection reset")
+
+    monkeypatch.setattr("adsb_notifier.adsb.urlopen", fake_urlopen)
+
+    with pytest.raises(AdsbSourceUnavailableError) as error:
+        fetch_aircraft("https://api.example.test/aircraft")
+
+    assert error.value.status_code is None
+    assert str(error.value) == "ADS-B source connection failed; backing off: connection reset"
 
 
 def test_fetch_aircraft_uses_versioned_user_agent(monkeypatch):

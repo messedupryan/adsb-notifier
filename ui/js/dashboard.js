@@ -34,7 +34,7 @@ function renderWorkerStatus(status) {
   if (selectedRecentMatchKey && !matches.some((match) => matchKey(match) === selectedRecentMatchKey)) {
     selectedRecentMatchKey = null;
   }
-  matches.slice(0, 10).forEach((match) => {
+  matches.slice(0, RECENT_MATCH_LIST_LIMIT).forEach((match) => {
     const key = matchKey(match);
     const item = document.createElement("div");
     item.className = "match-item";
@@ -102,26 +102,31 @@ function renderDashboardMap(status) {
   const matches = (Array.isArray(status.recent_matches) ? status.recent_matches : []).filter((match) =>
     hasPosition(match)
   );
-  matches.slice(0, 20).forEach((match) => {
+  matches.slice(0, MAP_MATCH_MARKER_LIMIT).forEach((match) => {
     const latLng = [Number(match.lat), Number(match.lon)];
     const isSelected = matchKey(match) === selectedRecentMatchKey;
     const marker = window.L.circleMarker(latLng, {
-      radius: isSelected ? 10 : 8,
+      radius: isSelected ? SELECTED_MATCH_MARKER_RADIUS : DEFAULT_MATCH_MARKER_RADIUS,
       color: "#17202a",
       fillColor: isSelected ? selectedMatchColor() : eventColor(match.event_type),
       fillOpacity: isSelected ? 1 : 0.88,
-      weight: isSelected ? 2.5 : 1.5,
+      weight: isSelected ? SELECTED_MATCH_MARKER_WEIGHT : DEFAULT_MATCH_MARKER_WEIGHT,
     })
       .bindPopup(matchPopupHtml(match))
       .addTo(dashboardMapLayers);
     marker.on("click", () => selectRecentMatch(matchKey(match)));
 
     if (Number.isFinite(Number(match.track_deg))) {
-      window.L.polyline([latLng, projectedTrackPoint(Number(match.lat), Number(match.lon), Number(match.track_deg), 0.8)], {
-        color: isSelected ? selectedMatchColor() : eventColor(match.event_type),
-        opacity: isSelected ? 1 : 0.78,
-        weight: isSelected ? 3.5 : 2,
-      }).addTo(dashboardMapLayers);
+      window.L
+        .polyline(
+          [latLng, projectedTrackPoint(Number(match.lat), Number(match.lon), Number(match.track_deg), TRACK_PROJECTION_DISTANCE_MILES)],
+          {
+            color: isSelected ? selectedMatchColor() : eventColor(match.event_type),
+            opacity: isSelected ? 1 : 0.78,
+            weight: isSelected ? SELECTED_TRACK_LINE_WEIGHT : DEFAULT_TRACK_LINE_WEIGHT,
+          }
+        )
+        .addTo(dashboardMapLayers);
     }
   });
 

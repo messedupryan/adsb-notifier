@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 import os
 from dataclasses import dataclass, field
@@ -7,11 +5,22 @@ from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
+from adsb_notifier.constants import (
+    DEFAULT_ADSB_REQUEST_TIMEOUT_SECONDS,
+    DEFAULT_CIRCLING_HEADING_CHANGE_DEG,
+    DEFAULT_CIRCLING_WINDOW_MINUTES,
+    DEFAULT_POLL_SECONDS,
+    DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
+    DEFAULT_RULE_COOLDOWN_MINUTES,
+    DEFAULT_SOURCE_ERROR_ALERT_COOLDOWN_MINUTES,
+    DEFAULT_SOURCE_ERROR_ALERT_FAILURE_THRESHOLD,
+    DEFAULT_STALE_AIRCRAFT_SECONDS,
+    MAX_RECENT_MATCHES_WINDOW_HOURS,
+)
+
 NOTIFICATION_PROVIDERS = {"email", "pushover", "twilio"}
 ADSB_SOURCE_PROVIDERS = {"direct", "airplanes_live", "adsb_lol"}
 ADSB_SOURCE_QUERIES = {"point", "mil", "reg", "type", "hex"}
-DEFAULT_RECENT_MATCHES_WINDOW_HOURS = 24
-MAX_RECENT_MATCHES_WINDOW_HOURS = 168
 
 
 @dataclass(frozen=True)
@@ -39,8 +48,8 @@ class AdsbSource:
 @dataclass(frozen=True)
 class SourceErrorAlerts:
     enabled: bool = True
-    failure_threshold: int = 3
-    cooldown_minutes: int = 60
+    failure_threshold: int = DEFAULT_SOURCE_ERROR_ALERT_FAILURE_THRESHOLD
+    cooldown_minutes: int = DEFAULT_SOURCE_ERROR_ALERT_COOLDOWN_MINUTES
 
 
 @dataclass(frozen=True)
@@ -57,9 +66,9 @@ class Rule:
     include_tisb: bool = False
     min_altitude_ft: int | None = None
     max_altitude_ft: int | None = None
-    cooldown_minutes: int = 30
-    circling_min_heading_change_deg: float = 270.0
-    circling_window_minutes: int = 8
+    cooldown_minutes: int = DEFAULT_RULE_COOLDOWN_MINUTES
+    circling_min_heading_change_deg: float = DEFAULT_CIRCLING_HEADING_CHANGE_DEG
+    circling_window_minutes: int = DEFAULT_CIRCLING_WINDOW_MINUTES
     notification_providers: set[str] | None = None
 
 
@@ -85,7 +94,7 @@ def load_settings_data(path: str | Path) -> dict[str, Any]:
     location = str(path)
     if location.startswith(("http://", "https://")):
         request = Request(location, headers={"User-Agent": "adsb-notifier/0.1"})
-        with urlopen(request, timeout=10) as response:
+        with urlopen(request, timeout=DEFAULT_ADSB_REQUEST_TIMEOUT_SECONDS) as response:
             return json.loads(response.read().decode("utf-8"))
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
@@ -103,8 +112,8 @@ def parse_settings(data: dict[str, Any]) -> Settings:
         adsb_url=_env_or_value(data.get("adsb_url", "")),
         adsb_source=_parse_adsb_source(data.get("adsb_source")),
         home=Home(lat=float(home_data["lat"]), lon=float(home_data["lon"])),
-        poll_seconds=int(data.get("poll_seconds", 30)),
-        stale_aircraft_seconds=int(data.get("stale_aircraft_seconds", 90)),
+        poll_seconds=int(data.get("poll_seconds", DEFAULT_POLL_SECONDS)),
+        stale_aircraft_seconds=int(data.get("stale_aircraft_seconds", DEFAULT_STALE_AIRCRAFT_SECONDS)),
         recent_matches_window_hours=_recent_matches_window_hours(data),
         source_error_alerts=_parse_source_error_alerts(data.get("source_error_alerts")),
         notifications=Notifications(
@@ -134,8 +143,14 @@ def _parse_source_error_alerts(data: dict[str, Any] | None) -> SourceErrorAlerts
         return SourceErrorAlerts()
     return SourceErrorAlerts(
         enabled=_bool_value(data.get("enabled", True)),
-        failure_threshold=max(1, int(data.get("failure_threshold", 3))),
-        cooldown_minutes=max(1, int(data.get("cooldown_minutes", 60))),
+        failure_threshold=max(
+            1,
+            int(data.get("failure_threshold", DEFAULT_SOURCE_ERROR_ALERT_FAILURE_THRESHOLD)),
+        ),
+        cooldown_minutes=max(
+            1,
+            int(data.get("cooldown_minutes", DEFAULT_SOURCE_ERROR_ALERT_COOLDOWN_MINUTES)),
+        ),
     )
 
 
@@ -193,8 +208,10 @@ def _parse_rule(data: dict[str, Any]) -> Rule:
         min_altitude_ft=data.get("min_altitude_ft"),
         max_altitude_ft=data.get("max_altitude_ft"),
         cooldown_minutes=_required_int(data, "cooldown_minutes", name),
-        circling_min_heading_change_deg=float(data.get("circling_min_heading_change_deg", 270.0)),
-        circling_window_minutes=int(data.get("circling_window_minutes", 8)),
+        circling_min_heading_change_deg=float(
+            data.get("circling_min_heading_change_deg", DEFAULT_CIRCLING_HEADING_CHANGE_DEG)
+        ),
+        circling_window_minutes=int(data.get("circling_window_minutes", DEFAULT_CIRCLING_WINDOW_MINUTES)),
         notification_providers=_parse_notification_providers(data),
     )
 

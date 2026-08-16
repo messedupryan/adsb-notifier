@@ -21,11 +21,11 @@ function selectedMatchWithPosition() {
 
 function dashboardMapZoom() {
   const radii = activeRulesWithRadius().map((rule) => Number(rule.radius_miles)).filter((radius) => radius > 0);
-  const largestRadius = radii.length ? Math.max(...radii) : 10;
+  const largestRadius = radii.length ? Math.max(...radii) : DEFAULT_DASHBOARD_MAP_RADIUS_MILES;
   if (largestRadius <= 2) return 13;
   if (largestRadius <= 5) return 12;
   if (largestRadius <= 15) return 11;
-  return 10;
+  return DEFAULT_DASHBOARD_MAP_ZOOM;
 }
 
 function hasPosition(match) {

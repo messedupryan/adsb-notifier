@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 import os
 import tempfile
@@ -9,10 +7,9 @@ from typing import Any
 
 from adsb_notifier.adsb import build_adsb_url
 from adsb_notifier.config import Settings
+from adsb_notifier.constants import MAX_RECENT_MATCHES
 from adsb_notifier.links import airplanes_live_aircraft_url
 from adsb_notifier.models import Sighting
-
-MAX_RECENT_MATCHES = 200
 
 
 def write_poll_status(path: str | Path, settings: Settings, aircraft_count: int, sightings: list[Sighting]) -> None:
@@ -56,7 +53,7 @@ def write_rate_limit_status(
     now = datetime.now(timezone.utc)
     existing.update(
         {
-            "status": "rate_limited",
+            "status": _source_error_status(error),
             "adsb_url": build_adsb_url(settings),
             "last_error": str(error),
             "last_error_at": now.isoformat(),
@@ -66,6 +63,16 @@ def write_rate_limit_status(
         }
     )
     write_status(path, existing)
+
+
+def _source_error_status(error: BaseException) -> str:
+    match getattr(error, "status_code", None):
+        case 403:
+            return "access_denied"
+        case 429:
+            return "rate_limited"
+        case _:
+            return "source_unavailable"
 
 
 def read_status(path: str | Path) -> dict[str, Any]:

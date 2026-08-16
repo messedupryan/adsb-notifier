@@ -1,4 +1,6 @@
 versionLabel.textContent = `UI ${uiVersion}`;
+fields.adsbSourceRadius.max = String(MAX_ADSB_POINT_RADIUS_MILES);
+fields.recentMatchesWindowHours.max = String(MAX_RECENT_MATCHES_WINDOW_HOURS);
 initThemeControls();
 
 document.querySelectorAll(".tab").forEach((tab) => {
