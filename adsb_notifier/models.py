@@ -15,6 +15,7 @@ class Aircraft:
     altitude_ft: int | None = None
     track_deg: float | None = None
     seen_seconds: float | None = None
+    squawk: str | None = None
     emergency: str | None = None
     military: bool = False
     raw: dict = field(default_factory=dict)

@@ -56,6 +56,7 @@ def test_ui_javascript_is_split_into_ordered_scripts():
     parser.feed(INDEX_HTML)
 
     expected_scripts = [
+        f"/js/constants.js?v={PROJECT_VERSION}",
         f"/js/state.js?v={PROJECT_VERSION}",
         f"/js/theme.js?v={PROJECT_VERSION}",
         f"/js/config-flow.js?v={PROJECT_VERSION}",
@@ -126,6 +127,15 @@ def test_adsb_source_controls_are_available_in_settings():
     assert "adsb_lol" in INDEX_HTML
     assert "airplanes_live" in INDEX_HTML
     assert "Direct aircraft.json" in INDEX_HTML
+
+
+def test_squawk_rule_controls_are_available():
+    parser = InputParser()
+    parser.feed(INDEX_HTML)
+
+    assert "rule-squawk-codes" in parser.inputs
+    assert 'value="squawk"' in INDEX_HTML
+    assert "squawk_codes" in UI_JS
 
 
 def test_ui_bootstrap_helpers_are_defined():

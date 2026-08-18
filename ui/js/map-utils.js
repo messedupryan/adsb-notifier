@@ -51,6 +51,7 @@ function eventColor(eventType) {
     tail: "#2563eb",
     military: "#be3455",
     aircraft_type: "#1f7a6d",
+    squawk: "#7c3aed",
     circling: "#b45309",
   }[eventType] || currentAccentColor();
 }

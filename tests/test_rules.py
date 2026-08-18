@@ -119,6 +119,32 @@ def test_aircraft_type_rule_matches_type_or_category():
     assert len(sightings) == 1
 
 
+def test_squawk_rule_matches_configured_code():
+    engine = RuleEngine(
+        settings_with(
+            Rule(
+                name="emergency",
+                event="squawk",
+                radius_miles=10,
+                squawk_codes={"7700"},
+            )
+        )
+    )
+
+    sightings = engine.evaluate([Aircraft(hex="A12345", squawk="7700", lat=40.7708, lon=-111.8910)])
+
+    assert len(sightings) == 1
+    assert sightings[0].event_type == "squawk"
+
+
+def test_squawk_rule_rejects_other_codes():
+    engine = RuleEngine(settings_with(Rule(name="emergency", event="squawk", radius_miles=10, squawk_codes={"7700"})))
+
+    sightings = engine.evaluate([Aircraft(hex="A12345", squawk="1200", lat=40.7708, lon=-111.8910)])
+
+    assert sightings == []
+
+
 def test_military_rule_rejects_civilian_aircraft_even_without_rule_flag():
     engine = RuleEngine(settings_with(Rule(name="mil", event="military", radius_miles=10, military=None)))
 

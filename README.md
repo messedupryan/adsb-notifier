@@ -34,7 +34,7 @@ The app can run locally during development or as containers in Kubernetes. See [
 
 ## ✨ Features
 
-- Rule matching for tail numbers, callsigns, ICAO hex IDs, military aircraft, aircraft types, ADS-B categories, and circling behavior.
+- Rule matching for tail numbers, callsigns, ICAO hex IDs, military aircraft, aircraft types, ADS-B categories, squawk codes, and circling behavior.
 - Radius, minimum altitude, maximum altitude, stale-aircraft, and cooldown filters.
 - Direct `aircraft.json` feed support for common dump1090/readsb/tar1090-style data.
 - Online source adapters for Airplanes.live and ADSB.lol.
@@ -142,6 +142,7 @@ Rules support these event values:
 - `tail`
 - `military`
 - `aircraft_type`
+- `squawk`
 - `circling`
 
 Example rule:

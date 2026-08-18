@@ -448,6 +448,7 @@ def _sighting_summary(sighting: Any) -> dict[str, Any]:
         "aircraft_type": plane.aircraft_type or plane.category,
         "distance_miles": round(sighting.distance_miles, 2),
         "altitude_ft": plane.altitude_ft,
+        "squawk": plane.squawk,
         "notification_providers": sorted(sighting.notification_providers or []),
     }
 

@@ -17,6 +17,9 @@ function createRule(eventType) {
   if (eventType === "aircraft_type") {
     return {...base, aircraft_types: ["H60"], categories: []};
   }
+  if (eventType === "squawk") {
+    return {...base, squawk_codes: ["1200"]};
+  }
   if (eventType === "circling") {
     return {
       ...base,
@@ -108,6 +111,7 @@ function pruneRuleForEvent(rule) {
     delete rule.aircraft_types;
     delete rule.categories;
   }
+  if (rule.event !== "squawk") delete rule.squawk_codes;
   if (rule.event !== "military") {
     delete rule.military;
     delete rule.include_tisb;
@@ -131,6 +135,7 @@ function updateRuleFieldVisibility(eventType) {
   document.querySelectorAll(".aircraft-type-field").forEach((node) => {
     node.classList.toggle("hidden", eventType !== "aircraft_type");
   });
+  document.querySelectorAll(".squawk-field").forEach((node) => node.classList.toggle("hidden", eventType !== "squawk"));
   document.querySelectorAll(".military-field").forEach((node) => node.classList.toggle("hidden", eventType !== "military"));
   document.querySelectorAll(".circling-field").forEach((node) => node.classList.toggle("hidden", eventType !== "circling"));
 }

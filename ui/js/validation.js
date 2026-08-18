@@ -70,6 +70,14 @@ function validateConfig(payload) {
         ruleValidationError(`${label} needs at least one aircraft type or category.`, rule, ["aircraftTypes", "categories"])
       );
     }
+    if (rule.event === "squawk") {
+      const squawkCodes = Array.isArray(rule.squawk_codes) ? rule.squawk_codes : [];
+      if (squawkCodes.length === 0) {
+        errors.push(ruleValidationError(`${label} needs at least one squawk code.`, rule, "squawkCodes"));
+      } else if (squawkCodes.some((code) => !isSquawkCode(code))) {
+        errors.push(ruleValidationError(`${label} squawk codes must use four digits from 0-7.`, rule, "squawkCodes"));
+      }
+    }
     if (rule.event === "circling" && !isRequiredNumber(rule.circling_min_heading_change_deg)) {
       errors.push(ruleValidationError(`${label} needs a heading change threshold.`, rule, "headingChange"));
     }
@@ -90,6 +98,10 @@ function validateConfig(payload) {
 
 function isRequiredNumber(value) {
   return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
+}
+
+function isSquawkCode(value) {
+  return /^[0-7]{4}$/.test(String(value).trim());
 }
 
 function validationError(message, targets = []) {
@@ -114,6 +126,7 @@ function ruleFieldForKey(key) {
     tailNumbers: fields.ruleTailNumbers,
     aircraftTypes: fields.ruleAircraftTypes,
     categories: fields.ruleCategories,
+    squawkCodes: fields.ruleSquawkCodes,
     notificationProviders: fields.ruleNotificationProviders,
     headingChange: fields.ruleHeadingChange,
     windowMinutes: fields.ruleWindowMinutes,

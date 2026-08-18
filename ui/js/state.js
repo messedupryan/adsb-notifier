@@ -4,7 +4,7 @@ let isDirty = false;
 let isJsonDirty = false;
 let selectedRuleId = null;
 let activeTab = "dashboard";
-const uiVersion = "0.0.13";
+const uiVersion = "0.0.14";
 const redactedSecret = "********";
 const notificationProviderOrder = ["pushover", "email", "twilio"];
 const adsbSourceProviders = ["adsb_lol", "airplanes_live", "direct"];
@@ -80,6 +80,7 @@ const fields = {
   ruleTailNumbers: document.querySelector("#rule-tail-numbers"),
   ruleAircraftTypes: document.querySelector("#rule-aircraft-types"),
   ruleCategories: document.querySelector("#rule-categories"),
+  ruleSquawkCodes: document.querySelector("#rule-squawk-codes"),
   ruleNotificationProviders: document.querySelector("#rule-notification-providers"),
   ruleNotificationEmpty: document.querySelector("#rule-notification-empty"),
   ruleMilitary: document.querySelector("#rule-military"),

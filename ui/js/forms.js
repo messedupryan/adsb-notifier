@@ -104,6 +104,7 @@ function renderRuleEditor() {
   fields.ruleTailNumbers.value = listToText(rule.tail_numbers);
   fields.ruleAircraftTypes.value = listToText(rule.aircraft_types);
   fields.ruleCategories.value = listToText(rule.categories);
+  fields.ruleSquawkCodes.value = listToText(rule.squawk_codes);
   fields.ruleMilitary.checked = (rule.event || "tail") === "military";
   fields.ruleMilitary.disabled = true;
   fields.ruleIncludeTisb.checked = rule.include_tisb === true;
@@ -212,6 +213,7 @@ function syncSelectedRuleFromForms() {
     rule.tail_numbers = textToList(fields.ruleTailNumbers.value);
     rule.aircraft_types = textToList(fields.ruleAircraftTypes.value);
     rule.categories = textToList(fields.ruleCategories.value);
+    rule.squawk_codes = textToList(fields.ruleSquawkCodes.value);
     rule.notification_providers = selectedRuleNotificationProviders();
     rule.military = rule.event === "military";
     rule.include_tisb = fields.ruleIncludeTisb.checked;

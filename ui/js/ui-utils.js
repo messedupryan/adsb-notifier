@@ -12,6 +12,7 @@ function eventLabel(eventType) {
     tail: "Tail",
     military: "Military",
     aircraft_type: "Aircraft type",
+    squawk: "Squawk",
     circling: "Circling",
 }[eventType] || "Unknown";
 }
@@ -27,6 +28,7 @@ function providerLabel(provider) {
 function ruleSummary(rule) {
   if (rule.event === "tail") return listToText(rule.tail_numbers) || "No tail";
   if (rule.event === "aircraft_type") return listToText([...(rule.aircraft_types || []), ...(rule.categories || [])]) || "No type";
+  if (rule.event === "squawk") return listToText(rule.squawk_codes) || "No squawk";
   if (rule.event === "military") return rule.include_tisb ? "Military + TIS-B" : "Military flag";
   if (rule.event === "circling") return `${rule.circling_min_heading_change_deg ?? DEFAULT_CIRCLING_HEADING_CHANGE_DEG} deg`;
   return `${rule.cooldown_minutes ?? DEFAULT_RULE_COOLDOWN_MINUTES} min`;

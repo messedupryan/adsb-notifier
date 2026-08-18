@@ -17,10 +17,12 @@ from adsb_notifier.constants import (
     DEFAULT_STALE_AIRCRAFT_SECONDS,
     MAX_RECENT_MATCHES_WINDOW_HOURS,
 )
+from adsb_notifier.squawk import require_squawk_code
 
 NOTIFICATION_PROVIDERS = {"email", "pushover", "twilio"}
 ADSB_SOURCE_PROVIDERS = {"direct", "airplanes_live", "adsb_lol"}
 ADSB_SOURCE_QUERIES = {"point", "mil", "reg", "type", "hex"}
+RULE_EVENTS = {"aircraft_type", "circling", "military", "squawk", "tail"}
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,7 @@ class Rule:
     tail_numbers: set[str] = field(default_factory=set)
     aircraft_types: set[str] = field(default_factory=set)
     categories: set[str] = field(default_factory=set)
+    squawk_codes: set[str] = field(default_factory=set)
     military: bool | None = None
     include_tisb: bool = False
     min_altitude_ft: int | None = None
@@ -194,6 +197,11 @@ def _parse_adsb_source(data: dict[str, Any] | None) -> AdsbSource | None:
 def _parse_rule(data: dict[str, Any]) -> Rule:
     name = data.get("name", "unnamed rule")
     event = data["event"]
+    if event not in RULE_EVENTS:
+        raise ValueError(f"unsupported rule event: {event}")
+    squawk_codes = {require_squawk_code(value) for value in data.get("squawk_codes", [])}
+    if event == "squawk" and not squawk_codes:
+        raise ValueError(f"{name} requires at least one squawk code")
     return Rule(
         name=data["name"],
         event=event,
@@ -203,6 +211,7 @@ def _parse_rule(data: dict[str, Any]) -> Rule:
         tail_numbers={value.upper() for value in data.get("tail_numbers", [])},
         aircraft_types={value.upper() for value in data.get("aircraft_types", [])},
         categories={value.upper() for value in data.get("categories", [])},
+        squawk_codes=squawk_codes,
         military=True if event == "military" else data.get("military"),
         include_tisb=_bool_value(data.get("include_tisb", False)),
         min_altitude_ft=data.get("min_altitude_ft"),

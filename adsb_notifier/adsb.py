@@ -14,6 +14,7 @@ from adsb_notifier.constants import (
     MAX_ADSB_POINT_RADIUS_MILES,
 )
 from adsb_notifier.models import Aircraft
+from adsb_notifier.squawk import normalize_squawk_code
 from adsb_notifier.version import __version__
 
 LOGGER = logging.getLogger(__name__)
@@ -129,6 +130,7 @@ def _normalize_aircraft(row: dict) -> Aircraft:
         altitude_ft=_altitude_or_none(altitude),
         track_deg=_float_or_none(row.get("track") or row.get("heading")),
         seen_seconds=_float_or_none(row.get("seen")),
+        squawk=normalize_squawk_code(row.get("squawk")),
         emergency=_clean(row.get("emergency")),
         military=_military_flag(row),
         raw=row,

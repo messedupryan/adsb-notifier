@@ -29,6 +29,7 @@ def test_parse_dump1090_aircraft_payload():
                     "lon": -111.9,
                     "alt_baro": "5500",
                     "track": 90,
+                    "squawk": "0421",
                     "seen": 1.2,
                 }
             ]
@@ -40,6 +41,7 @@ def test_parse_dump1090_aircraft_payload():
     assert aircraft[0].registration == "N12345"
     assert aircraft[0].aircraft_type == "C172"
     assert aircraft[0].altitude_ft == 5500
+    assert aircraft[0].squawk == "0421"
 
 
 def test_parse_skips_aircraft_without_position():
@@ -136,6 +138,23 @@ def test_parse_tisb_aircraft_sets_source_type():
     assert aircraft[0].source_type == "tisb_other"
     assert aircraft[0].is_tisb is True
     assert aircraft[0].military is False
+
+
+def test_parse_numeric_squawk_preserves_four_digit_code():
+    aircraft = parse_aircraft_payload(
+        {
+            "aircraft": [
+                {
+                    "hex": "a12345",
+                    "lat": 40.8,
+                    "lon": -111.9,
+                    "squawk": 75,
+                }
+            ]
+        }
+    )
+
+    assert aircraft[0].squawk == "0075"
 
 
 def test_build_airplanes_live_point_url_uses_configured_radius():

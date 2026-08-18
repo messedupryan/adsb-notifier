@@ -364,7 +364,7 @@ def template_context(sighting: Sighting, fallback_message: str | None = None) ->
         "ground_speed_label": ground_speed_label,
         "vertical_rate_fpm": vertical_rate if vertical_rate is not None else "",
         "vertical_rate_label": _format_vertical_rate(vertical_rate),
-        "squawk": raw.get("squawk") or "",
+        "squawk": plane.squawk or raw.get("squawk") or "",
         "emergency": plane.emergency or raw.get("emergency") or "",
         "military": plane.military,
         "lat": plane.lat if plane.lat is not None else "",

@@ -53,6 +53,8 @@ class RuleEngine:
                 event_matches = plane.military or (rule.include_tisb and plane.is_tisb)
             case "aircraft_type":
                 event_matches = _type_matches(rule, plane)
+            case "squawk":
+                event_matches = _squawk_matches(rule, plane)
             case "circling":
                 event_matches = self._is_circling(rule, plane.hex, observed_at)
             case _:
@@ -106,6 +108,11 @@ def _tail_matches(rule: Rule, plane: Aircraft) -> bool:
 
 def _type_matches(rule: Rule, plane: Aircraft) -> bool:
     return bool({value for value in (plane.aircraft_type, plane.category) if value} & (rule.aircraft_types | rule.categories))
+
+
+def _squawk_matches(rule: Rule, plane: Aircraft) -> bool:
+    return plane.squawk in rule.squawk_codes
+
 
 def _smallest_heading_delta(start: float, end: float) -> float:
     return abs((end - start + 180) % 360 - 180)

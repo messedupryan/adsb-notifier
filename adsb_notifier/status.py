@@ -119,6 +119,7 @@ def _sighting_summary(sighting: Sighting) -> dict[str, Any]:
         "distance_miles": round(sighting.distance_miles, 2),
         "altitude_ft": plane.altitude_ft,
         "track_deg": plane.track_deg,
+        "squawk": plane.squawk,
         "notification_providers": sorted(sighting.notification_providers or []),
         "observed_at": sighting.observed_at.isoformat(),
     }

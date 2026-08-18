@@ -390,6 +390,60 @@ def test_military_rule_parses_include_tisb_setting():
     assert settings.rules[0].include_tisb is True
 
 
+def test_squawk_rule_parses_codes():
+    payload = config_with_email()
+    payload["rules"][0] = {
+        "name": "emergency squawk",
+        "event": "squawk",
+        "radius_miles": 25,
+        "cooldown_minutes": 30,
+        "squawk_codes": ["7700", 75],
+        "notification_providers": ["email"],
+    }
+
+    settings = parse_settings(payload)
+
+    assert settings.rules[0].squawk_codes == {"7700", "0075"}
+
+
+def test_squawk_rule_rejects_invalid_codes():
+    payload = config_with_email()
+    payload["rules"][0] = {
+        "name": "bad squawk",
+        "event": "squawk",
+        "radius_miles": 25,
+        "cooldown_minutes": 30,
+        "squawk_codes": ["8888"],
+        "notification_providers": ["email"],
+    }
+
+    with pytest.raises(ValueError, match="invalid squawk code: 8888"):
+        parse_settings(payload)
+
+
+def test_squawk_rule_requires_at_least_one_code():
+    payload = config_with_email()
+    payload["rules"][0] = {
+        "name": "empty squawk",
+        "event": "squawk",
+        "radius_miles": 25,
+        "cooldown_minutes": 30,
+        "squawk_codes": [],
+        "notification_providers": ["email"],
+    }
+
+    with pytest.raises(ValueError, match="empty squawk requires at least one squawk code"):
+        parse_settings(payload)
+
+
+def test_unknown_rule_event_is_rejected():
+    payload = config_with_email()
+    payload["rules"][0]["event"] = "unknown"
+
+    with pytest.raises(ValueError, match="unsupported rule event: unknown"):
+        parse_settings(payload)
+
+
 def test_duplicate_rule_names_are_rejected():
     payload = valid_config()
     payload["rules"].append(
