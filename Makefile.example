@@ -16,6 +16,10 @@ API_PORT ?= 8765
 UI_PORT ?= 8766
 STATUS_FILE ?= status.json
 BACKUP_RETENTION ?= 20
+CONFIG_MOUNT ?= /config
+CONFIG_FILE ?= config.json
+CONFIG_EXPORT_DIR ?= exports/config
+RESTORE_FILE ?=
 
 WORKER_IMAGE := $(REGISTRY)/adsb-notifier-worker:$(IMAGE_TAG)
 API_IMAGE := $(REGISTRY)/adsb-notifier-api:$(IMAGE_TAG)
@@ -23,7 +27,7 @@ UI_IMAGE := $(REGISTRY)/adsb-notifier-ui:$(IMAGE_TAG)
 
 VERSION_FILES := VERSION pyproject.toml charts/adsb-notifier/Chart.yaml charts/adsb-notifier/values.example.yaml ui/index.html ui/js/bootstrap.js ui/js/config-flow.js ui/js/dashboard.js ui/js/forms.js ui/js/map-utils.js ui/js/modal.js ui/js/rule-actions.js ui/js/rule-model.js ui/js/state.js ui/js/theme.js ui/js/ui-utils.js ui/js/validation.js adsb_notifier/version.py docs/DEVELOPMENT.md docs/VERSIONING.md README.md Dockerfile Dockerfile.api Dockerfile.ui Makefile.example tests/test_versioning.py
 
-.PHONY: help version bump-version test local local-api local-ui worker-once build build-worker build-api build-ui push build-push k8s-secret deploy-k8s deploy-helm rollout status
+.PHONY: help version bump-version test local local-api local-ui worker-once build build-worker build-api build-ui push build-push k8s-secret deploy-k8s deploy-helm rollout status config-export config-backups config-export-backups config-restore
 
 help:
 	@printf '%s\n' \
@@ -41,6 +45,10 @@ help:
 		'  make deploy-helm   Deploy Helm chart with helm upgrade --install' \
 		'  make rollout       Wait for Kubernetes deployments to roll out' \
 		'  make status        Show Kubernetes resources' \
+		'  make config-export Export live Kubernetes config to CONFIG_EXPORT_DIR' \
+		'  make config-backups List config backups on the Kubernetes PVC' \
+		'  make config-export-backups Export PVC config backups to CONFIG_EXPORT_DIR/backups' \
+		'  make config-restore RESTORE_FILE=path.json  Restore a local config into Kubernetes' \
 		'  make version       Show project/component version and image tags' \
 		'  make bump-version NEW_VERSION=0.0.15  Bump project/component version files' \
 		'' \
@@ -146,3 +154,36 @@ rollout:
 
 status:
 	kubectl -n "$(NAMESPACE)" get pods,svc,ingress,pvc
+
+config-export:
+	@mkdir -p "$(CONFIG_EXPORT_DIR)"
+	@timestamp="$$(date -u +%Y%m%dT%H%M%SZ)"; \
+	outfile="$(CONFIG_EXPORT_DIR)/$(RELEASE).config.$$timestamp.json"; \
+	kubectl -n "$(NAMESPACE)" exec "deployment/$(RELEASE)-api" -- cat "$(CONFIG_MOUNT)/$(CONFIG_FILE)" > "$$outfile"; \
+	echo "Exported live config to $$outfile"
+
+config-backups:
+	@kubectl -n "$(NAMESPACE)" exec "deployment/$(RELEASE)-api" -- sh -c 'ls -1t "$(CONFIG_MOUNT)/backups" 2>/dev/null || true'
+
+config-export-backups:
+	@mkdir -p "$(CONFIG_EXPORT_DIR)/backups"
+	@backups="$$(kubectl -n "$(NAMESPACE)" exec "deployment/$(RELEASE)-api" -- sh -c 'ls -1 "$(CONFIG_MOUNT)/backups" 2>/dev/null || true')"; \
+	if [ -z "$$backups" ]; then \
+		echo "No config backups found on $(CONFIG_MOUNT)/backups"; \
+		exit 0; \
+	fi; \
+	for backup in $$backups; do \
+		kubectl -n "$(NAMESPACE)" exec "deployment/$(RELEASE)-api" -- cat "$(CONFIG_MOUNT)/backups/$$backup" > "$(CONFIG_EXPORT_DIR)/backups/$$backup"; \
+		echo "Exported $$backup"; \
+	done
+
+config-restore:
+	@test -n "$(RESTORE_FILE)" || { echo "Usage: make config-restore RESTORE_FILE=path/to/config.json"; exit 1; }
+	@test -f "$(RESTORE_FILE)" || { echo "RESTORE_FILE does not exist: $(RESTORE_FILE)"; exit 1; }
+	@python3 -m json.tool "$(RESTORE_FILE)" >/dev/null
+	@timestamp="$$(date -u +%Y%m%dT%H%M%SZ)"; \
+	backup_name="$(CONFIG_FILE).pre-restore.$$timestamp.json"; \
+	kubectl -n "$(NAMESPACE)" exec "deployment/$(RELEASE)-api" -- sh -c 'mkdir -p "$(CONFIG_MOUNT)/backups" && cp "$(CONFIG_MOUNT)/$(CONFIG_FILE)" "$(CONFIG_MOUNT)/backups/'"$$backup_name"'"'; \
+	kubectl -n "$(NAMESPACE)" exec -i "deployment/$(RELEASE)-api" -- sh -c 'cat > "$(CONFIG_MOUNT)/$(CONFIG_FILE)"' < "$(RESTORE_FILE)"; \
+	echo "Restored $(RESTORE_FILE) to $(CONFIG_MOUNT)/$(CONFIG_FILE)"; \
+	echo "Previous live config saved as $(CONFIG_MOUNT)/backups/$$backup_name"

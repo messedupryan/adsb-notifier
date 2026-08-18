@@ -242,6 +242,38 @@ If adopting resources that were first created outside Helm, use:
 make deploy-helm HELM_ADOPT=true HELM_ARGS='--server-side=false'
 ```
 
+## Config Export and Restore
+
+The API writes live config to the shared Kubernetes PVC at `/config/config.json` and stores API-created backups under `/config/backups`.
+
+Export the current live config:
+
+```bash
+make config-export NAMESPACE=adsb RELEASE=adsb-notifier
+```
+
+By default, this writes to `exports/config/`, which is ignored by Git because live config can contain local environment details.
+
+List config backups currently stored on the PVC:
+
+```bash
+make config-backups NAMESPACE=adsb RELEASE=adsb-notifier
+```
+
+Export all PVC backups:
+
+```bash
+make config-export-backups NAMESPACE=adsb RELEASE=adsb-notifier
+```
+
+Restore a local config file into the live PVC:
+
+```bash
+make config-restore NAMESPACE=adsb RELEASE=adsb-notifier RESTORE_FILE=exports/config/adsb-notifier.config.20260818T120000Z.json
+```
+
+`config-restore` validates that the restore file is JSON and saves the current live config to `/config/backups/config.json.pre-restore.<timestamp>.json` before overwriting `/config/config.json`.
+
 ## Raw Kubernetes Manifests
 
 Raw manifests are available in `k8s/` for reference and early bootstrap work:
