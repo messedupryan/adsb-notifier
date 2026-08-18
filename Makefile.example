@@ -42,7 +42,7 @@ help:
 		'  make rollout       Wait for Kubernetes deployments to roll out' \
 		'  make status        Show Kubernetes resources' \
 		'  make version       Show project/component version and image tags' \
-		'  make bump-version NEW_VERSION=0.0.12  Bump project/component version files' \
+		'  make bump-version NEW_VERSION=0.0.13  Bump project/component version files' \
 		'' \
 		'Common overrides:' \
 		'  REGISTRY=registry.example.test IMAGE_TAG=$(PROJECT_VERSION) NAMESPACE=adsb' \
@@ -58,7 +58,7 @@ version:
 		'UI image:        $(UI_IMAGE)'
 
 bump-version:
-	@test -n "$(NEW_VERSION)" || { echo "Usage: make bump-version NEW_VERSION=0.0.12"; exit 1; }
+	@test -n "$(NEW_VERSION)" || { echo "Usage: make bump-version NEW_VERSION=0.0.13"; exit 1; }
 	@echo "$(NEW_VERSION)" | grep -Eq '^0\.0\.[0-9]+$$' || { echo "NEW_VERSION must match beta semver pattern 0.0.x"; exit 1; }
 	@old_version="$(PROJECT_VERSION)"; \
 	if [ "$$old_version" = "$(NEW_VERSION)" ]; then \
