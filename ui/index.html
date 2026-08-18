@@ -53,6 +53,18 @@
           <article class="status-card recent-card">
             <header>
               <h2>Recent Matches</h2>
+              <div class="dashboard-filters" aria-label="Recent match filters">
+                <select id="dashboard-event-filter" aria-label="Filter recent matches by event type" data-dashboard-control="true">
+                  <option value="">All events</option>
+                </select>
+                <select id="dashboard-rule-filter" aria-label="Filter recent matches by rule" data-dashboard-control="true">
+                  <option value="">All rules</option>
+                </select>
+                <select id="dashboard-provider-filter" aria-label="Filter recent matches by notification provider" data-dashboard-control="true">
+                  <option value="">All providers</option>
+                </select>
+                <input id="dashboard-search" type="search" placeholder="Search" aria-label="Search recent matches" data-dashboard-control="true" />
+              </div>
             </header>
             <div id="recent-matches" class="recent-matches"></div>
           </article>

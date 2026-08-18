@@ -26,6 +26,7 @@ let latestWorkerStatus = null;
 let dashboardMap = null;
 let dashboardMapLayers = null;
 let selectedRecentMatchKey = null;
+let filteredRecentMatches = [];
 
 const fields = {
   adsbUrl: document.querySelector("#adsb-url"),
@@ -115,6 +116,10 @@ const workerSourceErrors = document.querySelector("#worker-source-errors");
 const workerRateLimitRetry = document.querySelector("#worker-rate-limit-retry");
 const workerLastError = document.querySelector("#worker-last-error");
 const recentMatches = document.querySelector("#recent-matches");
+const dashboardEventFilter = document.querySelector("#dashboard-event-filter");
+const dashboardRuleFilter = document.querySelector("#dashboard-rule-filter");
+const dashboardProviderFilter = document.querySelector("#dashboard-provider-filter");
+const dashboardSearch = document.querySelector("#dashboard-search");
 const alertMap = document.querySelector("#alert-map");
 const alertMapEmpty = document.querySelector("#alert-map-empty");
 const recenterMapButton = document.querySelector("#recenter-map");

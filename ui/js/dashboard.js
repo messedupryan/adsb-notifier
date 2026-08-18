@@ -26,15 +26,23 @@ function renderWorkerStatus(status) {
 
   recentMatches.replaceChildren();
   const matches = Array.isArray(status.recent_matches) ? status.recent_matches : [];
+  renderDashboardFilters(matches);
+  filteredRecentMatches = filterRecentMatches(matches);
   if (matches.length === 0) {
     selectedRecentMatchKey = null;
     recentMatches.append(emptyState("No recent matches"));
+    renderDashboardMap(status);
     return;
   }
-  if (selectedRecentMatchKey && !matches.some((match) => matchKey(match) === selectedRecentMatchKey)) {
-    selectedRecentMatchKey = null;
+  if (selectedRecentMatchKey && !filteredRecentMatches.some((match) => matchKey(match) === selectedRecentMatchKey)) {
+    updateMapActionState();
   }
-  matches.slice(0, RECENT_MATCH_LIST_LIMIT).forEach((match) => {
+  if (filteredRecentMatches.length === 0) {
+    recentMatches.append(emptyState("No matches for current filters"));
+    renderDashboardMap(status);
+    return;
+  }
+  filteredRecentMatches.slice(0, RECENT_MATCH_LIST_LIMIT).forEach((match) => {
     const key = matchKey(match);
     const item = document.createElement("div");
     item.className = "match-item";
@@ -99,9 +107,7 @@ function renderDashboardMap(status) {
       .addTo(dashboardMapLayers);
   });
 
-  const matches = (Array.isArray(status.recent_matches) ? status.recent_matches : []).filter((match) =>
-    hasPosition(match)
-  );
+  const matches = filteredRecentMatches.filter((match) => hasPosition(match));
   matches.slice(0, MAP_MATCH_MARKER_LIMIT).forEach((match) => {
     const latLng = [Number(match.lat), Number(match.lon)];
     const isSelected = matchKey(match) === selectedRecentMatchKey;
@@ -229,4 +235,73 @@ function selectRecentMatch(key) {
     renderWorkerStatus(latestWorkerStatus);
   }
   updateMapActionState();
+}
+
+function renderDashboardFilters(matches) {
+  syncFilterOptions(dashboardEventFilter, uniqueMatchValues(matches, (match) => match.event_type), "All events", eventLabel);
+  syncFilterOptions(dashboardRuleFilter, uniqueMatchValues(matches, (match) => match.rule_name), "All rules");
+  syncFilterOptions(
+    dashboardProviderFilter,
+    uniqueMatchValues(matches, (match) => match.notification_providers || []),
+    "All providers",
+    providerLabel
+  );
+}
+
+function syncFilterOptions(select, values, allLabel, labelForValue = (value) => value) {
+  if (!select) return;
+  const currentValue = select.value;
+  select.replaceChildren(new Option(allLabel, ""));
+  values.forEach((value) => select.append(new Option(labelForValue(value), value)));
+  select.value = values.includes(currentValue) ? currentValue : "";
+}
+
+function uniqueMatchValues(matches, valueForMatch) {
+  const values = new Set();
+  matches.forEach((match) => {
+    const value = valueForMatch(match);
+    const items = Array.isArray(value) ? value : [value];
+    items.forEach((item) => {
+      const normalized = String(item || "").trim();
+      if (normalized) values.add(normalized);
+    });
+  });
+  return Array.from(values).sort((a, b) => a.localeCompare(b));
+}
+
+function filterRecentMatches(matches) {
+  const eventType = dashboardEventFilter?.value || "";
+  const ruleName = dashboardRuleFilter?.value || "";
+  const provider = dashboardProviderFilter?.value || "";
+  const search = (dashboardSearch?.value || "").trim().toLowerCase();
+  return matches.filter((match) => {
+    if (eventType && match.event_type !== eventType) return false;
+    if (ruleName && match.rule_name !== ruleName) return false;
+    if (provider && !(match.notification_providers || []).includes(provider)) return false;
+    return !search || matchSearchText(match).includes(search);
+  });
+}
+
+function matchSearchText(match) {
+  return [
+    match.rule_name,
+    match.event_type,
+    match.aircraft_label,
+    match.registration,
+    match.flight,
+    match.hex,
+    match.aircraft_type,
+    match.category,
+    match.squawk,
+    match.source_type,
+  ]
+    .filter((value) => value !== null && value !== undefined)
+    .join(" ")
+    .toLowerCase();
+}
+
+function applyDashboardFilters() {
+  if (latestWorkerStatus) {
+    renderWorkerStatus(latestWorkerStatus);
+  }
 }

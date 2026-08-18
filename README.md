@@ -45,7 +45,7 @@ The app can run locally during development or as containers in Kubernetes. See [
 - Live rule testing against the configured ADS-B source.
 - Provider-specific notification templates.
 - Worker status and recent match history.
-- Dashboard map with home location, active rule radii, recent match markers, selected-match highlighting, and Airplanes.live aircraft links.
+- Dashboard map with home location, active rule radii, filtered recent match markers, selected-match highlighting, and Airplanes.live aircraft links.
 - Light/dark UI modes, accent themes, themed logo assets, and theme-aware favicon.
 
 <a id="ui"></a>

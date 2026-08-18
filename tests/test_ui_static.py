@@ -138,6 +138,18 @@ def test_squawk_rule_controls_are_available():
     assert "squawk_codes" in UI_JS
 
 
+def test_dashboard_filter_controls_are_available():
+    parser = InputParser()
+    parser.feed(INDEX_HTML)
+
+    assert "dashboard-event-filter" in parser.selects
+    assert "dashboard-rule-filter" in parser.selects
+    assert "dashboard-provider-filter" in parser.selects
+    assert "dashboard-search" in parser.inputs
+    assert 'data-dashboard-control="true"' in INDEX_HTML
+    assert "function filterRecentMatches" in UI_JS
+
+
 def test_ui_bootstrap_helpers_are_defined():
     for helper in [
         "normalizeConfig",

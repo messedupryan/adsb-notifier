@@ -20,6 +20,10 @@ refreshStatusButton.addEventListener("click", () => loadWorkerStatus());
 recenterMapButton.addEventListener("click", () => recenterDashboardMap());
 fitMapButton.addEventListener("click", () => fitDashboardMap());
 selectedMapButton.addEventListener("click", () => zoomSelectedMatch());
+[dashboardEventFilter, dashboardRuleFilter, dashboardProviderFilter, dashboardSearch].forEach((control) => {
+  control.addEventListener("input", applyDashboardFilters);
+  control.addEventListener("change", applyDashboardFilters);
+});
 fields.ruleNotificationProviders.addEventListener("change", handleInput);
 ruleList.addEventListener("click", async (event) => {
   const item = event.target.closest(".rule-item");
@@ -51,6 +55,7 @@ ruleList.addEventListener("click", async (event) => {
 
 document.querySelectorAll("input, select, textarea").forEach((input) => {
   if (input.dataset.themeControl) return;
+  if (input.dataset.dashboardControl) return;
   input.addEventListener("input", handleInput);
   input.addEventListener("change", handleInput);
 });

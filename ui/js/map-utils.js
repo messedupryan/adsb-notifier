@@ -10,7 +10,7 @@ function activeRulesWithRadius() {
 }
 
 function recentMatchesWithPositions() {
-  const matches = Array.isArray(latestWorkerStatus?.recent_matches) ? latestWorkerStatus.recent_matches : [];
+  const matches = Array.isArray(filteredRecentMatches) ? filteredRecentMatches : [];
   return matches.filter((match) => hasPosition(match));
 }
 
