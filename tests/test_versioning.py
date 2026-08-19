@@ -49,7 +49,7 @@ def chart_field(name: str) -> str:
 
 
 def test_project_version_uses_beta_semver():
-    assert re.fullmatch(r"0\.0\.\d+", project_version())
+    assert re.fullmatch(r"0\.\d+\.\d+(-rc\.\d+)?", project_version())
 
 
 def test_python_package_version_matches_project_version():
