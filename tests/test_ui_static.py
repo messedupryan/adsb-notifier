@@ -103,6 +103,7 @@ def test_email_html_and_brand_fields_are_available():
     assert "email-html-enabled" in parser.inputs
     assert "email-brand-theme" in INDEX_HTML
     assert "email-include-brand-images" in parser.inputs
+    assert "email-include-map-snapshot" in parser.inputs
     assert "email-html-body-template" in parser.textareas
 
 

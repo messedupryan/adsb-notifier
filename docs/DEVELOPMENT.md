@@ -51,7 +51,7 @@ API_HOST=127.0.0.1
 API_PORT=8765
 UI_PORT=8766
 REGISTRY=registry.example.test
-IMAGE_TAG=0.0.16
+IMAGE_TAG=0.0.22
 NAMESPACE=adsb
 RELEASE=adsb-notifier
 HELM_VALUES=charts/adsb-notifier/values.yaml
@@ -216,6 +216,16 @@ TWILIO_TO
 PUSHOVER_APP_TOKEN
 PUSHOVER_USER_KEY
 ```
+
+Map-backed email snapshots use two local caches in the worker container:
+
+```text
+ADSB_MAP_TILE_CACHE_DIR=/tmp/adsb-notifier-map-tiles
+ADSB_MAP_SNAPSHOT_CACHE_DIR=/tmp/adsb-notifier-map-snapshots
+ADSB_MAP_SNAPSHOT_CACHE_SECONDS=86400
+```
+
+Raw map tiles are cached by tile coordinate. Rendered base maps are cached by tile source, home location, rule radius, and zoom. The theme tint, radius overlay, home marker, and aircraft-specific overlay are drawn on top for each alert so one cached radius can serve any email theme.
 
 ## Helm Deployment
 

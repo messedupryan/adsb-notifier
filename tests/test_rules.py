@@ -44,6 +44,9 @@ def test_tail_rule_matches_inside_radius_and_altitude_limit():
 
     assert len(sightings) == 1
     assert sightings[0].rule_name == "target"
+    assert sightings[0].home_lat == 40.7608
+    assert sightings[0].home_lon == -111.8910
+    assert sightings[0].rule_radius_miles == 10
 
 
 def test_tail_rule_rejects_above_max_altitude():

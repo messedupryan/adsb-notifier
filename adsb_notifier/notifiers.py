@@ -11,10 +11,18 @@ from urllib.request import Request, urlopen
 
 from adsb_notifier.config import Notifications
 from adsb_notifier.links import airplanes_live_aircraft_url
+from adsb_notifier.map_snapshot import MAP_SNAPSHOT_CID, can_render_snapshot, render_alert_snapshot
 from adsb_notifier.models import Aircraft, Sighting
 
 LOGGER = logging.getLogger(__name__)
 EMAIL_BRAND_THEMES = {"amber", "blue", "rose", "teal", "violet"}
+EMAIL_THEME_COLORS = {
+    "amber": "#f59e0b",
+    "blue": "#0ea5e9",
+    "rose": "#f43f5e",
+    "teal": "#14b8a6",
+    "violet": "#8b5cf6",
+}
 EMAIL_LOGO_CID = "adsb-notifier-logo"
 EMAIL_ICON_CID = "adsb-notifier-icon"
 LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE = (
@@ -36,14 +44,14 @@ LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE = (
     '<tr><th align="left">Rule</th><td>{rule_name_html}</td></tr>'
     '<tr><th align="left">Observed</th><td>{observed_at_html}</td></tr></table>'
 )
-DEFAULT_EMAIL_HTML_BODY_TEMPLATE = """\
+EMAIL_HTML_BODY_TEMPLATE_WITHOUT_MAP_SNAPSHOT = """\
 <p>{message_html}</p>
 
 <p>
   <a href="{airplanes_live_url_html}">Airplanes.live</a>
 </p>
 
-<table>
+<table style="margin:0 auto;text-align:left;">
   <tr>
     <th align="left">Aircraft</th>
     <td>{aircraft_label_html}</td>
@@ -110,6 +118,10 @@ DEFAULT_EMAIL_HTML_BODY_TEMPLATE = """\
   </tr>
 </table>
 """.strip()
+DEFAULT_EMAIL_HTML_BODY_TEMPLATE = EMAIL_HTML_BODY_TEMPLATE_WITHOUT_MAP_SNAPSHOT.replace(
+    '\n<table style="margin:0 auto;text-align:left;">',
+    '\n{map_snapshot_html}\n\n<table style="margin:0 auto;text-align:left;">',
+)
 
 
 @dataclass(frozen=True)
@@ -133,7 +145,7 @@ class NotificationFanout:
                 render_email_body(self.config.email, sighting, message),
                 subject=render_email_subject(self.config.email, sighting, message),
                 html_message=render_email_html_body(self.config.email, sighting, message),
-                inline_images=email_inline_images(self.config.email),
+                inline_images=email_inline_images(self.config.email, sighting),
             )
             sent = True
         if self._should_send_provider("twilio", selected_providers):
@@ -219,7 +231,7 @@ def send_test_notification(config: Notifications, provider: str) -> None:
             render_email_body(config.email, sighting, message),
             subject=render_email_subject(config.email, sighting, message),
             html_message=render_email_html_body(config.email, sighting, message),
-            inline_images=email_inline_images(config.email),
+            inline_images=email_inline_images(config.email, sighting),
         )
         return
     if provider == "twilio":
@@ -266,7 +278,20 @@ def render_email_body(config: dict, sighting: Sighting, fallback_message: str | 
 def render_email_html_body(config: dict, sighting: Sighting, fallback_message: str | None = None) -> str | None:
     if not config.get("html_enabled"):
         return None
-    body = render_template(config["html_body_template"], sighting, fallback_message)
+    template = config["html_body_template"]
+    map_snapshot_html = _map_snapshot_html(config, sighting)
+    body = render_template(
+        template,
+        sighting,
+        fallback_message,
+        extra_context={
+            "map_snapshot_html": map_snapshot_html,
+            "message_html": _message_header_html(config, sighting, fallback_message),
+        },
+    )
+    if map_snapshot_html and "{map_snapshot_html}" not in template:
+        body = _insert_map_snapshot_before_details(body, map_snapshot_html)
+    body = _center_details_tables(body)
     return _wrap_email_html_body(config, body)
 
 
@@ -278,13 +303,22 @@ def _operational_email_html(config: dict, message: str) -> str | None:
 
 
 def _wrap_email_html_body(config: dict, body: str) -> str:
-    if config.get("include_brand_images") is False:
-        return body
+    header = ""
+    footer = ""
+    if config.get("include_brand_images") is not False:
+        header = (
+            f'<div style="text-align:center;margin:0 0 18px 0;"><img src="cid:{EMAIL_LOGO_CID}" '
+            'alt="ADS-B Notifier" width="260" style="max-width:100%;height:auto;" /></div>'
+        )
+        footer = (
+            f'<div style="text-align:center;margin:24px 0 0 0;"><img src="cid:{EMAIL_ICON_CID}" '
+            'alt="" width="48" height="48" /></div>'
+        )
     return (
-        '<div style="font-family:Arial,sans-serif;line-height:1.4;color:#17202a;">'
-        f'<div style="text-align:center;margin:0 0 18px 0;"><img src="cid:{EMAIL_LOGO_CID}" alt="ADS-B Notifier" width="260" style="max-width:100%;height:auto;" /></div>'
+        '<div style="font-family:Arial,sans-serif;line-height:1.4;color:#17202a;text-align:center;max-width:760px;margin:0 auto;">'
+        f"{header}"
         f"{body}"
-        f'<div style="text-align:center;margin:24px 0 0 0;"><img src="cid:{EMAIL_ICON_CID}" alt="" width="48" height="48" /></div>'
+        f"{footer}"
         "</div>"
     )
 
@@ -325,8 +359,16 @@ def render_pushover_url_title(config: dict, sighting: Sighting) -> str:
     return "Airplanes.live"
 
 
-def render_template(template: str, sighting: Sighting, fallback_message: str | None = None) -> str:
-    return template.format_map(_TemplateContext(template_context(sighting, fallback_message)))
+def render_template(
+    template: str,
+    sighting: Sighting,
+    fallback_message: str | None = None,
+    extra_context: dict[str, object] | None = None,
+) -> str:
+    context = template_context(sighting, fallback_message)
+    if extra_context:
+        context.update(extra_context)
+    return template.format_map(_TemplateContext(context))
 
 
 def template_context(sighting: Sighting, fallback_message: str | None = None) -> dict[str, object]:
@@ -407,14 +449,53 @@ def send_email(
         smtp.send_message(email)
 
 
-def email_inline_images(config: dict) -> list[InlineEmailImage]:
-    if not config.get("html_enabled") or config.get("include_brand_images") is False:
+def email_inline_images(config: dict, sighting: Sighting | None = None) -> list[InlineEmailImage]:
+    if not config.get("html_enabled"):
         return []
     theme = _email_brand_theme(config)
-    return [
-        InlineEmailImage(cid=EMAIL_LOGO_CID, data=_email_asset_bytes(f"logo_{theme}.png")),
-        InlineEmailImage(cid=EMAIL_ICON_CID, data=_email_asset_bytes(f"icon_{theme}.png")),
-    ]
+    images = []
+    if config.get("include_brand_images") is not False:
+        images.extend(
+            [
+                InlineEmailImage(cid=EMAIL_LOGO_CID, data=_email_asset_bytes(f"logo_{theme}.png")),
+                InlineEmailImage(cid=EMAIL_ICON_CID, data=_email_asset_bytes(f"icon_{theme}.png")),
+            ]
+        )
+    if sighting and _should_include_map_snapshot(config, sighting):
+        images.append(InlineEmailImage(cid=MAP_SNAPSHOT_CID, data=render_alert_snapshot(sighting, theme)))
+    return images
+
+
+def _map_snapshot_html(config: dict, sighting: Sighting) -> str:
+    if not _should_include_map_snapshot(config, sighting):
+        return ""
+    return (
+        '<p style="text-align:center;margin:18px 0;">'
+        f'<img src="cid:{MAP_SNAPSHOT_CID}" alt="Alert map snapshot" width="525" '
+        'style="max-width:100%;height:auto;border-radius:8px;" />'
+        "</p>"
+    )
+
+
+def _insert_map_snapshot_before_details(body: str, map_snapshot_html: str) -> str:
+    table_start = body.find("<table")
+    if table_start >= 0:
+        return f"{body[:table_start]}{map_snapshot_html}\n\n{body[table_start:]}"
+    return f"{body}\n{map_snapshot_html}"
+
+
+def _should_include_map_snapshot(config: dict, sighting: Sighting) -> bool:
+    return bool(config.get("include_map_snapshot") and can_render_snapshot(sighting))
+
+
+def _message_header_html(config: dict, sighting: Sighting, fallback_message: str | None = None) -> str:
+    color = EMAIL_THEME_COLORS[_email_brand_theme(config)]
+    message = html.escape(fallback_message or format_sighting(sighting), quote=True)
+    return f'<span style="font-size:24px;font-weight:700;color:{color};">{message}</span>'
+
+
+def _center_details_tables(body: str) -> str:
+    return body.replace("<table>", '<table style="margin:0 auto;text-align:left;">')
 
 
 def _email_brand_theme(config: dict) -> str:

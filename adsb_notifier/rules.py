@@ -68,6 +68,9 @@ class RuleEngine:
             distance_miles=distance,
             rule_name=rule.name,
             event_type=rule.event,
+            home_lat=self.settings.home.lat,
+            home_lon=self.settings.home.lon,
+            rule_radius_miles=rule.radius_miles,
             notification_providers=rule.notification_providers,
             observed_at=observed_at,
         )

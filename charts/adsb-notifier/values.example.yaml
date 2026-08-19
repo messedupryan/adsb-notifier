@@ -3,7 +3,7 @@ fullnameOverride: ""
 
 image:
   registry: registry.example.test
-  tag: 0.0.16
+  tag: 0.0.22
   pullPolicy: Always
 
 secret:
@@ -56,6 +56,7 @@ seedConfig:
         - env:SMTP_USERNAME
       brand_theme: teal
       include_brand_images: true
+      include_map_snapshot: false
       subject_template: "ADS-B alert: {aircraft_label} matched {rule_name}"
       body_template: "{message}\n\nAircraft: {aircraft_label}\nRegistration: {registration}\nFlight: {flight}\nType: {aircraft_type}\nDescription: {description}\nOperator: {operator}\nAltitude: {altitude_label}\nDistance: {distance_miles:.1f} mi\nTrack: {track_label}\nSpeed: {ground_speed_label}\nVertical rate: {vertical_rate_label}\nSquawk: {squawk}\nSeen: {seen_label}\nHex: {hex}\nAirplanes.live: {airplanes_live_url}\nRule: {rule_name}\nObserved: {observed_at}"
       html_body_template: |-
@@ -64,6 +65,8 @@ seedConfig:
         <p>
           <a href="{airplanes_live_url_html}">Airplanes.live</a>
         </p>
+
+        {map_snapshot_html}
 
         <table>
           <tr>

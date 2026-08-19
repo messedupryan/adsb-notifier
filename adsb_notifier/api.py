@@ -25,6 +25,7 @@ from adsb_notifier.constants import (
 from adsb_notifier.links import airplanes_live_aircraft_url
 from adsb_notifier.notifiers import (
     DEFAULT_EMAIL_HTML_BODY_TEMPLATE,
+    EMAIL_HTML_BODY_TEMPLATE_WITHOUT_MAP_SNAPSHOT,
     LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE,
     NotificationFanout,
     send_test_notification,
@@ -44,6 +45,7 @@ DEFAULT_NOTIFICATION_CONFIG_FIELDS = {
         "html_enabled": False,
         "brand_theme": "teal",
         "include_brand_images": True,
+        "include_map_snapshot": False,
         "html_body_template": DEFAULT_EMAIL_HTML_BODY_TEMPLATE,
     },
     "pushover": {
@@ -489,7 +491,10 @@ def _apply_notification_defaults(config: dict[str, Any]) -> dict[str, Any]:
             **defaults,
             **provider_config,
         }
-        if provider == "email" and next_provider_config.get("html_body_template") == LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE:
+        if provider == "email" and next_provider_config.get("html_body_template") in {
+            LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE,
+            EMAIL_HTML_BODY_TEMPLATE_WITHOUT_MAP_SNAPSHOT,
+        }:
             next_provider_config["html_body_template"] = DEFAULT_EMAIL_HTML_BODY_TEMPLATE
         normalized_notifications[provider] = next_provider_config
     normalized["notifications"] = normalized_notifications

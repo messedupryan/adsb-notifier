@@ -30,6 +30,7 @@ function renderForms() {
   fields.emailHtmlEnabled.checked = Boolean(email.html_enabled);
   fields.emailBrandTheme.value = email.brand_theme || "teal";
   fields.emailIncludeBrandImages.checked = email.include_brand_images !== false;
+  fields.emailIncludeMapSnapshot.checked = email.include_map_snapshot === true;
   fields.emailSubjectTemplate.value = email.subject_template || "";
   fields.emailBodyTemplate.value = email.body_template || "";
   fields.emailHtmlBodyTemplate.value = email.html_body_template || "";
@@ -167,6 +168,7 @@ function syncFromForms() {
       html_enabled: fields.emailHtmlEnabled.checked,
       brand_theme: fields.emailBrandTheme.value,
       include_brand_images: fields.emailIncludeBrandImages.checked,
+      include_map_snapshot: fields.emailIncludeMapSnapshot.checked,
       subject_template: fields.emailSubjectTemplate.value.trim(),
       body_template: fields.emailBodyTemplate.value.trim(),
       html_body_template: fields.emailHtmlBodyTemplate.value.trim(),

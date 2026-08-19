@@ -1,7 +1,10 @@
 import base64
+from dataclasses import replace
 
 from adsb_notifier.models import Aircraft, Sighting
+from adsb_notifier.map_snapshot import render_alert_snapshot
 from adsb_notifier.notifiers import (
+    DEFAULT_EMAIL_HTML_BODY_TEMPLATE,
     NotificationFanout,
     render_email_body,
     render_email_html_body,
@@ -299,7 +302,9 @@ def test_email_templates_render_rich_aircraft_fields():
         "Type BCS1\n"
         "27.0 mi, 10850 ft, descending 640 ft/min"
     )
-    assert render_email_html_body(config, sighting) == '<p><a href="https://globe.airplanes.live/?icao=A0B1C2">Airplanes.live</a></p>'
+    html = render_email_html_body(config, sighting)
+    assert '<div style="font-family:Arial,sans-serif;line-height:1.4;color:#17202a;text-align:center;' in html
+    assert '<p><a href="https://globe.airplanes.live/?icao=A0B1C2">Airplanes.live</a></p>' in html
 
 
 def test_email_html_body_wraps_with_inline_brand_images_by_default():
@@ -307,7 +312,7 @@ def test_email_html_body_wraps_with_inline_brand_images_by_default():
 
     assert 'src="cid:adsb-notifier-logo"' in html
     assert 'src="cid:adsb-notifier-icon"' in html
-    assert "<p>N123AB</p>" in html
+    assert "N123AB" in html
 
 
 def test_email_html_body_is_explicitly_enabled():
@@ -324,6 +329,187 @@ def test_email_inline_images_use_selected_theme():
 def test_email_inline_images_can_be_disabled():
     assert email_inline_images({"html_enabled": True, "html_body_template": "<p>body</p>", "include_brand_images": False}) == []
     assert email_inline_images({"html_body_template": "<p>body</p>"}) == []
+
+
+def test_email_html_body_can_include_map_snapshot():
+    sighting = sample_sighting()
+    html = render_email_html_body(
+        {
+            "html_enabled": True,
+            "html_body_template": "{map_snapshot_html}",
+            "include_brand_images": False,
+            "include_map_snapshot": True,
+        },
+        sighting,
+    )
+
+    assert 'src="cid:adsb-notifier-map-snapshot"' in html
+    assert 'width="525"' in html
+
+
+def test_email_html_body_inserts_map_snapshot_before_details_when_template_has_no_placeholder():
+    html = render_email_html_body(
+        {
+            "html_enabled": True,
+            "html_body_template": (
+                '<p><a href="{airplanes_live_url_html}">Airplanes.live</a></p>\n\n'
+                "<table><tr><td>{aircraft_label_html}</td></tr></table>"
+            ),
+            "include_brand_images": False,
+            "include_map_snapshot": True,
+        },
+        sample_sighting(),
+    )
+
+    assert 'src="cid:adsb-notifier-map-snapshot"' in html
+    assert html.index('src="cid:adsb-notifier-map-snapshot"') < html.index("<table")
+    assert '<table style="margin:0 auto;text-align:left;">' in html
+
+
+def test_email_html_body_appends_map_snapshot_when_template_has_no_details_table():
+    html = render_email_html_body(
+        {
+            "html_enabled": True,
+            "html_body_template": "<p>{aircraft_label_html}</p>",
+            "include_brand_images": False,
+            "include_map_snapshot": True,
+        },
+        sample_sighting(),
+    )
+
+    assert html.endswith("</div>")
+    assert "N123AB" in html
+    assert 'src="cid:adsb-notifier-map-snapshot"' in html
+
+
+def test_email_html_message_uses_theme_colored_heading():
+    html = render_email_html_body(
+        {
+            "html_enabled": True,
+            "html_body_template": "<p>{message_html}</p>",
+            "include_brand_images": False,
+            "brand_theme": "violet",
+        },
+        sample_sighting(),
+        "Boeing 737 @ KSLC: N392DA (B738) 13.8 mi away at 4575 ft",
+    )
+
+    assert "font-size:24px;font-weight:700;color:#8b5cf6" in html
+    assert "Boeing 737 @ KSLC: N392DA (B738) 13.8 mi away at 4575 ft" in html
+
+
+def test_default_email_html_template_has_one_map_snapshot_placeholder():
+    assert DEFAULT_EMAIL_HTML_BODY_TEMPLATE.count("{map_snapshot_html}") == 1
+
+
+def test_email_inline_images_include_map_snapshot_when_enabled():
+    def fake_snapshot(sighting, theme):
+        return b"\x89PNG snapshot"
+
+    from adsb_notifier import notifiers
+
+    original = notifiers.render_alert_snapshot
+    notifiers.render_alert_snapshot = fake_snapshot
+    try:
+        images = email_inline_images(
+            {
+                "html_enabled": True,
+                "html_body_template": "{map_snapshot_html}",
+                "include_brand_images": False,
+                "include_map_snapshot": True,
+            },
+            sample_sighting(),
+        )
+    finally:
+        notifiers.render_alert_snapshot = original
+
+    assert [image.cid for image in images] == ["adsb-notifier-map-snapshot"]
+    assert images[0].data.startswith(b"\x89PNG")
+
+
+def test_email_inline_images_reuse_cached_map_for_same_radius(monkeypatch, tmp_path):
+    from PIL import Image
+
+    from adsb_notifier import map_snapshot
+
+    calls = []
+
+    def fake_compose_tiles(tile_url_template, zoom, crop_left, crop_top, crop_right, crop_bottom):
+        calls.append((tile_url_template, zoom, crop_left, crop_top, crop_right, crop_bottom))
+        return Image.new("RGB", (768, 768), (230, 230, 220))
+
+    monkeypatch.setenv("ADSB_MAP_SNAPSHOT_CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(map_snapshot, "_compose_tiles", fake_compose_tiles)
+
+    images = email_inline_images(
+        {
+            "html_enabled": True,
+            "html_body_template": "{map_snapshot_html}",
+            "include_brand_images": False,
+            "include_map_snapshot": True,
+        },
+        sample_sighting(),
+    )
+    second_sighting = sample_sighting()
+    second_sighting = replace(second_sighting, aircraft=replace(second_sighting.aircraft, lat=40.8, lon=-111.95))
+    second_images = email_inline_images(
+        {
+            "html_enabled": True,
+            "html_body_template": "{map_snapshot_html}",
+            "include_brand_images": False,
+            "include_map_snapshot": True,
+        },
+        second_sighting,
+    )
+
+    assert len(calls) == 1
+    assert images[0].data != second_images[0].data
+
+
+def test_email_inline_images_reuse_cached_map_across_themes(monkeypatch, tmp_path):
+    from PIL import Image
+
+    from adsb_notifier import map_snapshot
+
+    calls = []
+
+    def fake_compose_tiles(tile_url_template, zoom, crop_left, crop_top, crop_right, crop_bottom):
+        calls.append((tile_url_template, zoom, crop_left, crop_top, crop_right, crop_bottom))
+        return Image.new("RGB", (768, 768), (230, 230, 220))
+
+    monkeypatch.setenv("ADSB_MAP_SNAPSHOT_CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(map_snapshot, "_compose_tiles", fake_compose_tiles)
+
+    teal = render_alert_snapshot(sample_sighting(), theme_name="teal")
+    violet = render_alert_snapshot(sample_sighting(), theme_name="violet")
+
+    assert len(calls) == 1
+    assert teal != violet
+
+
+def test_map_snapshot_radius_overlay_is_translucent(monkeypatch, tmp_path):
+    from PIL import Image
+
+    from adsb_notifier import map_snapshot
+
+    def fake_compose_tiles(tile_url_template, zoom, crop_left, crop_top, crop_right, crop_bottom):
+        return Image.new("RGB", (768, 768), (200, 200, 200))
+
+    monkeypatch.setenv("ADSB_MAP_SNAPSHOT_CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(map_snapshot, "_compose_tiles", fake_compose_tiles)
+
+    data = render_alert_snapshot(sample_sighting())
+    image = Image.open(__import__("io").BytesIO(data)).convert("RGBA")
+    center_pixel = image.getpixel((320, 320))
+
+    assert center_pixel[:3] != map_snapshot.SNAPSHOT_THEMES["teal"].radius
+
+
+def test_alert_snapshot_is_square_png():
+    data = render_alert_snapshot(sample_sighting(), tile_url_template="")
+
+    assert data.startswith(b"\x89PNG")
+    assert data[16:24] == b"\x00\x00\x02\x80\x00\x00\x02\x80"
 
 
 def test_sms_template_can_be_shorter_than_email():
@@ -412,4 +598,7 @@ def sample_sighting() -> Sighting:
         distance_miles=27.04,
         rule_name="TEST TAIL NUMBER",
         event_type="tail",
+        home_lat=40.7608,
+        home_lon=-111.8910,
+        rule_radius_miles=30,
     )

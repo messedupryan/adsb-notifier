@@ -4,7 +4,7 @@ let isDirty = false;
 let isJsonDirty = false;
 let selectedRuleId = null;
 let activeTab = "dashboard";
-const uiVersion = "0.0.16";
+const uiVersion = "0.0.22";
 const redactedSecret = "********";
 const notificationProviderOrder = ["pushover", "email", "twilio"];
 const adsbSourceProviders = ["adsb_lol", "airplanes_live", "direct"];
@@ -51,6 +51,7 @@ const fields = {
   emailHtmlEnabled: document.querySelector("#email-html-enabled"),
   emailBrandTheme: document.querySelector("#email-brand-theme"),
   emailIncludeBrandImages: document.querySelector("#email-include-brand-images"),
+  emailIncludeMapSnapshot: document.querySelector("#email-include-map-snapshot"),
   emailSubjectTemplate: document.querySelector("#email-subject-template"),
   emailBodyTemplate: document.querySelector("#email-body-template"),
   emailHtmlBodyTemplate: document.querySelector("#email-html-body-template"),

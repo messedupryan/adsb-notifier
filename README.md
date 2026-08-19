@@ -44,6 +44,7 @@ The app can run locally during development or as containers in Kubernetes. See [
 - Per-rule notification provider selection from globally enabled providers.
 - Live rule testing against the configured ADS-B source.
 - Provider-specific notification templates.
+- Optional square alert snapshots in HTML email notifications.
 - Worker status and recent match history.
 - Dashboard map with home location, active rule radii, filtered recent match markers, selected-match highlighting, and Airplanes.live aircraft links.
 - Light/dark UI modes, accent themes, themed logo assets, and theme-aware favicon.
@@ -78,6 +79,8 @@ Current notification support includes:
 - SMTP email
 - Pushover push notifications
 - Twilio SMS
+
+HTML email can embed themed branding and an optional square alert snapshot. The snapshot is centered on the configured home location and scaled so the matched rule radius fills the image. Map-backed snapshots cache raw tiles and theme-neutral rendered base maps by home location, radius, zoom, and tile source before drawing the theme and aircraft-specific overlays.
 
 I found Twilio to be overly cumbersome, and not worth the cost. I am using email and Pushover notifications. I left Twilio support in the app, in case I ever do want to leverage SMS, but I doubt I ever will.
 
@@ -201,7 +204,7 @@ ADS-B Notifier is an independent personal project and is not affiliated with, en
 
 When configured to use Airplanes.live, aircraft data and aircraft detail links may come from Airplanes.live. Please be a good neighbor: follow their API guide and terms, keep polling reasonable, and remember that public access can change. If this project is useful to you, consider becoming an Airplanes.live feeder and contributing ADS-B coverage back to the community.
 
-Dashboard maps are rendered with Leaflet and OpenStreetMap tiles. OpenStreetMap attribution is displayed in the map UI.
+Dashboard maps and map-backed email snapshots can use OpenStreetMap tiles. OpenStreetMap attribution is displayed in the map UI and rendered into email snapshots.
 
 <a id="status"></a>
 

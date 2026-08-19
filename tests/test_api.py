@@ -121,6 +121,7 @@ def test_read_config_backfills_new_notification_defaults(tmp_path):
     assert config["notifications"]["email"]["html_enabled"] is False
     assert config["notifications"]["email"]["brand_theme"] == "teal"
     assert config["notifications"]["email"]["include_brand_images"] is True
+    assert config["notifications"]["email"]["include_map_snapshot"] is False
     assert config["notifications"]["email"]["html_body_template"] == DEFAULT_NOTIFICATION_CONFIG_FIELDS["email"]["html_body_template"]
     assert json.loads(path.read_text(encoding="utf-8"))["notifications"]["email"]["html_enabled"] is False
 
@@ -131,6 +132,7 @@ def test_read_config_preserves_existing_notification_defaults(tmp_path):
     payload["notifications"]["email"]["html_enabled"] = True
     payload["notifications"]["email"]["brand_theme"] = "amber"
     payload["notifications"]["email"]["include_brand_images"] = False
+    payload["notifications"]["email"]["include_map_snapshot"] = True
     payload["notifications"]["email"]["html_body_template"] = "<p>custom</p>"
     path.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -139,6 +141,7 @@ def test_read_config_preserves_existing_notification_defaults(tmp_path):
     assert config["notifications"]["email"]["html_enabled"] is True
     assert config["notifications"]["email"]["brand_theme"] == "amber"
     assert config["notifications"]["email"]["include_brand_images"] is False
+    assert config["notifications"]["email"]["include_map_snapshot"] is True
     assert config["notifications"]["email"]["html_body_template"] == "<p>custom</p>"
 
 
@@ -151,6 +154,7 @@ def test_read_config_reformats_legacy_default_email_html_template(tmp_path):
     config = _read_config(path)
 
     assert config["notifications"]["email"]["html_body_template"] == DEFAULT_EMAIL_HTML_BODY_TEMPLATE
+    assert "{map_snapshot_html}" in config["notifications"]["email"]["html_body_template"]
     assert "\n  <tr>\n" in config["notifications"]["email"]["html_body_template"]
 
 
