@@ -259,6 +259,41 @@ If adopting resources that were first created outside Helm, use:
 make deploy-helm HELM_ADOPT=true HELM_ARGS='--server-side=false'
 ```
 
+## Deployment Rollback
+
+Inspect the current release and revision history:
+
+```bash
+helm -n adsb status adsb-notifier
+helm -n adsb history adsb-notifier
+```
+
+Rollback to a previous Helm revision when the previous release metadata and values are known-good:
+
+```bash
+helm -n adsb rollback adsb-notifier <REVISION>
+kubectl -n adsb rollout status deployment/adsb-notifier-api --timeout=120s
+kubectl -n adsb rollout status deployment/adsb-notifier-ui --timeout=120s
+kubectl -n adsb rollout status deployment/adsb-notifier-worker --timeout=120s
+```
+
+Rollback to a previous image tag while keeping the current Helm values:
+
+```bash
+helm -n adsb upgrade adsb-notifier charts/adsb-notifier \
+  --reuse-values \
+  --set image.tag=<PREVIOUS_VERSION>
+make rollout NAMESPACE=adsb
+```
+
+After either rollback path, verify the running images, UI version, and API health:
+
+```bash
+kubectl -n adsb get deploy -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.template.spec.containers[0].image}{"\n"}{end}'
+curl -fsS http://adsb-notifier.local/ | grep 'UI '
+curl -fsS http://adsb-notifier.local/api/healthz
+```
+
 ## Config Export and Restore
 
 The API writes live config to the shared Kubernetes PVC at `/config/config.json` and stores API-created backups under `/config/backups`.
