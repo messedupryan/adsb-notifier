@@ -36,6 +36,7 @@ make worker-once
 make build
 make push
 make build-push
+make release
 make k8s-secret
 make deploy-helm
 make rollout
@@ -178,6 +179,12 @@ Or build and push:
 
 ```bash
 make build-push REGISTRY=registry.example.test
+```
+
+Build, push, deploy the Helm chart, and wait for rollout:
+
+```bash
+make release REGISTRY=registry.example.test NAMESPACE=adsb RELEASE=adsb-notifier
 ```
 
 Individual images:

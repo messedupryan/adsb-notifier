@@ -27,7 +27,7 @@ UI_IMAGE := $(REGISTRY)/adsb-notifier-ui:$(IMAGE_TAG)
 
 VERSION_FILES := VERSION pyproject.toml charts/adsb-notifier/Chart.yaml charts/adsb-notifier/values.example.yaml ui/index.html ui/js/bootstrap.js ui/js/config-flow.js ui/js/dashboard.js ui/js/forms.js ui/js/map-utils.js ui/js/modal.js ui/js/rule-actions.js ui/js/rule-model.js ui/js/state.js ui/js/theme.js ui/js/ui-utils.js ui/js/validation.js adsb_notifier/version.py docs/DEVELOPMENT.md docs/VERSIONING.md README.md Dockerfile Dockerfile.api Dockerfile.ui Makefile.example tests/test_versioning.py
 
-.PHONY: help version bump-version test local local-api local-ui worker-once build build-worker build-api build-ui push build-push k8s-secret deploy-k8s deploy-helm rollout status config-export config-backups config-export-backups config-restore
+.PHONY: help version bump-version test local local-api local-ui worker-once build build-worker build-api build-ui push build-push release k8s-secret deploy-k8s deploy-helm rollout status config-export config-backups config-export-backups config-restore
 
 help:
 	@printf '%s\n' \
@@ -40,6 +40,7 @@ help:
 		'  make build         Build worker, API, and UI container images' \
 		'  make push          Push worker, API, and UI container images' \
 		'  make build-push    Build and push all images' \
+		'  make release       Build/push images, deploy Helm chart, and wait for rollout' \
 		'  make k8s-secret    Create/update Kubernetes secret from .env' \
 		'  make deploy-k8s    Apply raw Kubernetes manifests' \
 		'  make deploy-helm   Deploy Helm chart with helm upgrade --install' \
@@ -118,6 +119,8 @@ push:
 	docker push "$(UI_IMAGE)"
 
 build-push: build push
+
+release: build-push deploy-helm rollout
 
 k8s-secret:
 	@set -a; [ ! -f .env ] || source .env; set +a; \
