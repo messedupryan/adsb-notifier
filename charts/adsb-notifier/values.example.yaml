@@ -27,7 +27,6 @@ config:
   backupRetention: 20
 
 seedConfig:
-  adsb_url: http://readsb.default.svc.cluster.local/tar1090/data/aircraft.json
   adsb_source:
     provider: adsb_lol
     query: point

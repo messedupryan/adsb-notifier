@@ -4,7 +4,7 @@
 
 # 📡 ADS-B Notifier
 
-ADS-B Notifier watches live aircraft data near a configured home location and sends notifications when saved rules match. I created this app to run on my home kube (k3s) cluster so that I can watch military traffic, figure out what loud helicopters just flew over me and to get warnings when cool planes fly over that I can snap photos of.
+ADS-B Notifier watches live aircraft data near a configured home location and sends notifications when saved rules match. It is built for local Kubernetes or homelab deployments where you want alerts for aircraft that are interesting, noisy, unusual, or worth stepping outside to see.
 
 The project is organized as three deployable components:
 
@@ -26,6 +26,7 @@ The app can run locally during development or as containers in Kubernetes. See [
 - [⚙️ Configuration Overview](#configuration-overview)
 - [🗺️ Dashboard](#dashboard)
 - [🏷️ Versioning](#versioning)
+- [🔒 Security Model](#security-model)
 - [🛠️ Development](#development)
 - [🙏 Credits and Disclaimer](#credits-and-disclaimer)
 - [🚧 Status](#status)
@@ -43,6 +44,7 @@ The app can run locally during development or as containers in Kubernetes. See [
 - Optional TIS-B inclusion for military rules.
 - Per-rule notification provider selection from globally enabled providers.
 - Live rule testing against the configured ADS-B source.
+- Shared configuration validation for required sections, supported fields, home coordinates, rule shape, and notification providers.
 - Provider-specific notification templates.
 - Optional square alert snapshots in HTML email notifications.
 - Worker status and recent match history.
@@ -58,7 +60,7 @@ The UI is broken into sections by tabs. Below are example screenshots of each ta
 ![amber_dashboard](docs/images/amber_dashboard.png)
 
 #### General Settings
-![blue_settingsd](docs/images/blue_settings.png)
+![blue_settings](docs/images/blue_settings.png)
 
 #### Notification settings
 ![violet_notifications](docs/images/violet_notifications.png)
@@ -82,7 +84,7 @@ Current notification support includes:
 
 HTML email can embed themed branding and an optional square alert snapshot. The snapshot is centered on the configured home location and scaled so the matched rule radius fills the image. Map-backed snapshots cache raw tiles and theme-neutral rendered base maps by home location, radius, zoom, and tile source before drawing the theme and aircraft-specific overlays.
 
-I found Twilio to be overly cumbersome, and not worth the cost. I am using email and Pushover notifications. I left Twilio support in the app, in case I ever do want to leverage SMS, but I doubt I ever will.
+Twilio remains supported for SMS, but email and Pushover are the primary notification paths for the intended homelab workflow.
 
 <a id="architecture"></a>
 
@@ -183,6 +185,14 @@ The project is currently in beta and uses SemVer-style `0.0.x` versions. The wor
 
 See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, and promotion checklist.
 
+<a id="security-model"></a>
+
+## 🔒 Security Model
+
+ADS-B Notifier is designed for trusted local networks. The web UI and configuration API do not provide app-level authentication or authorization. Put it behind your existing local network controls, VPN, ingress restrictions, or reverse proxy protections if you expose it beyond a trusted LAN.
+
+Notification secrets can be referenced through environment variables such as `env:SMTP_PASSWORD`, and the API redacts known secret fields before serving configuration to the UI.
+
 <a id="development"></a>
 
 ## 🛠️ Development
@@ -210,4 +220,4 @@ Dashboard maps and map-backed email snapshots can use OpenStreetMap tiles. OpenS
 
 ## 🚧 Status
 
-This project is under active development. I haven't really focused on making this something for public consumption. I am sharing this so that my friends (Tom and Matt) can see what I am working on.
+This project is under active development and is approaching its first release-candidate milestone.

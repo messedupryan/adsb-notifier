@@ -290,8 +290,8 @@ After either rollback path, verify the running images, UI version, and API healt
 
 ```bash
 kubectl -n adsb get deploy -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.template.spec.containers[0].image}{"\n"}{end}'
-curl -fsS http://adsb-notifier.local/ | grep 'UI '
-curl -fsS http://adsb-notifier.local/api/healthz
+curl -fsS http://adsb-notifier.example.test/ | grep 'UI '
+curl -fsS http://adsb-notifier.example.test/api/healthz
 ```
 
 ## Config Export and Restore
