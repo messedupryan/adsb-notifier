@@ -4,7 +4,7 @@
 
 # 📡 ADS-B Notifier
 
-ADS-B Notifier watches live aircraft data near a configured home location and sends notifications when saved rules match. It is built for local Kubernetes or homelab deployments where you want alerts for aircraft that are interesting, noisy, unusual, or worth stepping outside to see.
+ADS-B Notifier watches live aircraft data near a configured home location and sends notifications when saved rules match. I built this app to run on my home Kubernetes cluster so I can watch military traffic, figure out what loud helicopters just flew over the house, and get warnings when cool planes fly over that I might want to step outside and photograph.
 
 The project is organized as three deployable components:
 
@@ -84,7 +84,7 @@ Current notification support includes:
 
 HTML email can embed themed branding and an optional square alert snapshot. The snapshot is centered on the configured home location and scaled so the matched rule radius fills the image. Map-backed snapshots cache raw tiles and theme-neutral rendered base maps by home location, radius, zoom, and tile source before drawing the theme and aircraft-specific overlays.
 
-Twilio remains supported for SMS, but email and Pushover are the primary notification paths for the intended homelab workflow.
+I found Twilio to be overly cumbersome, and not worth the cost for my use case. I am using email and Pushover notifications. I left Twilio support in the app in case I ever want to leverage SMS, but I doubt I will use it often.
 
 <a id="architecture"></a>
 
@@ -220,4 +220,4 @@ Dashboard maps and map-backed email snapshots can use OpenStreetMap tiles. OpenS
 
 ## 🚧 Status
 
-This project is under active development and is approaching its first release-candidate milestone.
+This project is under active development. I do not expect it to be broadly useful, but I am sharing it in case another aviation nerd with a homelab finds the shape of it helpful.
