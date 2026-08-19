@@ -18,7 +18,7 @@ from adsb_notifier.api import (
     _restore_redacted_secrets,
     _write_config,
 )
-from adsb_notifier.config import load_settings_data, parse_settings
+from adsb_notifier.config import load_settings_data, parse_settings, validate_settings_data
 from adsb_notifier.models import Aircraft
 from adsb_notifier.notifiers import DEFAULT_EMAIL_HTML_BODY_TEMPLATE, LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE
 
@@ -281,6 +281,67 @@ def test_invalid_config_without_rules_is_rejected():
 
     with pytest.raises(ValueError, match="at least one rule"):
         parse_settings(payload)
+
+
+def test_config_validation_requires_home_section():
+    payload = valid_config()
+    del payload["home"]
+
+    with pytest.raises(ValueError, match="config requires home"):
+        validate_settings_data(payload)
+
+
+def test_config_validation_rejects_unknown_top_level_fields():
+    payload = valid_config()
+    payload["webhook_url"] = "https://example.test/hook"
+
+    with pytest.raises(ValueError, match="unsupported top-level field: webhook_url"):
+        validate_settings_data(payload)
+
+
+def test_config_validation_rejects_invalid_home_coordinates():
+    payload = valid_config()
+    payload["home"]["lat"] = 120
+
+    with pytest.raises(ValueError, match="config.home.lat must be between -90 and 90"):
+        validate_settings_data(payload)
+
+
+def test_config_validation_requires_rules_to_be_objects():
+    payload = valid_config()
+    payload["rules"] = ["not-a-rule"]
+
+    with pytest.raises(ValueError, match=r"config.rules\[1\] must be a JSON object"):
+        validate_settings_data(payload)
+
+
+def test_config_validation_requires_tail_rule_tail_numbers():
+    payload = valid_config()
+    payload["rules"][0]["tail_numbers"] = []
+
+    with pytest.raises(ValueError, match="target requires at least one tail_numbers"):
+        validate_settings_data(payload)
+
+
+def test_config_validation_requires_aircraft_type_selectors():
+    payload = valid_config()
+    payload["rules"][0] = {
+        "name": "empty aircraft type",
+        "event": "aircraft_type",
+        "radius_miles": 25,
+        "cooldown_minutes": 30,
+    }
+
+    with pytest.raises(ValueError, match="empty aircraft type requires aircraft_types or categories"):
+        validate_settings_data(payload)
+
+
+def test_config_validation_rejects_unknown_notification_providers():
+    payload = valid_config()
+    payload["notifications"] = {"webhook": {"enabled": True}}
+
+    with pytest.raises(ValueError, match="notifications contains unsupported provider: webhook"):
+        validate_settings_data(payload)
 
 
 def test_recent_matches_window_defaults_to_24_hours():
