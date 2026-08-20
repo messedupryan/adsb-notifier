@@ -1,6 +1,6 @@
 # Versioning and Promotion
 
-ADS-B Notifier is in beta and uses SemVer-style `0.x.y` versions. Release-candidate builds use an explicit prerelease suffix such as `0.1.0-rc.1`.
+ADS-B Notifier is in beta and uses SemVer-style `0.x.y` versions. Release-candidate builds use an explicit prerelease suffix such as `0.1.0-rc.1`; stable cuts drop the prerelease suffix, such as `0.1.0`.
 
 ## Source of Truth
 
@@ -9,7 +9,7 @@ The root `VERSION` file is the project version source of truth.
 The current beta version is:
 
 ```text
-0.1.0-rc.1
+0.1.0
 ```
 
 For now, the worker, API, UI, Python package, Helm chart, and container images all share the project version. Split component versions only when the components need independent release cadence.
@@ -33,7 +33,7 @@ Run `make version` to display the project version and image tags that will be bu
 - Increment the patch version for each stable batch of work that should be deployable or eligible for promotion.
 - Use `0.1.0-rc.n` for release-candidate builds that are ready for soak testing before promotion.
 - Keep all components on the same version during beta unless there is a strong reason to split them.
-- Avoid deploying `latest` for normal testing. Use the explicit version tag, such as `0.1.0-rc.1`.
+- Avoid deploying `latest` for normal testing. Use the explicit version tag, such as `0.1.0`.
 
 ## Branch Flow
 
@@ -53,8 +53,8 @@ make version
 
 git switch main
 git merge --no-ff develop
-git tag v0.1.0-rc.1
-git push origin main v0.1.0-rc.1
+git tag v0.1.0
+git push origin main v0.1.0
 ```
 
 ## Deployment Tags
@@ -70,9 +70,9 @@ make deploy-helm REGISTRY=registry.example.test HELM_VALUES=charts/adsb-notifier
 This builds and deploys:
 
 ```text
-registry.example.test/adsb-notifier-worker:0.1.0-rc.1
-registry.example.test/adsb-notifier-api:0.1.0-rc.1
-registry.example.test/adsb-notifier-ui:0.1.0-rc.1
+registry.example.test/adsb-notifier-worker:0.1.0
+registry.example.test/adsb-notifier-api:0.1.0
+registry.example.test/adsb-notifier-ui:0.1.0
 ```
 
 Use `IMAGE_TAG=...` only when intentionally testing a nonstandard tag.
