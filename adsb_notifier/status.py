@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 import os
 import tempfile
@@ -9,10 +7,9 @@ from typing import Any
 
 from adsb_notifier.adsb import build_adsb_url
 from adsb_notifier.config import Settings
-from adsb_notifier.links import adsb_exchange_aircraft_url
+from adsb_notifier.constants import MAX_RECENT_MATCHES
+from adsb_notifier.links import airplanes_live_aircraft_url
 from adsb_notifier.models import Sighting
-
-MAX_RECENT_MATCHES = 200
 
 
 def write_poll_status(path: str | Path, settings: Settings, aircraft_count: int, sightings: list[Sighting]) -> None:
@@ -26,6 +23,7 @@ def write_poll_status(path: str | Path, settings: Settings, aircraft_count: int,
         "recent_matches_window_hours": settings.recent_matches_window_hours,
         "recent_matches": recent_matches,
         "last_error": None,
+        "consecutive_source_errors": 0,
         "rate_limit_retry_at": None,
         "rate_limit_backoff_seconds": 0,
     }
@@ -39,6 +37,7 @@ def write_error_status(path: str | Path, error: BaseException) -> None:
             "status": "error",
             "last_error": str(error),
             "last_error_at": _now_iso(),
+            "consecutive_source_errors": _next_source_error_count(existing),
         }
     )
     write_status(path, existing)
@@ -54,15 +53,26 @@ def write_rate_limit_status(
     now = datetime.now(timezone.utc)
     existing.update(
         {
-            "status": "rate_limited",
+            "status": _source_error_status(error),
             "adsb_url": build_adsb_url(settings),
             "last_error": str(error),
             "last_error_at": now.isoformat(),
+            "consecutive_source_errors": _next_source_error_count(existing),
             "rate_limit_backoff_seconds": backoff_seconds,
             "rate_limit_retry_at": (now + timedelta(seconds=backoff_seconds)).isoformat(),
         }
     )
     write_status(path, existing)
+
+
+def _source_error_status(error: BaseException) -> str:
+    match getattr(error, "status_code", None):
+        case 403:
+            return "access_denied"
+        case 429:
+            return "rate_limited"
+        case _:
+            return "source_unavailable"
 
 
 def read_status(path: str | Path) -> dict[str, Any]:
@@ -82,6 +92,13 @@ def write_status(path: str | Path, payload: dict[str, Any]) -> None:
     os.replace(temp_name, status_path)
 
 
+def _next_source_error_count(status: dict[str, Any]) -> int:
+    try:
+        return int(status.get("consecutive_source_errors") or 0) + 1
+    except (TypeError, ValueError):
+        return 1
+
+
 def _sighting_summary(sighting: Sighting) -> dict[str, Any]:
     plane = sighting.aircraft
     return {
@@ -91,7 +108,8 @@ def _sighting_summary(sighting: Sighting) -> dict[str, Any]:
         "registration": plane.registration,
         "flight": plane.flight,
         "hex": plane.hex,
-        "adsb_exchange_url": adsb_exchange_aircraft_url(plane.hex),
+        "airplanes_live_url": airplanes_live_aircraft_url(plane.hex),
+        "adsb_exchange_url": airplanes_live_aircraft_url(plane.hex),
         "aircraft_type": plane.aircraft_type or plane.category,
         "category": plane.category,
         "source_type": plane.source_type,
@@ -101,6 +119,7 @@ def _sighting_summary(sighting: Sighting) -> dict[str, Any]:
         "distance_miles": round(sighting.distance_miles, 2),
         "altitude_ft": plane.altitude_ft,
         "track_deg": plane.track_deg,
+        "squawk": plane.squawk,
         "notification_providers": sorted(sighting.notification_providers or []),
         "observed_at": sighting.observed_at.isoformat(),
     }
@@ -143,9 +162,14 @@ def _match_is_recent(match: dict[str, Any], cutoff: datetime) -> bool:
 
 
 def _backfill_match_links(match: dict[str, Any]) -> dict[str, Any]:
-    if match.get("adsb_exchange_url"):
+    url = airplanes_live_aircraft_url(match.get("hex"))
+    if match.get("airplanes_live_url"):
+        if match["airplanes_live_url"] != url:
+            return {**match, "airplanes_live_url": url, "adsb_exchange_url": url}
+        if match.get("adsb_exchange_url") != url:
+            return {**match, "adsb_exchange_url": url}
         return match
-    return {**match, "adsb_exchange_url": adsb_exchange_aircraft_url(match.get("hex"))}
+    return {**match, "airplanes_live_url": url, "adsb_exchange_url": url}
 
 
 def _observed_at(match: dict[str, Any]) -> datetime | None:

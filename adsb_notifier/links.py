@@ -1,13 +1,15 @@
-from __future__ import annotations
-
 from urllib.parse import urlencode
 
 
-ADSB_EXCHANGE_GLOBE_URL = "https://globe.adsbexchange.com/"
+AIRPLANES_LIVE_GLOBE_URL = "https://globe.airplanes.live/"
 
 
-def adsb_exchange_aircraft_url(hex_id: str | None) -> str:
+def airplanes_live_aircraft_url(hex_id: str | None) -> str:
     aircraft_hex = str(hex_id or "").strip().upper()
     if not aircraft_hex:
         return ""
-    return f"{ADSB_EXCHANGE_GLOBE_URL}?{urlencode({'icao': aircraft_hex})}"
+    return f"{AIRPLANES_LIVE_GLOBE_URL}?{urlencode({'icao': aircraft_hex})}"
+
+
+def adsb_exchange_aircraft_url(hex_id: str | None) -> str:
+    return airplanes_live_aircraft_url(hex_id)

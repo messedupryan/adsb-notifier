@@ -424,6 +424,20 @@ textarea.invalid {
   gap: 8px;
 }
 
+.dashboard-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(110px, 1fr)) minmax(130px, 1.4fr);
+  gap: 8px;
+  width: min(100%, 640px);
+}
+
+.dashboard-filters input,
+.dashboard-filters select {
+  min-height: 34px;
+  min-width: 0;
+  width: 100%;
+}
+
 .status-list {
   display: grid;
   gap: 0;
@@ -779,7 +793,8 @@ textarea {
   .actions,
   .section-header,
   .rule-actions,
-  .provider-actions {
+  .provider-actions,
+  .recent-card header {
     align-items: stretch;
     flex-direction: column;
   }
@@ -794,6 +809,7 @@ textarea {
 
   .form-grid,
   .form-grid.compact,
+  .dashboard-filters,
   .dashboard-grid,
   .rules-layout {
     grid-template-columns: 1fr;

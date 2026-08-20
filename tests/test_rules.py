@@ -44,6 +44,9 @@ def test_tail_rule_matches_inside_radius_and_altitude_limit():
 
     assert len(sightings) == 1
     assert sightings[0].rule_name == "target"
+    assert sightings[0].home_lat == 40.7608
+    assert sightings[0].home_lon == -111.8910
+    assert sightings[0].rule_radius_miles == 10
 
 
 def test_tail_rule_rejects_above_max_altitude():
@@ -117,6 +120,32 @@ def test_aircraft_type_rule_matches_type_or_category():
     sightings = engine.evaluate([Aircraft(hex="AE0001", aircraft_type="H60", lat=40.7708, lon=-111.8910)])
 
     assert len(sightings) == 1
+
+
+def test_squawk_rule_matches_configured_code():
+    engine = RuleEngine(
+        settings_with(
+            Rule(
+                name="emergency",
+                event="squawk",
+                radius_miles=10,
+                squawk_codes={"7700"},
+            )
+        )
+    )
+
+    sightings = engine.evaluate([Aircraft(hex="A12345", squawk="7700", lat=40.7708, lon=-111.8910)])
+
+    assert len(sightings) == 1
+    assert sightings[0].event_type == "squawk"
+
+
+def test_squawk_rule_rejects_other_codes():
+    engine = RuleEngine(settings_with(Rule(name="emergency", event="squawk", radius_miles=10, squawk_codes={"7700"})))
+
+    sightings = engine.evaluate([Aircraft(hex="A12345", squawk="1200", lat=40.7708, lon=-111.8910)])
+
+    assert sightings == []
 
 
 def test_military_rule_rejects_civilian_aircraft_even_without_rule_flag():

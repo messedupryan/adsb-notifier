@@ -6,24 +6,28 @@ IMAGE_TAG ?= $(PROJECT_VERSION)
 NAMESPACE ?= adsb
 RELEASE ?= adsb-notifier
 HELM_CHART ?= charts/adsb-notifier
-HELM_VALUES ?= charts/adsb-notifier/values.yaml
+HELM_VALUES ?= charts/adsb-notifier/values.example.yaml
 HELM_ADOPT ?= false
 HELM_ARGS ?=
 
 LOCAL_CONFIG ?= config.dev.json
-API_HOST ?= 127.0.0.5
+API_HOST ?= 127.0.0.1
 API_PORT ?= 8765
 UI_PORT ?= 8766
 STATUS_FILE ?= status.json
 BACKUP_RETENTION ?= 20
+CONFIG_MOUNT ?= /config
+CONFIG_FILE ?= config.json
+CONFIG_EXPORT_DIR ?= exports/config
+RESTORE_FILE ?=
 
 WORKER_IMAGE := $(REGISTRY)/adsb-notifier-worker:$(IMAGE_TAG)
 API_IMAGE := $(REGISTRY)/adsb-notifier-api:$(IMAGE_TAG)
 UI_IMAGE := $(REGISTRY)/adsb-notifier-ui:$(IMAGE_TAG)
 
-VERSION_FILES := VERSION pyproject.toml charts/adsb-notifier/Chart.yaml charts/adsb-notifier/values.yaml ui/index.html ui/app.js adsb_notifier/version.py docs/DEVELOPMENT.md docs/VERSIONING.md README.md Dockerfile Dockerfile.api Dockerfile.ui Makefile tests/test_versioning.py
+VERSION_FILES := VERSION pyproject.toml charts/adsb-notifier/Chart.yaml charts/adsb-notifier/values.example.yaml ui/index.html ui/js/bootstrap.js ui/js/config-flow.js ui/js/dashboard.js ui/js/forms.js ui/js/map-utils.js ui/js/modal.js ui/js/rule-actions.js ui/js/rule-model.js ui/js/state.js ui/js/theme.js ui/js/ui-utils.js ui/js/validation.js adsb_notifier/version.py docs/DEVELOPMENT.md docs/VERSIONING.md README.md Dockerfile Dockerfile.api Dockerfile.ui Makefile.example tests/test_versioning.py
 
-.PHONY: help version bump-version test local local-api local-ui worker-once build build-worker build-api build-ui push build-push k8s-secret deploy-k8s deploy-helm rollout status
+.PHONY: help version bump-version test local local-api local-ui worker-once build build-worker build-api build-ui push build-push release k8s-secret deploy-k8s deploy-helm rollout status config-export config-backups config-export-backups config-restore
 
 help:
 	@printf '%s\n' \
@@ -36,18 +40,23 @@ help:
 		'  make build         Build worker, API, and UI container images' \
 		'  make push          Push worker, API, and UI container images' \
 		'  make build-push    Build and push all images' \
+		'  make release       Build/push images, deploy Helm chart, and wait for rollout' \
 		'  make k8s-secret    Create/update Kubernetes secret from .env' \
 		'  make deploy-k8s    Apply raw Kubernetes manifests' \
 		'  make deploy-helm   Deploy Helm chart with helm upgrade --install' \
 		'  make rollout       Wait for Kubernetes deployments to roll out' \
 		'  make status        Show Kubernetes resources' \
+		'  make config-export Export live Kubernetes config to CONFIG_EXPORT_DIR' \
+		'  make config-backups List config backups on the Kubernetes PVC' \
+		'  make config-export-backups Export PVC config backups to CONFIG_EXPORT_DIR/backups' \
+		'  make config-restore RESTORE_FILE=path.json  Restore a local config into Kubernetes' \
 		'  make version       Show project/component version and image tags' \
-		'  make bump-version NEW_VERSION=0.0.6  Bump project/component version files' \
+		'  make bump-version NEW_VERSION=0.1.0  Bump project/component version files' \
 		'' \
 		'Common overrides:' \
 		'  REGISTRY=registry.example.test IMAGE_TAG=$(PROJECT_VERSION) NAMESPACE=adsb' \
 		'  LOCAL_CONFIG=config.dev.json API_PORT=8765 UI_PORT=8766' \
-		'  HELM_CHART=charts/adsb-notifier HELM_VALUES=charts/adsb-notifier/values.yaml' \
+		'  HELM_CHART=charts/adsb-notifier HELM_VALUES=charts/adsb-notifier/values.example.yaml' \
 		'  HELM_ADOPT=true HELM_ARGS="--set image.tag=$(PROJECT_VERSION)"'
 
 version:
@@ -58,15 +67,15 @@ version:
 		'UI image:        $(UI_IMAGE)'
 
 bump-version:
-	@test -n "$(NEW_VERSION)" || { echo "Usage: make bump-version NEW_VERSION=0.0.6"; exit 1; }
-	@echo "$(NEW_VERSION)" | grep -Eq '^0\.0\.[0-9]+$$' || { echo "NEW_VERSION must match beta semver pattern 0.0.x"; exit 1; }
+	@test -n "$(NEW_VERSION)" || { echo "Usage: make bump-version NEW_VERSION=0.1.0"; exit 1; }
+	@echo "$(NEW_VERSION)" | grep -Eq '^0\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$$' || { echo "NEW_VERSION must match beta semver pattern 0.x.y or 0.x.y-rc.n"; exit 1; }
 	@old_version="$(PROJECT_VERSION)"; \
 	if [ "$$old_version" = "$(NEW_VERSION)" ]; then \
 		echo "Version is already $(NEW_VERSION)"; \
 		exit 0; \
 	fi; \
 	OLD_VERSION="$$old_version" NEW_VERSION="$(NEW_VERSION)" \
-		perl -0pi -e 's/\Q$$ENV{OLD_VERSION}\E/$$ENV{NEW_VERSION}/g' $(VERSION_FILES); \
+		perl -0pi -e 's/(?<![\d.])\Q$$ENV{OLD_VERSION}\E(?![\d.])/$$ENV{NEW_VERSION}/g' $(VERSION_FILES); \
 	echo "Bumped version $$old_version -> $(NEW_VERSION)"
 
 test:
@@ -76,10 +85,10 @@ local:
 	@if [ ! -f "$(LOCAL_CONFIG)" ]; then echo "Missing $(LOCAL_CONFIG). Set LOCAL_CONFIG=..."; exit 1; fi
 	@set -e; \
 	pipenv run adsb-notifier-api --config "$(LOCAL_CONFIG)" --host "$(API_HOST)" --port "$(API_PORT)" --status-file "$(STATUS_FILE)" --backup-retention "$(BACKUP_RETENTION)" & api_pid=$$!; \
-	( cd ui && UI_HOST=127.0.0.5 UI_PORT="$(UI_PORT)" pipenv run python dev_server.py ) & ui_pid=$$!; \
+	( cd ui && UI_HOST=127.0.0.1 UI_PORT="$(UI_PORT)" pipenv run python dev_server.py ) & ui_pid=$$!; \
 	trap 'kill $$api_pid $$ui_pid 2>/dev/null || true' INT TERM EXIT; \
 	echo "API: http://$(API_HOST):$(API_PORT)"; \
-	echo "UI:  http://127.0.0.5:$(UI_PORT)/?api=http://$(API_HOST):$(API_PORT)"; \
+	echo "UI:  http://127.0.0.1:$(UI_PORT)/?api=http://$(API_HOST):$(API_PORT)"; \
 	wait
 
 local-api:
@@ -87,7 +96,7 @@ local-api:
 	pipenv run adsb-notifier-api --config "$(LOCAL_CONFIG)" --host "$(API_HOST)" --port "$(API_PORT)" --status-file "$(STATUS_FILE)" --backup-retention "$(BACKUP_RETENTION)"
 
 local-ui:
-	cd ui && UI_HOST=127.0.0.5 UI_PORT="$(UI_PORT)" pipenv run python dev_server.py
+	cd ui && UI_HOST=127.0.0.1 UI_PORT="$(UI_PORT)" pipenv run python dev_server.py
 
 worker-once:
 	@if [ ! -f "$(LOCAL_CONFIG)" ]; then echo "Missing $(LOCAL_CONFIG). Set LOCAL_CONFIG=..."; exit 1; fi
@@ -110,6 +119,8 @@ push:
 	docker push "$(UI_IMAGE)"
 
 build-push: build push
+
+release: build-push deploy-helm rollout
 
 k8s-secret:
 	@set -a; [ ! -f .env ] || source .env; set +a; \
@@ -146,3 +157,36 @@ rollout:
 
 status:
 	kubectl -n "$(NAMESPACE)" get pods,svc,ingress,pvc
+
+config-export:
+	@mkdir -p "$(CONFIG_EXPORT_DIR)"
+	@timestamp="$$(date -u +%Y%m%dT%H%M%SZ)"; \
+	outfile="$(CONFIG_EXPORT_DIR)/$(RELEASE).config.$$timestamp.json"; \
+	kubectl -n "$(NAMESPACE)" exec "deployment/$(RELEASE)-api" -- cat "$(CONFIG_MOUNT)/$(CONFIG_FILE)" > "$$outfile"; \
+	echo "Exported live config to $$outfile"
+
+config-backups:
+	@kubectl -n "$(NAMESPACE)" exec "deployment/$(RELEASE)-api" -- sh -c 'ls -1t "$(CONFIG_MOUNT)/backups" 2>/dev/null || true'
+
+config-export-backups:
+	@mkdir -p "$(CONFIG_EXPORT_DIR)/backups"
+	@backups="$$(kubectl -n "$(NAMESPACE)" exec "deployment/$(RELEASE)-api" -- sh -c 'ls -1 "$(CONFIG_MOUNT)/backups" 2>/dev/null || true')"; \
+	if [ -z "$$backups" ]; then \
+		echo "No config backups found on $(CONFIG_MOUNT)/backups"; \
+		exit 0; \
+	fi; \
+	for backup in $$backups; do \
+		kubectl -n "$(NAMESPACE)" exec "deployment/$(RELEASE)-api" -- cat "$(CONFIG_MOUNT)/backups/$$backup" > "$(CONFIG_EXPORT_DIR)/backups/$$backup"; \
+		echo "Exported $$backup"; \
+	done
+
+config-restore:
+	@test -n "$(RESTORE_FILE)" || { echo "Usage: make config-restore RESTORE_FILE=path/to/config.json"; exit 1; }
+	@test -f "$(RESTORE_FILE)" || { echo "RESTORE_FILE does not exist: $(RESTORE_FILE)"; exit 1; }
+	@python3 -m json.tool "$(RESTORE_FILE)" >/dev/null
+	@timestamp="$$(date -u +%Y%m%dT%H%M%SZ)"; \
+	backup_name="$(CONFIG_FILE).pre-restore.$$timestamp.json"; \
+	kubectl -n "$(NAMESPACE)" exec "deployment/$(RELEASE)-api" -- sh -c 'mkdir -p "$(CONFIG_MOUNT)/backups" && cp "$(CONFIG_MOUNT)/$(CONFIG_FILE)" "$(CONFIG_MOUNT)/backups/'"$$backup_name"'"'; \
+	kubectl -n "$(NAMESPACE)" exec -i "deployment/$(RELEASE)-api" -- sh -c 'cat > "$(CONFIG_MOUNT)/$(CONFIG_FILE)"' < "$(RESTORE_FILE)"; \
+	echo "Restored $(RESTORE_FILE) to $(CONFIG_MOUNT)/$(CONFIG_FILE)"; \
+	echo "Previous live config saved as $(CONFIG_MOUNT)/backups/$$backup_name"

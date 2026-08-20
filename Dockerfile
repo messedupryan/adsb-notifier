@@ -1,4 +1,23 @@
-FROM python:3.12-slim
+FROM python:3.14-slim AS builder
+
+ENV PIPENV_IGNORE_VIRTUALENVS=1 \
+    PIPENV_VENV_IN_PROJECT=1 \
+    LANG=C.UTF-8 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends pipenv \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY Pipfile Pipfile.lock pyproject.toml ./
+COPY adsb_notifier ./adsb_notifier
+
+RUN pipenv verify && pipenv sync
+
+FROM python:3.14-slim
 
 ARG APP_VERSION=0.0.0
 LABEL org.opencontainers.image.title="adsb-notifier-worker" \
@@ -6,13 +25,12 @@ LABEL org.opencontainers.image.title="adsb-notifier-worker" \
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    ADSB_NOTIFIER_VERSION="${APP_VERSION}"
+    LANG=C.UTF-8 \
+    ADSB_NOTIFIER_VERSION="${APP_VERSION}" \
+    PATH="/app/.venv/bin:${PATH}"
 
 WORKDIR /app
-COPY pyproject.toml ./
-COPY adsb_notifier ./adsb_notifier
-
-RUN pip install --no-cache-dir .
+COPY --from=builder /app /app
 
 USER nobody
 ENTRYPOINT ["adsb-notifier"]

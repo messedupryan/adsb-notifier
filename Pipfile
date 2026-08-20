@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 adsb-notifier = {path = ".", editable = true}
+pillow = "*"
 
 [dev-packages]
 pytest = "*"

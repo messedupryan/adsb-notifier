@@ -11,9 +11,20 @@ VERSION_MANAGED_FILES = [
     "VERSION",
     "pyproject.toml",
     "charts/adsb-notifier/Chart.yaml",
-    "charts/adsb-notifier/values.yaml",
+    "charts/adsb-notifier/values.example.yaml",
     "ui/index.html",
-    "ui/app.js",
+    "ui/js/bootstrap.js",
+    "ui/js/config-flow.js",
+    "ui/js/dashboard.js",
+    "ui/js/forms.js",
+    "ui/js/map-utils.js",
+    "ui/js/modal.js",
+    "ui/js/rule-actions.js",
+    "ui/js/rule-model.js",
+    "ui/js/state.js",
+    "ui/js/theme.js",
+    "ui/js/ui-utils.js",
+    "ui/js/validation.js",
     "adsb_notifier/version.py",
     "docs/DEVELOPMENT.md",
     "docs/VERSIONING.md",
@@ -21,7 +32,7 @@ VERSION_MANAGED_FILES = [
     "Dockerfile",
     "Dockerfile.api",
     "Dockerfile.ui",
-    "Makefile",
+    "Makefile.example",
     "tests/test_versioning.py",
 ]
 
@@ -38,7 +49,7 @@ def chart_field(name: str) -> str:
 
 
 def test_project_version_uses_beta_semver():
-    assert re.fullmatch(r"0\.0\.\d+", project_version())
+    assert re.fullmatch(r"0\.\d+\.\d+(-rc\.\d+)?", project_version())
 
 
 def test_python_package_version_matches_project_version():
@@ -54,15 +65,35 @@ def test_helm_chart_version_matches_project_version():
 
 
 def test_default_image_tag_matches_project_version():
-    values = (ROOT / "charts" / "adsb-notifier" / "values.yaml").read_text(encoding="utf-8")
+    values = (ROOT / "charts" / "adsb-notifier" / "values.example.yaml").read_text(encoding="utf-8")
 
     assert f"  tag: {project_version()}" in values
 
 
 def test_makefile_bump_version_target_covers_version_managed_files():
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    makefile = (ROOT / "Makefile.example").read_text(encoding="utf-8")
 
     assert "bump-version:" in makefile
     assert "NEW_VERSION" in makefile
     for path in VERSION_MANAGED_FILES:
         assert path in makefile
+
+
+def test_local_deploy_files_are_ignored():
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+
+    assert "\nMakefile\n" in gitignore
+    assert "charts/*/values.yaml" in gitignore
+    assert "!charts/*/values.example.yaml" in gitignore
+
+
+def test_python_dockerfiles_use_pipenv_with_python_314():
+    for name in ["Dockerfile", "Dockerfile.api"]:
+        dockerfile = (ROOT / name).read_text(encoding="utf-8")
+
+        assert "FROM python:3.14-slim AS builder" in dockerfile
+        assert "FROM python:3.14-slim" in dockerfile
+        assert "COPY Pipfile Pipfile.lock pyproject.toml ./" in dockerfile
+        assert "RUN pipenv verify && pipenv sync" in dockerfile
+        assert "PATH=\"/app/.venv/bin:${PATH}\"" in dockerfile
+        assert "pip install" not in dockerfile

@@ -1,6 +1,6 @@
 # Versioning and Promotion
 
-ADS-B Notifier is in beta and uses SemVer-style `0.0.x` versions until the project is stable enough for `0.1.0`.
+ADS-B Notifier is in beta and uses SemVer-style `0.x.y` versions. Release-candidate builds use an explicit prerelease suffix such as `0.1.0-rc.1`; stable cuts drop the prerelease suffix, such as `0.1.0`.
 
 ## Source of Truth
 
@@ -9,7 +9,7 @@ The root `VERSION` file is the project version source of truth.
 The current beta version is:
 
 ```text
-0.0.5
+0.1.0
 ```
 
 For now, the worker, API, UI, Python package, Helm chart, and container images all share the project version. Split component versions only when the components need independent release cadence.
@@ -19,19 +19,21 @@ Version-aligned files:
 - `VERSION`
 - `pyproject.toml`
 - `adsb_notifier/version.py`
-- `ui/app.js`
+- `ui/js/state.js`
 - `ui/index.html`
 - `charts/adsb-notifier/Chart.yaml`
-- `charts/adsb-notifier/values.yaml`
+- `charts/adsb-notifier/values.example.yaml`
+- `Makefile.example`
 
 Run `make version` to display the project version and image tags that will be built.
 
 ## Beta Version Rules
 
-- Use `0.0.x` while the project is still changing quickly.
+- Use `0.x.y` while the project is still changing quickly.
 - Increment the patch version for each stable batch of work that should be deployable or eligible for promotion.
+- Use `0.1.0-rc.n` for release-candidate builds that are ready for soak testing before promotion.
 - Keep all components on the same version during beta unless there is a strong reason to split them.
-- Avoid deploying `latest` for normal testing. Use the explicit version tag, such as `0.0.5`.
+- Avoid deploying `latest` for normal testing. Use the explicit version tag, such as `0.1.0`.
 
 ## Branch Flow
 
@@ -39,7 +41,7 @@ Run `make version` to display the project version and image tags that will be bu
 - `main` is the stable branch.
 - Feature and cleanup work lands on `develop`.
 - When a version on `develop` is tested and considered stable, merge that version into `main`.
-- Tag promoted main commits as `v0.0.x`.
+- Tag promoted main commits as `v0.x.y` or `v0.x.y-rc.n`.
 
 Suggested promotion flow:
 
@@ -51,8 +53,8 @@ make version
 
 git switch main
 git merge --no-ff develop
-git tag v0.0.x
-git push origin main v0.0.x
+git tag v0.1.0
+git push origin main v0.1.0
 ```
 
 ## Deployment Tags
@@ -62,15 +64,15 @@ By default, the Makefile uses the version from `VERSION` as the image tag:
 ```bash
 make build REGISTRY=registry.example.test
 make push REGISTRY=registry.example.test
-make deploy-helm REGISTRY=registry.example.test
+make deploy-helm REGISTRY=registry.example.test HELM_VALUES=charts/adsb-notifier/values.example.yaml
 ```
 
 This builds and deploys:
 
 ```text
-registry.example.test/adsb-notifier-worker:0.0.5
-registry.example.test/adsb-notifier-api:0.0.5
-registry.example.test/adsb-notifier-ui:0.0.5
+registry.example.test/adsb-notifier-worker:0.1.0
+registry.example.test/adsb-notifier-api:0.1.0
+registry.example.test/adsb-notifier-ui:0.1.0
 ```
 
 Use `IMAGE_TAG=...` only when intentionally testing a nonstandard tag.

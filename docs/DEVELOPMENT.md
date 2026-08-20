@@ -16,9 +16,11 @@ Install Python dependencies:
 ```bash
 pipenv install --dev
 cp config.example.json config.dev.json
+cp Makefile.example Makefile
+cp charts/adsb-notifier/values.example.yaml charts/adsb-notifier/values.yaml
 ```
 
-Use `pipenv run ...` or the Makefile targets so commands run inside the project environment.
+Use `pipenv run ...` or the Makefile targets so commands run inside the project environment. The repo tracks `Makefile.example`; copy it to ignored local `Makefile` when setting up a development checkout.
 
 ## Makefile Targets
 
@@ -34,6 +36,7 @@ make worker-once
 make build
 make push
 make build-push
+make release
 make k8s-secret
 make deploy-helm
 make rollout
@@ -44,15 +47,17 @@ Useful overrides:
 
 ```bash
 LOCAL_CONFIG=config.dev.json
-API_HOST=127.0.0.5
+API_HOST=127.0.0.1
 API_PORT=8765
 UI_PORT=8766
 REGISTRY=registry.example.test
-IMAGE_TAG=0.0.5
+IMAGE_TAG=0.1.0
 NAMESPACE=adsb
 RELEASE=adsb-notifier
 HELM_VALUES=charts/adsb-notifier/values.yaml
 ```
+
+The public example defaults live in `Makefile.example` and `charts/adsb-notifier/values.example.yaml`. Local deploy-ready files live at `Makefile` and `charts/adsb-notifier/values.yaml`; both local files are ignored by Git so registry names, ingress hosts, namespaces, and other environment-specific values do not leak into commits.
 
 ## Running Locally
 
@@ -65,7 +70,7 @@ make local LOCAL_CONFIG=config.dev.json
 Open:
 
 ```text
-http://127.0.0.5:8766/?api=http://127.0.0.5:8765
+http://127.0.0.1:8766/?api=http://127.0.0.1:8765
 ```
 
 Run components separately:
@@ -78,8 +83,8 @@ make local-ui
 Direct commands:
 
 ```bash
-pipenv run adsb-notifier-api --config config.dev.json --host 127.0.0.5 --port 8765 --status-file status.json --backup-retention 20
-cd ui && UI_HOST=127.0.0.5 UI_PORT=8766 pipenv run python dev_server.py
+pipenv run adsb-notifier-api --config config.dev.json --host 127.0.0.1 --port 8765 --status-file status.json --backup-retention 20
+cd ui && UI_HOST=127.0.0.1 UI_PORT=8766 pipenv run python dev_server.py
 ```
 
 Run one worker poll:
@@ -91,7 +96,7 @@ make worker-once LOCAL_CONFIG=config.dev.json
 Run one worker poll against a local or port-forwarded ADS-B feed:
 
 ```bash
-pipenv run adsb-notifier --config config.dev.json --adsb-url http://127.0.0.5:8080/tar1090/data/aircraft.json --once
+pipenv run adsb-notifier --config config.dev.json --adsb-url http://127.0.0.1:8080/tar1090/data/aircraft.json --once
 ```
 
 ## Testing
@@ -127,7 +132,7 @@ The UI is static HTML, CSS, and JavaScript served by `ui/dev_server.py` locally 
 
 When changing UI assets or behavior:
 
-- Keep the UI version in `ui/app.js` aligned with `VERSION`.
+- Keep the UI version in `ui/js/state.js` aligned with `VERSION`.
 - Update `ui/index.html` asset query strings and footer text to the same version.
 - Keep the footer version visible.
 - Verify the dashboard still renders recent matches and the map.
@@ -139,7 +144,8 @@ The UI uses Leaflet from a CDN for dashboard maps.
 Keep these files aligned when adding configuration fields:
 
 - `config.example.json`
-- `charts/adsb-notifier/values.yaml` under `seedConfig`
+- `charts/adsb-notifier/values.example.yaml` under `seedConfig`
+- local `charts/adsb-notifier/values.yaml`, if you keep one for deployment
 - `README.md`
 - this development guide, when commands or deployment behavior change
 
@@ -154,6 +160,8 @@ Use `0` to disable backups.
 The API redacts notification secret fields when serving configuration to the UI. In Kubernetes, the worker reads the live config file from shared storage so notification secrets remain available to the worker without exposing them through the browser-facing config response.
 
 ## Container Builds
+
+The worker and API images use `python:3.14-slim` and install the application from `Pipfile.lock` with Pipenv during a builder stage. The runtime images copy the project virtualenv into `/app/.venv` and run the console scripts from that environment. The UI image is nginx-only and does not install Python dependencies.
 
 Build all images:
 
@@ -171,6 +179,12 @@ Or build and push:
 
 ```bash
 make build-push REGISTRY=registry.example.test
+```
+
+Build, push, deploy the Helm chart, and wait for rollout:
+
+```bash
+make release REGISTRY=registry.example.test NAMESPACE=adsb RELEASE=adsb-notifier
 ```
 
 Individual images:
@@ -203,6 +217,16 @@ PUSHOVER_APP_TOKEN
 PUSHOVER_USER_KEY
 ```
 
+Map-backed email snapshots use two local caches in the worker container:
+
+```text
+ADSB_MAP_TILE_CACHE_DIR=/tmp/adsb-notifier-map-tiles
+ADSB_MAP_SNAPSHOT_CACHE_DIR=/tmp/adsb-notifier-map-snapshots
+ADSB_MAP_SNAPSHOT_CACHE_SECONDS=86400
+```
+
+Raw map tiles are cached by tile coordinate. Rendered base maps are cached by tile source, home location, rule radius, and zoom. The theme tint, radius overlay, home marker, and aircraft-specific overlay are drawn on top for each alert so one cached radius can serve any email theme.
+
 ## Helm Deployment
 
 The Helm chart lives in `charts/adsb-notifier`.
@@ -214,7 +238,7 @@ make deploy-helm \
   REGISTRY=registry.example.test \
   NAMESPACE=adsb \
   RELEASE=adsb-notifier \
-  HELM_VALUES=charts/adsb-notifier/values.yaml
+  HELM_VALUES=charts/adsb-notifier/values.example.yaml
 ```
 
 Wait for rollout:
@@ -234,6 +258,73 @@ If adopting resources that were first created outside Helm, use:
 ```bash
 make deploy-helm HELM_ADOPT=true HELM_ARGS='--server-side=false'
 ```
+
+## Deployment Rollback
+
+Inspect the current release and revision history:
+
+```bash
+helm -n adsb status adsb-notifier
+helm -n adsb history adsb-notifier
+```
+
+Rollback to a previous Helm revision when the previous release metadata and values are known-good:
+
+```bash
+helm -n adsb rollback adsb-notifier <REVISION>
+kubectl -n adsb rollout status deployment/adsb-notifier-api --timeout=120s
+kubectl -n adsb rollout status deployment/adsb-notifier-ui --timeout=120s
+kubectl -n adsb rollout status deployment/adsb-notifier-worker --timeout=120s
+```
+
+Rollback to a previous image tag while keeping the current Helm values:
+
+```bash
+helm -n adsb upgrade adsb-notifier charts/adsb-notifier \
+  --reuse-values \
+  --set image.tag=<PREVIOUS_VERSION>
+make rollout NAMESPACE=adsb
+```
+
+After either rollback path, verify the running images, UI version, and API health:
+
+```bash
+kubectl -n adsb get deploy -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.template.spec.containers[0].image}{"\n"}{end}'
+curl -fsS http://adsb-notifier.example.test/ | grep 'UI '
+curl -fsS http://adsb-notifier.example.test/api/healthz
+```
+
+## Config Export and Restore
+
+The API writes live config to the shared Kubernetes PVC at `/config/config.json` and stores API-created backups under `/config/backups`.
+
+Export the current live config:
+
+```bash
+make config-export NAMESPACE=adsb RELEASE=adsb-notifier
+```
+
+By default, this writes to `exports/config/`, which is ignored by Git because live config can contain local environment details.
+
+List config backups currently stored on the PVC:
+
+```bash
+make config-backups NAMESPACE=adsb RELEASE=adsb-notifier
+```
+
+Export all PVC backups:
+
+```bash
+make config-export-backups NAMESPACE=adsb RELEASE=adsb-notifier
+```
+
+Restore a local config file into the live PVC:
+
+```bash
+make config-restore NAMESPACE=adsb RELEASE=adsb-notifier RESTORE_FILE=exports/config/adsb-notifier.config.20260818T120000Z.json
+```
+
+`config-restore` validates that the restore file is JSON and saves the current live config to `/config/backups/config.json.pre-restore.<timestamp>.json` before overwriting `/config/config.json`.
 
 ## Raw Kubernetes Manifests
 

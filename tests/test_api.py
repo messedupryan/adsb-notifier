@@ -18,7 +18,7 @@ from adsb_notifier.api import (
     _restore_redacted_secrets,
     _write_config,
 )
-from adsb_notifier.config import load_settings_data, parse_settings
+from adsb_notifier.config import load_settings_data, parse_settings, validate_settings_data
 from adsb_notifier.models import Aircraft
 from adsb_notifier.notifiers import DEFAULT_EMAIL_HTML_BODY_TEMPLATE, LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE
 
@@ -121,6 +121,7 @@ def test_read_config_backfills_new_notification_defaults(tmp_path):
     assert config["notifications"]["email"]["html_enabled"] is False
     assert config["notifications"]["email"]["brand_theme"] == "teal"
     assert config["notifications"]["email"]["include_brand_images"] is True
+    assert config["notifications"]["email"]["include_map_snapshot"] is False
     assert config["notifications"]["email"]["html_body_template"] == DEFAULT_NOTIFICATION_CONFIG_FIELDS["email"]["html_body_template"]
     assert json.loads(path.read_text(encoding="utf-8"))["notifications"]["email"]["html_enabled"] is False
 
@@ -131,6 +132,7 @@ def test_read_config_preserves_existing_notification_defaults(tmp_path):
     payload["notifications"]["email"]["html_enabled"] = True
     payload["notifications"]["email"]["brand_theme"] = "amber"
     payload["notifications"]["email"]["include_brand_images"] = False
+    payload["notifications"]["email"]["include_map_snapshot"] = True
     payload["notifications"]["email"]["html_body_template"] = "<p>custom</p>"
     path.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -139,6 +141,7 @@ def test_read_config_preserves_existing_notification_defaults(tmp_path):
     assert config["notifications"]["email"]["html_enabled"] is True
     assert config["notifications"]["email"]["brand_theme"] == "amber"
     assert config["notifications"]["email"]["include_brand_images"] is False
+    assert config["notifications"]["email"]["include_map_snapshot"] is True
     assert config["notifications"]["email"]["html_body_template"] == "<p>custom</p>"
 
 
@@ -151,6 +154,7 @@ def test_read_config_reformats_legacy_default_email_html_template(tmp_path):
     config = _read_config(path)
 
     assert config["notifications"]["email"]["html_body_template"] == DEFAULT_EMAIL_HTML_BODY_TEMPLATE
+    assert "{map_snapshot_html}" in config["notifications"]["email"]["html_body_template"]
     assert "\n  <tr>\n" in config["notifications"]["email"]["html_body_template"]
 
 
@@ -279,6 +283,67 @@ def test_invalid_config_without_rules_is_rejected():
         parse_settings(payload)
 
 
+def test_config_validation_requires_home_section():
+    payload = valid_config()
+    del payload["home"]
+
+    with pytest.raises(ValueError, match="config requires home"):
+        validate_settings_data(payload)
+
+
+def test_config_validation_rejects_unknown_top_level_fields():
+    payload = valid_config()
+    payload["webhook_url"] = "https://example.test/hook"
+
+    with pytest.raises(ValueError, match="unsupported top-level field: webhook_url"):
+        validate_settings_data(payload)
+
+
+def test_config_validation_rejects_invalid_home_coordinates():
+    payload = valid_config()
+    payload["home"]["lat"] = 120
+
+    with pytest.raises(ValueError, match="config.home.lat must be between -90 and 90"):
+        validate_settings_data(payload)
+
+
+def test_config_validation_requires_rules_to_be_objects():
+    payload = valid_config()
+    payload["rules"] = ["not-a-rule"]
+
+    with pytest.raises(ValueError, match=r"config.rules\[1\] must be a JSON object"):
+        validate_settings_data(payload)
+
+
+def test_config_validation_requires_tail_rule_tail_numbers():
+    payload = valid_config()
+    payload["rules"][0]["tail_numbers"] = []
+
+    with pytest.raises(ValueError, match="target requires at least one tail_numbers"):
+        validate_settings_data(payload)
+
+
+def test_config_validation_requires_aircraft_type_selectors():
+    payload = valid_config()
+    payload["rules"][0] = {
+        "name": "empty aircraft type",
+        "event": "aircraft_type",
+        "radius_miles": 25,
+        "cooldown_minutes": 30,
+    }
+
+    with pytest.raises(ValueError, match="empty aircraft type requires aircraft_types or categories"):
+        validate_settings_data(payload)
+
+
+def test_config_validation_rejects_unknown_notification_providers():
+    payload = valid_config()
+    payload["notifications"] = {"webhook": {"enabled": True}}
+
+    with pytest.raises(ValueError, match="notifications contains unsupported provider: webhook"):
+        validate_settings_data(payload)
+
+
 def test_recent_matches_window_defaults_to_24_hours():
     payload = valid_config()
     del payload["recent_matches_window_hours"]
@@ -293,6 +358,53 @@ def test_recent_matches_window_rejects_values_above_max():
     payload["recent_matches_window_hours"] = 169
 
     with pytest.raises(ValueError, match="recent_matches_window_hours cannot exceed 168"):
+        parse_settings(payload)
+
+
+def test_source_error_alerts_default_to_enabled():
+    settings = parse_settings(valid_config())
+
+    assert settings.source_error_alerts.enabled is True
+    assert settings.source_error_alerts.failure_threshold == 3
+    assert settings.source_error_alerts.cooldown_minutes == 60
+
+
+def test_source_error_alerts_parse_overrides():
+    payload = valid_config()
+    payload["source_error_alerts"] = {"enabled": False, "failure_threshold": 5, "cooldown_minutes": 120}
+
+    settings = parse_settings(payload)
+
+    assert settings.source_error_alerts.enabled is False
+    assert settings.source_error_alerts.failure_threshold == 5
+    assert settings.source_error_alerts.cooldown_minutes == 120
+
+
+def test_adsb_lol_source_config_is_supported():
+    payload = valid_config()
+    payload["adsb_source"] = {"provider": "adsb_lol", "query": "point", "radius_miles": 40}
+
+    settings = parse_settings(payload)
+
+    assert settings.adsb_source is not None
+    assert settings.adsb_source.provider == "adsb_lol"
+    assert settings.adsb_source.query == "point"
+    assert settings.adsb_source.radius_miles == 40
+
+
+def test_adsb_source_rejects_unknown_provider():
+    payload = valid_config()
+    payload["adsb_source"] = {"provider": "example_flights", "query": "point"}
+
+    with pytest.raises(ValueError, match="unsupported adsb_source provider: example_flights"):
+        parse_settings(payload)
+
+
+def test_adsb_lookup_source_requires_value():
+    payload = valid_config()
+    payload["adsb_source"] = {"provider": "adsb_lol", "query": "reg"}
+
+    with pytest.raises(ValueError, match="adsb_source query reg requires value"):
         parse_settings(payload)
 
 
@@ -341,6 +453,60 @@ def test_military_rule_parses_include_tisb_setting():
     settings = parse_settings(payload)
 
     assert settings.rules[0].include_tisb is True
+
+
+def test_squawk_rule_parses_codes():
+    payload = config_with_email()
+    payload["rules"][0] = {
+        "name": "emergency squawk",
+        "event": "squawk",
+        "radius_miles": 25,
+        "cooldown_minutes": 30,
+        "squawk_codes": ["7700", 75],
+        "notification_providers": ["email"],
+    }
+
+    settings = parse_settings(payload)
+
+    assert settings.rules[0].squawk_codes == {"7700", "0075"}
+
+
+def test_squawk_rule_rejects_invalid_codes():
+    payload = config_with_email()
+    payload["rules"][0] = {
+        "name": "bad squawk",
+        "event": "squawk",
+        "radius_miles": 25,
+        "cooldown_minutes": 30,
+        "squawk_codes": ["8888"],
+        "notification_providers": ["email"],
+    }
+
+    with pytest.raises(ValueError, match="invalid squawk code: 8888"):
+        parse_settings(payload)
+
+
+def test_squawk_rule_requires_at_least_one_code():
+    payload = config_with_email()
+    payload["rules"][0] = {
+        "name": "empty squawk",
+        "event": "squawk",
+        "radius_miles": 25,
+        "cooldown_minutes": 30,
+        "squawk_codes": [],
+        "notification_providers": ["email"],
+    }
+
+    with pytest.raises(ValueError, match="empty squawk requires at least one squawk code"):
+        parse_settings(payload)
+
+
+def test_unknown_rule_event_is_rejected():
+    payload = config_with_email()
+    payload["rules"][0]["event"] = "unknown"
+
+    with pytest.raises(ValueError, match="unsupported rule event: unknown"):
+        parse_settings(payload)
 
 
 def test_duplicate_rule_names_are_rejected():
@@ -625,13 +791,13 @@ def test_rule_test_endpoint_sends_when_rule_matches_live_data(tmp_path, monkeypa
     assert response["matched"] is True
     assert response["sent_count"] == 1
     assert response["matches"][0]["aircraft_label"] == "N12345"
-    assert response["matches"][0]["adsb_exchange_url"] == "https://globe.adsbexchange.com/?icao=A12345"
+    assert response["matches"][0]["airplanes_live_url"] == "https://globe.airplanes.live/?icao=A12345"
     assert sent == [
         (
             "target: N12345 (C172) 0.0 mi away at 5500 ft",
             "ADS-B alert",
-            "https://globe.adsbexchange.com/?icao=A12345",
-            "ADS-B Exchange",
+            "https://globe.airplanes.live/?icao=A12345",
+            "Airplanes.live",
         )
     ]
 

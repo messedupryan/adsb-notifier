@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 import os
 from dataclasses import dataclass, field
@@ -7,9 +5,36 @@ from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
+from adsb_notifier.constants import (
+    DEFAULT_ADSB_REQUEST_TIMEOUT_SECONDS,
+    DEFAULT_CIRCLING_HEADING_CHANGE_DEG,
+    DEFAULT_CIRCLING_WINDOW_MINUTES,
+    DEFAULT_POLL_SECONDS,
+    DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
+    DEFAULT_RULE_COOLDOWN_MINUTES,
+    DEFAULT_SOURCE_ERROR_ALERT_COOLDOWN_MINUTES,
+    DEFAULT_SOURCE_ERROR_ALERT_FAILURE_THRESHOLD,
+    DEFAULT_STALE_AIRCRAFT_SECONDS,
+    MAX_RECENT_MATCHES_WINDOW_HOURS,
+)
+from adsb_notifier.squawk import require_squawk_code
+
 NOTIFICATION_PROVIDERS = {"email", "pushover", "twilio"}
-DEFAULT_RECENT_MATCHES_WINDOW_HOURS = 24
-MAX_RECENT_MATCHES_WINDOW_HOURS = 168
+ADSB_SOURCE_PROVIDERS = {"direct", "airplanes_live", "adsb_lol"}
+ADSB_SOURCE_QUERIES = {"point", "mil", "reg", "type", "hex"}
+RULE_EVENTS = {"aircraft_type", "circling", "military", "squawk", "tail"}
+CONFIG_TOP_LEVEL_KEYS = {
+    "adsb_source",
+    "adsb_url",
+    "config_revision",
+    "home",
+    "notifications",
+    "poll_seconds",
+    "recent_matches_window_hours",
+    "rules",
+    "source_error_alerts",
+    "stale_aircraft_seconds",
+}
 
 
 @dataclass(frozen=True)
@@ -35,6 +60,13 @@ class AdsbSource:
 
 
 @dataclass(frozen=True)
+class SourceErrorAlerts:
+    enabled: bool = True
+    failure_threshold: int = DEFAULT_SOURCE_ERROR_ALERT_FAILURE_THRESHOLD
+    cooldown_minutes: int = DEFAULT_SOURCE_ERROR_ALERT_COOLDOWN_MINUTES
+
+
+@dataclass(frozen=True)
 class Rule:
     name: str
     event: str
@@ -44,13 +76,14 @@ class Rule:
     tail_numbers: set[str] = field(default_factory=set)
     aircraft_types: set[str] = field(default_factory=set)
     categories: set[str] = field(default_factory=set)
+    squawk_codes: set[str] = field(default_factory=set)
     military: bool | None = None
     include_tisb: bool = False
     min_altitude_ft: int | None = None
     max_altitude_ft: int | None = None
-    cooldown_minutes: int = 30
-    circling_min_heading_change_deg: float = 270.0
-    circling_window_minutes: int = 8
+    cooldown_minutes: int = DEFAULT_RULE_COOLDOWN_MINUTES
+    circling_min_heading_change_deg: float = DEFAULT_CIRCLING_HEADING_CHANGE_DEG
+    circling_window_minutes: int = DEFAULT_CIRCLING_WINDOW_MINUTES
     notification_providers: set[str] | None = None
 
 
@@ -64,6 +97,7 @@ class Settings:
     notifications: Notifications
     rules: list[Rule]
     recent_matches_window_hours: int = DEFAULT_RECENT_MATCHES_WINDOW_HOURS
+    source_error_alerts: SourceErrorAlerts = field(default_factory=SourceErrorAlerts)
 
 
 def load_settings(path: str | Path) -> Settings:
@@ -75,12 +109,13 @@ def load_settings_data(path: str | Path) -> dict[str, Any]:
     location = str(path)
     if location.startswith(("http://", "https://")):
         request = Request(location, headers={"User-Agent": "adsb-notifier/0.1"})
-        with urlopen(request, timeout=10) as response:
+        with urlopen(request, timeout=DEFAULT_ADSB_REQUEST_TIMEOUT_SECONDS) as response:
             return json.loads(response.read().decode("utf-8"))
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
 def parse_settings(data: dict[str, Any]) -> Settings:
+    validate_settings_data(data)
     home_data = data["home"]
     notification_data = data.get("notifications", {})
     _validate_notifications(notification_data)
@@ -93,9 +128,10 @@ def parse_settings(data: dict[str, Any]) -> Settings:
         adsb_url=_env_or_value(data.get("adsb_url", "")),
         adsb_source=_parse_adsb_source(data.get("adsb_source")),
         home=Home(lat=float(home_data["lat"]), lon=float(home_data["lon"])),
-        poll_seconds=int(data.get("poll_seconds", 30)),
-        stale_aircraft_seconds=int(data.get("stale_aircraft_seconds", 90)),
+        poll_seconds=int(data.get("poll_seconds", DEFAULT_POLL_SECONDS)),
+        stale_aircraft_seconds=int(data.get("stale_aircraft_seconds", DEFAULT_STALE_AIRCRAFT_SECONDS)),
         recent_matches_window_hours=_recent_matches_window_hours(data),
+        source_error_alerts=_parse_source_error_alerts(data.get("source_error_alerts")),
         notifications=Notifications(
             email=notification_data.get("email"),
             twilio=notification_data.get("twilio"),
@@ -103,6 +139,114 @@ def parse_settings(data: dict[str, Any]) -> Settings:
         ),
         rules=rules,
     )
+
+
+def validate_settings_data(data: dict[str, Any]) -> None:
+    if not isinstance(data, dict):
+        raise ValueError("config must be a JSON object")
+
+    unknown_keys = sorted(set(data) - CONFIG_TOP_LEVEL_KEYS)
+    if unknown_keys:
+        raise ValueError(f"config contains unsupported top-level field: {', '.join(unknown_keys)}")
+
+    _validate_required_section(data, "home", dict)
+    _validate_required_section(data, "rules", list)
+    _validate_optional_section(data, "adsb_source", dict)
+    _validate_optional_section(data, "notifications", dict)
+    _validate_optional_section(data, "source_error_alerts", dict)
+    _validate_home_shape(data["home"])
+    _validate_optional_numeric_field(data, "poll_seconds")
+    _validate_optional_numeric_field(data, "stale_aircraft_seconds")
+    _validate_optional_numeric_field(data, "recent_matches_window_hours")
+    _validate_rules_shape(data["rules"])
+    _validate_notifications_shape(data.get("notifications", {}))
+
+
+def _validate_required_section(data: dict[str, Any], key: str, expected_type: type) -> None:
+    if key not in data:
+        raise ValueError(f"config requires {key}")
+    _validate_section_type(data[key], key, expected_type)
+
+
+def _validate_optional_section(data: dict[str, Any], key: str, expected_type: type) -> None:
+    if key in data and data[key] is not None:
+        _validate_section_type(data[key], key, expected_type)
+
+
+def _validate_section_type(value: Any, key: str, expected_type: type) -> None:
+    if not isinstance(value, expected_type):
+        type_name = "array" if expected_type is list else "object"
+        raise ValueError(f"config.{key} must be a JSON {type_name}")
+
+
+def _validate_home_shape(data: dict[str, Any]) -> None:
+    _validate_numeric_field(data, "lat", prefix="config.home")
+    _validate_numeric_field(data, "lon", prefix="config.home")
+    lat = float(data["lat"])
+    lon = float(data["lon"])
+    if not -90 <= lat <= 90:
+        raise ValueError("config.home.lat must be between -90 and 90")
+    if not -180 <= lon <= 180:
+        raise ValueError("config.home.lon must be between -180 and 180")
+
+
+def _validate_rules_shape(rules: list[Any]) -> None:
+    for index, rule in enumerate(rules, start=1):
+        if not isinstance(rule, dict):
+            raise ValueError(f"config.rules[{index}] must be a JSON object")
+        rule_label = _rule_label(rule, index)
+        if not str(rule.get("name", "")).strip():
+            raise ValueError(f"{rule_label} requires name")
+        event = str(rule.get("event", "")).strip()
+        if not event:
+            raise ValueError(f"{rule_label} requires event")
+        if event == "tail":
+            _validate_nonempty_list(rule, "tail_numbers", rule_label)
+        if event == "aircraft_type" and not _has_list_values(rule, "aircraft_types") and not _has_list_values(rule, "categories"):
+            raise ValueError(f"{rule_label} requires aircraft_types or categories")
+        if "notification_providers" in rule and not isinstance(rule["notification_providers"], list):
+            raise ValueError(f"{rule_label} notification_providers must be an array")
+        _validate_numeric_field(rule, "radius_miles", prefix=rule_label)
+        _validate_numeric_field(rule, "cooldown_minutes", prefix=rule_label)
+
+
+def _validate_notifications_shape(notifications: dict[str, Any]) -> None:
+    unknown_providers = sorted(set(notifications) - NOTIFICATION_PROVIDERS)
+    if unknown_providers:
+        raise ValueError(f"notifications contains unsupported provider: {', '.join(unknown_providers)}")
+    for provider, provider_config in notifications.items():
+        if not isinstance(provider_config, dict):
+            raise ValueError(f"notifications.{provider} must be a JSON object")
+
+
+def _validate_nonempty_list(data: dict[str, Any], key: str, label: str) -> None:
+    if not _has_list_values(data, key):
+        raise ValueError(f"{label} requires at least one {key}")
+
+
+def _has_list_values(data: dict[str, Any], key: str) -> bool:
+    value = data.get(key)
+    return isinstance(value, list) and any(str(item).strip() for item in value)
+
+
+def _validate_numeric_field(data: dict[str, Any], key: str, prefix: str = "config") -> None:
+    if key not in data or data[key] in (None, ""):
+        raise ValueError(f"{prefix} requires {key}")
+    try:
+        float(data[key])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{prefix} requires numeric {key}") from exc
+
+
+def _validate_optional_numeric_field(data: dict[str, Any], key: str, prefix: str = "config") -> None:
+    if key not in data:
+        return
+    _validate_numeric_field(data, key, prefix)
+
+
+def _rule_label(rule: dict[str, Any], index: int) -> str:
+    name = str(rule.get("name", "")).strip()
+    return name or f"rule {index}"
 
 
 def _recent_matches_window_hours(data: dict[str, Any]) -> int:
@@ -116,6 +260,22 @@ def _recent_matches_window_hours(data: dict[str, Any]) -> int:
     if hours > MAX_RECENT_MATCHES_WINDOW_HOURS:
         raise ValueError(f"recent_matches_window_hours cannot exceed {MAX_RECENT_MATCHES_WINDOW_HOURS}")
     return hours
+
+
+def _parse_source_error_alerts(data: dict[str, Any] | None) -> SourceErrorAlerts:
+    if not isinstance(data, dict):
+        return SourceErrorAlerts()
+    return SourceErrorAlerts(
+        enabled=_bool_value(data.get("enabled", True)),
+        failure_threshold=max(
+            1,
+            int(data.get("failure_threshold", DEFAULT_SOURCE_ERROR_ALERT_FAILURE_THRESHOLD)),
+        ),
+        cooldown_minutes=max(
+            1,
+            int(data.get("cooldown_minutes", DEFAULT_SOURCE_ERROR_ALERT_COOLDOWN_MINUTES)),
+        ),
+    )
 
 
 def _validate_notifications(data: dict[str, Any]) -> None:
@@ -139,9 +299,16 @@ def _parse_adsb_source(data: dict[str, Any] | None) -> AdsbSource | None:
     provider = str(data.get("provider", "")).strip().lower()
     if not provider:
         raise ValueError("adsb_source requires provider")
+    if provider not in ADSB_SOURCE_PROVIDERS:
+        raise ValueError(f"unsupported adsb_source provider: {provider}")
+    query = str(data.get("query", "point")).strip().lower()
+    if query not in ADSB_SOURCE_QUERIES:
+        raise ValueError(f"unsupported adsb_source query: {query}")
+    if query in {"reg", "type", "hex"} and not str(data.get("value", "")).strip():
+        raise ValueError(f"adsb_source query {query} requires value")
     return AdsbSource(
         provider=provider,
-        query=str(data.get("query", "point")).strip().lower(),
+        query=query,
         base_url=_optional_env_or_value(data.get("base_url")),
         radius_miles=None if data.get("radius_miles") in (None, "") else float(data["radius_miles"]),
         value=_optional_env_or_value(data.get("value")),
@@ -151,6 +318,11 @@ def _parse_adsb_source(data: dict[str, Any] | None) -> AdsbSource | None:
 def _parse_rule(data: dict[str, Any]) -> Rule:
     name = data.get("name", "unnamed rule")
     event = data["event"]
+    if event not in RULE_EVENTS:
+        raise ValueError(f"unsupported rule event: {event}")
+    squawk_codes = {require_squawk_code(value) for value in data.get("squawk_codes", [])}
+    if event == "squawk" and not squawk_codes:
+        raise ValueError(f"{name} requires at least one squawk code")
     return Rule(
         name=data["name"],
         event=event,
@@ -160,13 +332,16 @@ def _parse_rule(data: dict[str, Any]) -> Rule:
         tail_numbers={value.upper() for value in data.get("tail_numbers", [])},
         aircraft_types={value.upper() for value in data.get("aircraft_types", [])},
         categories={value.upper() for value in data.get("categories", [])},
+        squawk_codes=squawk_codes,
         military=True if event == "military" else data.get("military"),
         include_tisb=_bool_value(data.get("include_tisb", False)),
         min_altitude_ft=data.get("min_altitude_ft"),
         max_altitude_ft=data.get("max_altitude_ft"),
         cooldown_minutes=_required_int(data, "cooldown_minutes", name),
-        circling_min_heading_change_deg=float(data.get("circling_min_heading_change_deg", 270.0)),
-        circling_window_minutes=int(data.get("circling_window_minutes", 8)),
+        circling_min_heading_change_deg=float(
+            data.get("circling_min_heading_change_deg", DEFAULT_CIRCLING_HEADING_CHANGE_DEG)
+        ),
+        circling_window_minutes=int(data.get("circling_window_minutes", DEFAULT_CIRCLING_WINDOW_MINUTES)),
         notification_providers=_parse_notification_providers(data),
     )
 

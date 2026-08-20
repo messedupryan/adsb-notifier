@@ -1,23 +1,30 @@
-from __future__ import annotations
-
 import argparse
 import logging
 import os
 import signal
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from adsb_notifier.adsb import AdsbRateLimitError, fetch_aircraft_for_settings
+from adsb_notifier.adsb import AdsbSourceUnavailableError, fetch_aircraft_for_settings
 from adsb_notifier.config import Settings, load_settings
+from adsb_notifier.constants import (
+    DEFAULT_RATE_LIMIT_BACKOFF_SECONDS,
+    MAX_RATE_LIMIT_BACKOFF_SECONDS,
+)
 from adsb_notifier.notifiers import NotificationFanout
 from adsb_notifier.rules import RuleEngine
 from adsb_notifier.status import write_error_status, write_poll_status, write_rate_limit_status
 
 LOGGER = logging.getLogger(__name__)
 SHOULD_STOP = False
-DEFAULT_RATE_LIMIT_BACKOFF_SECONDS = 60
-MAX_RATE_LIMIT_BACKOFF_SECONDS = 900
+
+
+@dataclass
+class SourceFailureState:
+    consecutive_failures: int = 0
+    last_alert_at: datetime | None = None
 
 
 def main() -> None:
@@ -43,9 +50,11 @@ def main() -> None:
     engine = RuleEngine(settings)
     notifications = NotificationFanout(settings.notifications)
     rate_limit_attempts = 0
+    source_failure_state = SourceFailureState()
 
     while not SHOULD_STOP:
         sleep_seconds = settings.poll_seconds
+        source_fetch_complete = False
         try:
             if _is_url(config_location):
                 next_settings = _apply_overrides(load_settings(config_location), args.adsb_url)
@@ -64,13 +73,15 @@ def main() -> None:
                     LOGGER.info("config reloaded from %s", config_path)
 
             aircraft = fetch_aircraft_for_settings(settings)
+            source_fetch_complete = True
             sightings = engine.evaluate(aircraft)
             for sighting in sightings:
                 notifications.send(sighting)
             write_poll_status(args.status_file, settings, len(aircraft), sightings)
             LOGGER.info("poll complete aircraft=%s notifications=%s", len(aircraft), len(sightings))
             rate_limit_attempts = 0
-        except AdsbRateLimitError as exc:
+            source_failure_state.consecutive_failures = 0
+        except AdsbSourceUnavailableError as exc:
             sleep_seconds = _rate_limit_backoff_seconds(
                 retry_after_seconds=exc.retry_after_seconds,
                 poll_seconds=settings.poll_seconds,
@@ -78,10 +89,18 @@ def main() -> None:
             )
             rate_limit_attempts += 1
             write_rate_limit_status(args.status_file, settings, exc, sleep_seconds)
-            LOGGER.warning("ADS-B source rate limited; backing off for %ss", sleep_seconds)
+            _maybe_send_source_error_alert(source_failure_state, settings, notifications, exc)
+            LOGGER.warning(
+                "ADS-B source %s status=%s; backing off for %ss",
+                _source_error_log_label(exc),
+                exc.status_code or "network",
+                sleep_seconds,
+            )
         except Exception as exc:
             rate_limit_attempts = 0
             write_error_status(args.status_file, exc)
+            if not source_fetch_complete:
+                _maybe_send_source_error_alert(source_failure_state, settings, notifications, exc)
             LOGGER.exception("poll failed")
 
         if args.once:
@@ -129,6 +148,59 @@ def _rate_limit_backoff_seconds(
 
     base_delay = max(DEFAULT_RATE_LIMIT_BACKOFF_SECONDS, poll_seconds * 2)
     return min(MAX_RATE_LIMIT_BACKOFF_SECONDS, base_delay * (2**attempts))
+
+
+def _source_error_log_label(error: BaseException) -> str:
+    match getattr(error, "status_code", None):
+        case 403:
+            return "access denied"
+        case 429:
+            return "rate limited"
+        case _:
+            return "unavailable"
+
+
+def _maybe_send_source_error_alert(
+    state: SourceFailureState,
+    settings: Settings,
+    notifications: NotificationFanout,
+    error: BaseException,
+    now: datetime | None = None,
+) -> bool:
+    state.consecutive_failures += 1
+    config = settings.source_error_alerts
+    if not config.enabled or state.consecutive_failures < config.failure_threshold:
+        return False
+
+    now = now or datetime.now(timezone.utc)
+    cooldown = timedelta(minutes=config.cooldown_minutes)
+    if state.last_alert_at and now - state.last_alert_at < cooldown:
+        return False
+
+    source_url = _safe_adsb_source_url(settings)
+    title = "ADS-B source unhealthy"
+    message = (
+        f"ADS-B Notifier has failed to pull aircraft data {state.consecutive_failures} consecutive times.\n"
+        f"Source: {source_url}\n"
+        f"Last error: {error}"
+    )
+    try:
+        notifications.send_operational_alert(title, message)
+        state.last_alert_at = now
+        LOGGER.warning("sent ADS-B source unhealthy alert failures=%s", state.consecutive_failures)
+        return True
+    except Exception:
+        LOGGER.exception("failed to send ADS-B source unhealthy alert")
+        return False
+
+
+def _safe_adsb_source_url(settings: Settings) -> str:
+    try:
+        from adsb_notifier.adsb import build_adsb_url
+
+        return build_adsb_url(settings)
+    except Exception as exc:
+        return f"unavailable ({exc})"
 
 
 if __name__ == "__main__":

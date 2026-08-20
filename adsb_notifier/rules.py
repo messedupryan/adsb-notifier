@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -48,19 +46,21 @@ class RuleEngine:
         if not _altitude_matches(rule, plane):
             return None
 
-        if rule.event == "tail":
-            if not _tail_matches(rule, plane):
-                return None
-        elif rule.event == "military":
-            if not plane.military and not (rule.include_tisb and plane.is_tisb):
-                return None
-        elif rule.event == "aircraft_type":
-            if not _type_matches(rule, plane):
-                return None
-        elif rule.event == "circling":
-            if not self._is_circling(rule, plane.hex, observed_at):
-                return None
-        else:
+        match rule.event:
+            case "tail":
+                event_matches = _tail_matches(rule, plane)
+            case "military":
+                event_matches = plane.military or (rule.include_tisb and plane.is_tisb)
+            case "aircraft_type":
+                event_matches = _type_matches(rule, plane)
+            case "squawk":
+                event_matches = _squawk_matches(rule, plane)
+            case "circling":
+                event_matches = self._is_circling(rule, plane.hex, observed_at)
+            case _:
+                event_matches = False
+
+        if not event_matches:
             return None
 
         return Sighting(
@@ -68,6 +68,9 @@ class RuleEngine:
             distance_miles=distance,
             rule_name=rule.name,
             event_type=rule.event,
+            home_lat=self.settings.home.lat,
+            home_lon=self.settings.home.lon,
+            rule_radius_miles=rule.radius_miles,
             notification_providers=rule.notification_providers,
             observed_at=observed_at,
         )
@@ -95,22 +98,23 @@ class RuleEngine:
             return True
         return observed_at - previous >= timedelta(minutes=rule.cooldown_minutes)
 
-
-def _tail_matches(rule: Rule, plane: Aircraft) -> bool:
-    candidates = {value for value in (plane.registration, plane.flight, plane.hex) if value}
-    return bool(candidates & rule.tail_numbers)
-
-
-def _type_matches(rule: Rule, plane: Aircraft) -> bool:
-    return bool({value for value in (plane.aircraft_type, plane.category) if value} & (rule.aircraft_types | rule.categories))
-
-
 def _altitude_matches(rule: Rule, plane: Aircraft) -> bool:
     if rule.min_altitude_ft is not None and (plane.altitude_ft is None or plane.altitude_ft < rule.min_altitude_ft):
         return False
     if rule.max_altitude_ft is not None and (plane.altitude_ft is None or plane.altitude_ft > rule.max_altitude_ft):
         return False
     return True
+
+def _tail_matches(rule: Rule, plane: Aircraft) -> bool:
+    candidates = {value for value in (plane.registration, plane.flight, plane.hex) if value}
+    return bool(candidates & rule.tail_numbers)
+
+def _type_matches(rule: Rule, plane: Aircraft) -> bool:
+    return bool({value for value in (plane.aircraft_type, plane.category) if value} & (rule.aircraft_types | rule.categories))
+
+
+def _squawk_matches(rule: Rule, plane: Aircraft) -> bool:
+    return plane.squawk in rule.squawk_codes
 
 
 def _smallest_heading_delta(start: float, end: float) -> float:

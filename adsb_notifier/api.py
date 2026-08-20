@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import argparse
 import json
 import logging
@@ -15,9 +13,19 @@ from urllib.parse import urlparse
 
 from adsb_notifier.adsb import fetch_aircraft_for_settings
 from adsb_notifier.config import NOTIFICATION_PROVIDERS, parse_settings
-from adsb_notifier.links import adsb_exchange_aircraft_url
+from adsb_notifier.constants import (
+    DEFAULT_API_PORT,
+    DEFAULT_CONFIG_BACKUP_RETENTION,
+    DEFAULT_POLL_SECONDS,
+    DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
+    DEFAULT_RULE_COOLDOWN_MINUTES,
+    DEFAULT_RULE_RADIUS_MILES,
+    DEFAULT_STALE_AIRCRAFT_SECONDS,
+)
+from adsb_notifier.links import airplanes_live_aircraft_url
 from adsb_notifier.notifiers import (
     DEFAULT_EMAIL_HTML_BODY_TEMPLATE,
+    EMAIL_HTML_BODY_TEMPLATE_WITHOUT_MAP_SNAPSHOT,
     LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE,
     NotificationFanout,
     send_test_notification,
@@ -37,11 +45,12 @@ DEFAULT_NOTIFICATION_CONFIG_FIELDS = {
         "html_enabled": False,
         "brand_theme": "teal",
         "include_brand_images": True,
+        "include_map_snapshot": False,
         "html_body_template": DEFAULT_EMAIL_HTML_BODY_TEMPLATE,
     },
     "pushover": {
-        "url_template": "{adsb_exchange_url}",
-        "url_title_template": "ADS-B Exchange",
+        "url_template": "{airplanes_live_url}",
+        "url_title_template": "Airplanes.live",
     },
 }
 
@@ -49,7 +58,7 @@ DEFAULT_NOTIFICATION_CONFIG_FIELDS = {
 class ConfigApiHandler(BaseHTTPRequestHandler):
     config_path: Path
     status_path: Path
-    backup_retention: int = 20
+    backup_retention: int = DEFAULT_CONFIG_BACKUP_RETENTION
 
     def do_GET(self) -> None:
         route = _route(self.path)
@@ -81,7 +90,9 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
         if route != ["rules"]:
             self._send_error(HTTPStatus.NOT_FOUND, "not found")
             return
+        self._create_rule()
 
+    def _create_rule(self) -> None:
         try:
             rule = self._read_json_body()
             config = _ensure_rule_ids(_read_config(self.config_path))
@@ -176,13 +187,15 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
 
     def do_DELETE(self) -> None:
         route = _route(self.path)
-        if len(route) != 2 or route[0] != "rules":
-            self._send_error(HTTPStatus.NOT_FOUND, "not found")
+        if len(route) == 2 and route[0] == "rules":
+            self._delete_rule(route[1])
             return
+        self._send_error(HTTPStatus.NOT_FOUND, "not found")
 
+    def _delete_rule(self, rule_id: str) -> None:
         config = _ensure_rule_ids(_read_config(self.config_path))
         rules = config.get("rules", [])
-        next_rules = [rule for rule in rules if rule.get("id") != route[1]]
+        next_rules = [rule for rule in rules if rule.get("id") != rule_id]
         if len(next_rules) == len(rules):
             self._send_error(HTTPStatus.NOT_FOUND, "rule not found")
             return
@@ -204,7 +217,7 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
 
-        self._send_json({"deleted": route[1], "rules": next_rules, "config_revision": config["config_revision"]})
+        self._send_json({"deleted": rule_id, "rules": next_rules, "config_revision": config["config_revision"]})
 
     def _replace_config(self) -> None:
         try:
@@ -306,11 +319,11 @@ def main() -> None:
         help="Path to worker status JSON file served by GET /status.",
     )
     parser.add_argument("--host", default="0.0.0.0", help="Host interface to bind.")
-    parser.add_argument("--port", type=int, default=8000, help="Port to bind.")
+    parser.add_argument("--port", type=int, default=DEFAULT_API_PORT, help="Port to bind.")
     parser.add_argument(
         "--backup-retention",
         type=int,
-        default=int(os.environ.get("ADSB_CONFIG_BACKUP_RETENTION", "20")),
+        default=int(os.environ.get("ADSB_CONFIG_BACKUP_RETENTION", str(DEFAULT_CONFIG_BACKUP_RETENTION))),
         help="Number of config backups to retain. Use 0 to disable backups.",
     )
     args = parser.parse_args()
@@ -347,7 +360,12 @@ def _read_config(path: Path) -> dict[str, Any]:
     return normalized
 
 
-def _write_config(path: Path, payload: dict[str, Any], create_backup: bool = False, backup_retention: int = 20) -> None:
+def _write_config(
+    path: Path,
+    payload: dict[str, Any],
+    create_backup: bool = False,
+    backup_retention: int = DEFAULT_CONFIG_BACKUP_RETENTION,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if create_backup and path.exists() and backup_retention > 0:
         _backup_config(path, backup_retention=backup_retention)
@@ -358,7 +376,7 @@ def _write_config(path: Path, payload: dict[str, Any], create_backup: bool = Fal
     os.replace(temp_name, path)
 
 
-def _backup_config(path: Path, backup_retention: int = 20) -> Path:
+def _backup_config(path: Path, backup_retention: int = DEFAULT_CONFIG_BACKUP_RETENTION) -> Path:
     backup_dir = path.parent / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
     current = json.loads(path.read_text(encoding="utf-8"))
@@ -427,10 +445,12 @@ def _sighting_summary(sighting: Any) -> dict[str, Any]:
         "registration": plane.registration,
         "flight": plane.flight,
         "hex": plane.hex,
-        "adsb_exchange_url": adsb_exchange_aircraft_url(plane.hex),
+        "airplanes_live_url": airplanes_live_aircraft_url(plane.hex),
+        "adsb_exchange_url": airplanes_live_aircraft_url(plane.hex),
         "aircraft_type": plane.aircraft_type or plane.category,
         "distance_miles": round(sighting.distance_miles, 2),
         "altitude_ft": plane.altitude_ft,
+        "squawk": plane.squawk,
         "notification_providers": sorted(sighting.notification_providers or []),
     }
 
@@ -471,7 +491,10 @@ def _apply_notification_defaults(config: dict[str, Any]) -> dict[str, Any]:
             **defaults,
             **provider_config,
         }
-        if provider == "email" and next_provider_config.get("html_body_template") == LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE:
+        if provider == "email" and next_provider_config.get("html_body_template") in {
+            LEGACY_COMPACT_EMAIL_HTML_BODY_TEMPLATE,
+            EMAIL_HTML_BODY_TEMPLATE_WITHOUT_MAP_SNAPSHOT,
+        }:
             next_provider_config["html_body_template"] = DEFAULT_EMAIL_HTML_BODY_TEMPLATE
         normalized_notifications[provider] = next_provider_config
     normalized["notifications"] = normalized_notifications
@@ -576,18 +599,18 @@ def _default_config() -> dict[str, Any]:
         "config_revision": 1,
         "adsb_url": "http://readsb.default.svc.cluster.local/tar1090/data/aircraft.json",
         "home": {"lat": 40.7608, "lon": -111.8910},
-        "poll_seconds": 30,
-        "stale_aircraft_seconds": 90,
-        "recent_matches_window_hours": 24,
+        "poll_seconds": DEFAULT_POLL_SECONDS,
+        "stale_aircraft_seconds": DEFAULT_STALE_AIRCRAFT_SECONDS,
+        "recent_matches_window_hours": DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
         "notifications": {},
         "rules": [
             {
                 "name": "example-tail",
                 "event": "tail",
                 "enabled": True,
-                "radius_miles": 25,
+                "radius_miles": DEFAULT_RULE_RADIUS_MILES,
                 "tail_numbers": ["N12345"],
-                "cooldown_minutes": 30,
+                "cooldown_minutes": DEFAULT_RULE_COOLDOWN_MINUTES,
             }
         ],
     }

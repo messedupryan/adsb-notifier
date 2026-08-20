@@ -4,7 +4,7 @@
 
 # 📡 ADS-B Notifier
 
-ADS-B Notifier watches live aircraft data near a configured home location and sends notifications when saved rules match. It is intended for small personal or homelab deployments where you want to know when specific aircraft, aircraft types, or categories appear nearby.
+ADS-B Notifier watches live aircraft data near a configured home location and sends notifications when saved rules match. I built this app to run on my home Kubernetes cluster so I can watch military traffic, figure out what loud helicopters just flew over the house, and get warnings when cool planes fly over that I might want to step outside and photograph.
 
 The project is organized as three deployable components:
 
@@ -26,14 +26,16 @@ The app can run locally during development or as containers in Kubernetes. See [
 - [⚙️ Configuration Overview](#configuration-overview)
 - [🗺️ Dashboard](#dashboard)
 - [🏷️ Versioning](#versioning)
+- [🔒 Security Model](#security-model)
 - [🛠️ Development](#development)
+- [🙏 Credits and Disclaimer](#credits-and-disclaimer)
 - [🚧 Status](#status)
 
 <a id="features"></a>
 
 ## ✨ Features
 
-- Rule matching for tail numbers, callsigns, ICAO hex IDs, military aircraft, aircraft types, ADS-B categories, and circling behavior.
+- Rule matching for tail numbers, callsigns, ICAO hex IDs, military aircraft, aircraft types, ADS-B categories, squawk codes, and circling behavior.
 - Radius, minimum altitude, maximum altitude, stale-aircraft, and cooldown filters.
 - Direct `aircraft.json` feed support for common dump1090/readsb/tar1090-style data.
 - Online source adapters for Airplanes.live and ADSB.lol.
@@ -42,9 +44,11 @@ The app can run locally during development or as containers in Kubernetes. See [
 - Optional TIS-B inclusion for military rules.
 - Per-rule notification provider selection from globally enabled providers.
 - Live rule testing against the configured ADS-B source.
+- Shared configuration validation for required sections, supported fields, home coordinates, rule shape, and notification providers.
 - Provider-specific notification templates.
+- Optional square alert snapshots in HTML email notifications.
 - Worker status and recent match history.
-- Dashboard map with home location, active rule radii, recent match markers, selected-match highlighting, and ADS-B Exchange aircraft links.
+- Dashboard map with home location, active rule radii, filtered recent match markers, selected-match highlighting, and Airplanes.live aircraft links.
 - Light/dark UI modes, accent themes, themed logo assets, and theme-aware favicon.
 
 <a id="ui"></a>
@@ -56,7 +60,7 @@ The UI is broken into sections by tabs. Below are example screenshots of each ta
 ![amber_dashboard](docs/images/amber_dashboard.png)
 
 #### General Settings
-![blue_settingsd](docs/images/blue_settings.png)
+![blue_settings](docs/images/blue_settings.png)
 
 #### Notification settings
 ![violet_notifications](docs/images/violet_notifications.png)
@@ -78,14 +82,16 @@ Current notification support includes:
 - Pushover push notifications
 - Twilio SMS
 
-Pushover is the recommended phone notification path for a small personal deployment because it avoids carrier SMS registration and compliance overhead. Twilio remains useful when actual SMS delivery is required.
+HTML email can embed themed branding and an optional square alert snapshot. The snapshot is centered on the configured home location and scaled so the matched rule radius fills the image. Map-backed snapshots cache raw tiles and theme-neutral rendered base maps by home location, radius, zoom, and tile source before drawing the theme and aircraft-specific overlays.
+
+I found Twilio to be overly cumbersome, and not worth the cost for my use case. I am using email and Pushover notifications. I left Twilio support in the app in case I ever want to leverage SMS, but I doubt I will use it often.
 
 <a id="architecture"></a>
 
 ## 🏗️ Architecture
 
 ```text
-ADS-B source
+ADS-B source (ADSB.lol, Airplanes.live, or direct aircraft.json)
     |
     v
 Worker service
@@ -113,7 +119,7 @@ charts/adsb-notifier/ Helm chart for Kubernetes deployment
 k8s/                  Raw Kubernetes manifests
 docs/                 Development and operational documentation
 config.example.json   Example configuration
-Makefile              Common local, test, build, and deploy commands
+Makefile.example      Example Make targets for local, test, build, and deploy commands
 ```
 
 <a id="configuration-overview"></a>
@@ -126,7 +132,7 @@ Configuration is JSON. The checked-in [config.example.json](config.example.json)
 - `poll_seconds`: worker polling interval
 - `stale_aircraft_seconds`: ignore aircraft that have not been seen recently
 - `recent_matches_window_hours`: how long recent matches remain in status history
-- `adsb_url` or `adsb_source`: ADS-B source configuration
+- `adsb_url` or `adsb_source`: ADS-B source configuration. The current example defaults to ADSB.lol; Airplanes.live and direct `aircraft.json` endpoints are also supported.
 - `notifications`: provider configuration and templates
 - `rules`: alert rules
 
@@ -141,6 +147,7 @@ Rules support these event values:
 - `tail`
 - `military`
 - `aircraft_type`
+- `squawk`
 - `circling`
 
 Example rule:
@@ -160,7 +167,7 @@ Example rule:
 
 ## 🗺️ Dashboard
 
-The dashboard shows worker health, recent matches, and a map view. Recent matches include observed timestamps, aircraft metadata, notification provider selections, map positions when available, and ADS-B Exchange links.
+The dashboard shows worker health, recent matches, and a map view. Recent matches include observed timestamps, aircraft metadata, notification provider selections, map positions when available, and Airplanes.live links.
 
 The map is centered around the configured home location and can show:
 
@@ -174,9 +181,17 @@ The map is centered around the configured home location and can show:
 
 ## 🏷️ Versioning
 
-The project is currently in beta and uses SemVer-style `0.0.x` versions. The worker, API, UI, Helm chart, Python package, and container images share the project version during beta.
+The project is currently in beta and uses SemVer-style `0.x.y` versions, with explicit release-candidate builds like `0.1.0-rc.1` before stable cuts like `0.1.0`. The worker, API, UI, Helm chart, Python package, and container images share the project version during beta.
 
 See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, and promotion checklist.
+
+<a id="security-model"></a>
+
+## 🔒 Security Model
+
+ADS-B Notifier is designed for trusted local networks. The web UI and configuration API do not provide app-level authentication or authorization. Put it behind your existing local network controls, VPN, ingress restrictions, or reverse proxy protections if you expose it beyond a trusted LAN.
+
+Notification secrets can be referenced through environment variables such as `env:SMTP_PASSWORD`, and the API redacts known secret fields before serving configuration to the UI.
 
 <a id="development"></a>
 
@@ -191,8 +206,18 @@ See [Development Guide](docs/DEVELOPMENT.md) for:
 - Deploying with Helm
 - Managing runtime secrets
 
+<a id="credits-and-disclaimer"></a>
+
+## 🙏 Credits and Disclaimer
+
+ADS-B Notifier is an independent personal project and is not affiliated with, endorsed by, or sponsored by Airplanes.live, ADSB.lol, OpenStreetMap, Leaflet, Pushover, Twilio, or any aircraft tracking service or notification provider.
+
+When configured to use Airplanes.live, aircraft data and aircraft detail links may come from Airplanes.live. Please be a good neighbor: follow their API guide and terms, keep polling reasonable, and remember that public access can change. If this project is useful to you, consider becoming an Airplanes.live feeder and contributing ADS-B coverage back to the community.
+
+Dashboard maps and map-backed email snapshots can use OpenStreetMap tiles. OpenStreetMap attribution is displayed in the map UI and rendered into email snapshots.
+
 <a id="status"></a>
 
 ## 🚧 Status
 
-This project is under active development. The current focus is turning the prototype into a reliable Kubernetes-hosted notifier with a practical dashboard, robust configuration handling, and a small set of notification providers that fit personal use.
+This project is under active development. I do not expect it to be broadly useful, but I am sharing it in case another aviation nerd with a homelab finds the shape of it helpful.

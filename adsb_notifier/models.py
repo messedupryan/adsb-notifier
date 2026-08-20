@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -17,6 +15,7 @@ class Aircraft:
     altitude_ft: int | None = None
     track_deg: float | None = None
     seen_seconds: float | None = None
+    squawk: str | None = None
     emergency: str | None = None
     military: bool = False
     raw: dict = field(default_factory=dict)
@@ -36,5 +35,8 @@ class Sighting:
     distance_miles: float
     rule_name: str
     event_type: str
+    home_lat: float | None = None
+    home_lon: float | None = None
+    rule_radius_miles: float | None = None
     notification_providers: set[str] | None = None
     observed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

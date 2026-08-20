@@ -1,40 +1,79 @@
-from __future__ import annotations
-
 import json
 import logging
 import math
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from adsb_notifier.config import Settings
+from adsb_notifier.constants import (
+    DEFAULT_ADSB_POINT_RADIUS_MILES,
+    DEFAULT_ADSB_REQUEST_TIMEOUT_SECONDS,
+    MAX_ADSB_POINT_RADIUS_MILES,
+)
 from adsb_notifier.models import Aircraft
+from adsb_notifier.squawk import normalize_squawk_code
+from adsb_notifier.version import __version__
 
 LOGGER = logging.getLogger(__name__)
+USER_AGENT = f"adsb-notifier/{__version__} (+https://github.com/messedUpRyan/adsb-notifier)"
 
 
-class AdsbRateLimitError(RuntimeError):
-    def __init__(self, url: str, retry_after_seconds: int | None = None):
-        super().__init__("ADS-B source rate limit reached")
+class AdsbSourceUnavailableError(RuntimeError):
+    def __init__(
+        self,
+        url: str,
+        retry_after_seconds: int | None = None,
+        status_code: int | None = None,
+        message: str = "ADS-B source unavailable; backing off",
+    ):
+        super().__init__(message)
         self.url = url
         self.retry_after_seconds = retry_after_seconds
+        self.status_code = status_code
 
 
-def fetch_aircraft(url: str, timeout_seconds: int = 10) -> list[Aircraft]:
-    request = Request(url, headers={"User-Agent": "adsb-notifier/0.1"})
+class AdsbRateLimitError(AdsbSourceUnavailableError):
+    def __init__(self, url: str, retry_after_seconds: int | None = None):
+        super().__init__(
+            url,
+            retry_after_seconds=retry_after_seconds,
+            status_code=429,
+            message="ADS-B source rate limit reached",
+        )
+
+
+class AdsbAccessDeniedError(AdsbSourceUnavailableError):
+    def __init__(self, url: str, retry_after_seconds: int | None = None):
+        super().__init__(
+            url,
+            retry_after_seconds=retry_after_seconds,
+            status_code=403,
+            message="ADS-B source access denied; backing off",
+        )
+
+
+def fetch_aircraft(url: str, timeout_seconds: int = DEFAULT_ADSB_REQUEST_TIMEOUT_SECONDS) -> list[Aircraft]:
+    request = Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urlopen(request, timeout=timeout_seconds) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
+        if exc.code == 403:
+            raise AdsbAccessDeniedError(url, _retry_after_seconds(exc.headers.get("Retry-After"))) from exc
         if exc.code == 429:
             raise AdsbRateLimitError(url, _retry_after_seconds(exc.headers.get("Retry-After"))) from exc
         raise
+    except TimeoutError as exc:
+        raise AdsbSourceUnavailableError(url, message="ADS-B source timed out; backing off") from exc
+    except URLError as exc:
+        raise AdsbSourceUnavailableError(url, message=f"ADS-B source connection failed; backing off: {exc.reason}") from exc
     return parse_aircraft_payload(payload)
 
 
-def fetch_aircraft_for_settings(settings: Settings, timeout_seconds: int = 10) -> list[Aircraft]:
+def fetch_aircraft_for_settings(settings: Settings, timeout_seconds: int = DEFAULT_ADSB_REQUEST_TIMEOUT_SECONDS) -> list[Aircraft]:
     return fetch_aircraft(build_adsb_url(settings), timeout_seconds=timeout_seconds)
 
 
@@ -48,7 +87,7 @@ def build_adsb_url(settings: Settings) -> str:
     base_url = _source_base_url(source.provider, source.base_url).rstrip("/")
     if source.query == "point":
         radius = source.radius_miles or _max_enabled_rule_radius(settings)
-        radius = min(radius, 250)
+        radius = min(radius, MAX_ADSB_POINT_RADIUS_MILES)
         return f"{base_url}/point/{settings.home.lat}/{settings.home.lon}/{radius:g}"
     if source.query in {"reg", "type", "hex"}:
         if not source.value:
@@ -91,6 +130,7 @@ def _normalize_aircraft(row: dict) -> Aircraft:
         altitude_ft=_altitude_or_none(altitude),
         track_deg=_float_or_none(row.get("track") or row.get("heading")),
         seen_seconds=_float_or_none(row.get("seen")),
+        squawk=normalize_squawk_code(row.get("squawk")),
         emergency=_clean(row.get("emergency")),
         military=_military_flag(row),
         raw=row,
@@ -127,7 +167,7 @@ def _retry_after_seconds(value: str | None) -> int | None:
 
 def _max_enabled_rule_radius(settings: Settings) -> float:
     radii = [rule.radius_miles for rule in settings.rules if rule.enabled]
-    return max(radii) if radii else 25.0
+    return max(radii) if radii else DEFAULT_ADSB_POINT_RADIUS_MILES
 
 
 def _bool_or_false(value: object) -> bool:
@@ -173,8 +213,8 @@ def _float_or_none(value: object) -> float | None:
 def _altitude_or_none(value: object) -> int | None:
     if value is None:
         return None
+    # Ground traffic can arrive as a string, if it does convert to 0
     if isinstance(value, str) and value.strip().lower() == "ground":
-        # Ground traffic arrives as a string in common aircraft.json feeds.
         return 0
     try:
         return int(float(value))
