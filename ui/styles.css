@@ -22,8 +22,8 @@
   --overlay: rgba(23, 32, 42, 0.38);
   --status-enabled-bg: #dff3ea;
   --status-enabled-text: #116149;
-  --dashboard-list-column: minmax(0, 1fr);
-  --dashboard-map-column: minmax(360px, 1fr);
+  --dashboard-list-column: minmax(0, 2fr);
+  --dashboard-map-column: minmax(360px, 3fr);
 }
 
 [data-mode="dark"] {
