@@ -63,7 +63,13 @@
       "tail_numbers": ["N12345"],
       "radius_miles": 25,
       "max_altitude_ft": 12000,
-      "cooldown_minutes": 60
+      "cooldown_minutes": 60,
+      "quiet_hours": {
+        "enabled": false,
+        "start": "22:00",
+        "end": "07:00",
+        "suppress_providers": ["pushover", "twilio"]
+      }
     },
     {
       "name": "Military nearby",

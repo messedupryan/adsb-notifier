@@ -111,6 +111,9 @@ function renderRuleEditor() {
   fields.ruleIncludeTisb.checked = rule.include_tisb === true;
   fields.ruleHeadingChange.value = rule.circling_min_heading_change_deg ?? DEFAULT_CIRCLING_HEADING_CHANGE_DEG;
   fields.ruleWindowMinutes.value = rule.circling_window_minutes ?? DEFAULT_CIRCLING_WINDOW_MINUTES;
+  fields.ruleQuietEnabled.checked = rule.quiet_hours?.enabled === true;
+  fields.ruleQuietStart.value = rule.quiet_hours?.start || DEFAULT_QUIET_HOURS_START;
+  fields.ruleQuietEnd.value = rule.quiet_hours?.end || DEFAULT_QUIET_HOURS_END;
   renderRuleNotificationProviders(rule);
   updateRuleFieldVisibility(rule.event || "tail");
 }
@@ -217,6 +220,13 @@ function syncSelectedRuleFromForms() {
     rule.categories = textToList(fields.ruleCategories.value);
     rule.squawk_codes = textToList(fields.ruleSquawkCodes.value);
     rule.notification_providers = selectedRuleNotificationProviders();
+    rule.quiet_hours = {
+      ...defaultQuietHours(),
+      ...(rule.quiet_hours || {}),
+      enabled: fields.ruleQuietEnabled.checked,
+      start: fields.ruleQuietStart.value || DEFAULT_QUIET_HOURS_START,
+      end: fields.ruleQuietEnd.value || DEFAULT_QUIET_HOURS_END,
+    };
     rule.military = rule.event === "military";
     rule.include_tisb = fields.ruleIncludeTisb.checked;
     rule.circling_min_heading_change_deg = numberValue(fields.ruleHeadingChange);

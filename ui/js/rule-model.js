@@ -7,6 +7,7 @@ function createRule(eventType) {
     radius_miles: DEFAULT_RULE_RADIUS_MILES,
     cooldown_minutes: DEFAULT_RULE_COOLDOWN_MINUTES,
     notification_providers: enabledNotificationProviders(),
+    quiet_hours: defaultQuietHours(),
   };
   if (eventType === "tail") {
     return {...base, tail_numbers: ["N12345"]};
@@ -83,7 +84,28 @@ function normalizeConfig(payload) {
 
 function normalizeRules(rules) {
   if (!Array.isArray(rules)) return [];
-  return rules.map((rule) => ({...rule, id: rule.id || createClientRuleId(), enabled: rule.enabled !== false}));
+  return rules.map((rule) => ({
+    ...rule,
+    id: rule.id || createClientRuleId(),
+    enabled: rule.enabled !== false,
+    quiet_hours: normalizeQuietHours(rule.quiet_hours),
+  }));
+}
+
+function normalizeQuietHours(quietHours) {
+  return {
+    ...defaultQuietHours(),
+    ...(quietHours || {}),
+  };
+}
+
+function defaultQuietHours() {
+  return {
+    enabled: false,
+    start: DEFAULT_QUIET_HOURS_START,
+    end: DEFAULT_QUIET_HOURS_END,
+    suppress_providers: ["pushover", "twilio"],
+  };
 }
 
 function normalizeRuleNotificationProviders(payload) {

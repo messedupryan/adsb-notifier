@@ -57,6 +57,7 @@ def test_write_poll_status_records_worker_summary(tmp_path):
         rule_name="target",
         event_type="tail",
         notification_providers={"pushover"},
+        suppressed_notification_providers={"twilio"},
     )
     status_path = tmp_path / "status.json"
 
@@ -72,6 +73,8 @@ def test_write_poll_status_records_worker_summary(tmp_path):
     assert status["recent_matches"][0]["track_deg"] == 183
     assert status["recent_matches"][0]["source_type"] == "adsb_icao"
     assert status["recent_matches"][0]["airplanes_live_url"] == "https://globe.airplanes.live/?icao=ABC123"
+    assert status["recent_matches"][0]["notification_status"] == "partially_suppressed"
+    assert status["recent_matches"][0]["suppressed_notification_providers"] == ["twilio"]
     assert status["recent_matches_window_hours"] == 24
 
 

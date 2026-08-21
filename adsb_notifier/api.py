@@ -17,6 +17,8 @@ from adsb_notifier.constants import (
     DEFAULT_API_PORT,
     DEFAULT_CONFIG_BACKUP_RETENTION,
     DEFAULT_POLL_SECONDS,
+    DEFAULT_QUIET_HOURS_END,
+    DEFAULT_QUIET_HOURS_START,
     DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
     DEFAULT_RULE_COOLDOWN_MINUTES,
     DEFAULT_RULE_RADIUS_MILES,
@@ -98,6 +100,7 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             config = _ensure_rule_ids(_read_config(self.config_path))
             _check_revision(self.headers.get("If-Match"), config)
             rule = _ensure_rule_id(rule)
+            rule = _normalize_rule_quiet_hours(rule)
             rule = _normalize_rule_notification_providers(rule, config)
             config.setdefault("rules", []).append(rule)
             config = _normalize_notification_provider_selections(config)
@@ -170,7 +173,7 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
                 "rule": rule,
                 "matched": bool(sightings),
                 "match_count": len(sightings),
-                "sent_count": len(sightings),
+                "sent_count": sum(1 for sighting in sightings if sighting.notification_providers is None or sighting.notification_providers),
                 "matches": [_sighting_summary(sighting) for sighting in sightings],
             }
         )
@@ -252,7 +255,7 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             rules = config.get("rules", [])
             for index, existing_rule in enumerate(rules):
                 if existing_rule.get("id") == rule_id:
-                    rules[index] = _normalize_rule_notification_providers(rule, config)
+                    rules[index] = _normalize_rule_notification_providers(_normalize_rule_quiet_hours(rule), config)
                     break
             else:
                 self._send_error(HTTPStatus.NOT_FOUND, "rule not found")
@@ -452,16 +455,48 @@ def _sighting_summary(sighting: Any) -> dict[str, Any]:
         "altitude_ft": plane.altitude_ft,
         "squawk": plane.squawk,
         "notification_providers": sorted(sighting.notification_providers or []),
+        "suppressed_notification_providers": sorted(sighting.suppressed_notification_providers),
+        "notification_status": _notification_status(sighting),
     }
+
+
+def _notification_status(sighting: Any) -> str:
+    if not sighting.suppressed_notification_providers:
+        return "sent"
+    if sighting.notification_providers:
+        return "partially_suppressed"
+    return "suppressed"
 
 
 def _normalize_notification_provider_selections(config: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(config)
     normalized["rules"] = [
-        _normalize_rule_notification_providers(rule, normalized)
+        _normalize_rule_notification_providers(_normalize_rule_quiet_hours(rule), normalized)
         for rule in normalized.get("rules", [])
     ]
     return normalized
+
+
+def _normalize_rule_quiet_hours(rule: dict[str, Any]) -> dict[str, Any]:
+    next_rule = dict(rule)
+    quiet_hours = next_rule.get("quiet_hours")
+    if not isinstance(quiet_hours, dict):
+        next_rule["quiet_hours"] = _default_quiet_hours_config()
+        return next_rule
+    next_rule["quiet_hours"] = {
+        **_default_quiet_hours_config(),
+        **quiet_hours,
+    }
+    return next_rule
+
+
+def _default_quiet_hours_config() -> dict[str, Any]:
+    return {
+        "enabled": False,
+        "start": DEFAULT_QUIET_HOURS_START,
+        "end": DEFAULT_QUIET_HOURS_END,
+        "suppress_providers": ["pushover", "twilio"],
+    }
 
 
 def _normalize_notification_blocks(config: dict[str, Any]) -> dict[str, Any]:
@@ -611,6 +646,7 @@ def _default_config() -> dict[str, Any]:
                 "radius_miles": DEFAULT_RULE_RADIUS_MILES,
                 "tail_numbers": ["N12345"],
                 "cooldown_minutes": DEFAULT_RULE_COOLDOWN_MINUTES,
+                "quiet_hours": _default_quiet_hours_config(),
             }
         ],
     }

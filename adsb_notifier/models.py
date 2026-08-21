@@ -39,4 +39,5 @@ class Sighting:
     home_lon: float | None = None
     rule_radius_miles: float | None = None
     notification_providers: set[str] | None = None
+    suppressed_notification_providers: set[str] = field(default_factory=set)
     observed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

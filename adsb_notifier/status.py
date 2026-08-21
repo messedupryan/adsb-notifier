@@ -121,8 +121,18 @@ def _sighting_summary(sighting: Sighting) -> dict[str, Any]:
         "track_deg": plane.track_deg,
         "squawk": plane.squawk,
         "notification_providers": sorted(sighting.notification_providers or []),
+        "suppressed_notification_providers": sorted(sighting.suppressed_notification_providers),
+        "notification_status": _notification_status(sighting),
         "observed_at": sighting.observed_at.isoformat(),
     }
+
+
+def _notification_status(sighting: Sighting) -> str:
+    if not sighting.suppressed_notification_providers:
+        return "sent"
+    if sighting.notification_providers:
+        return "partially_suppressed"
+    return "suppressed"
 
 
 def _recent_matches(path: str | Path, settings: Settings, sightings: list[Sighting]) -> list[dict[str, Any]]:

@@ -10,6 +10,8 @@ from adsb_notifier.constants import (
     DEFAULT_CIRCLING_HEADING_CHANGE_DEG,
     DEFAULT_CIRCLING_WINDOW_MINUTES,
     DEFAULT_POLL_SECONDS,
+    DEFAULT_QUIET_HOURS_END,
+    DEFAULT_QUIET_HOURS_START,
     DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
     DEFAULT_RULE_COOLDOWN_MINUTES,
     DEFAULT_SOURCE_ERROR_ALERT_COOLDOWN_MINUTES,
@@ -20,6 +22,7 @@ from adsb_notifier.constants import (
 from adsb_notifier.squawk import require_squawk_code
 
 NOTIFICATION_PROVIDERS = {"email", "pushover", "twilio"}
+PHONE_NOTIFICATION_PROVIDERS = {"pushover", "twilio"}
 ADSB_SOURCE_PROVIDERS = {"direct", "airplanes_live", "adsb_lol"}
 ADSB_SOURCE_QUERIES = {"point", "mil", "reg", "type", "hex"}
 RULE_EVENTS = {"aircraft_type", "circling", "military", "squawk", "tail"}
@@ -67,6 +70,14 @@ class SourceErrorAlerts:
 
 
 @dataclass(frozen=True)
+class QuietHours:
+    enabled: bool = False
+    start: str = DEFAULT_QUIET_HOURS_START
+    end: str = DEFAULT_QUIET_HOURS_END
+    suppress_providers: set[str] = field(default_factory=lambda: set(PHONE_NOTIFICATION_PROVIDERS))
+
+
+@dataclass(frozen=True)
 class Rule:
     name: str
     event: str
@@ -85,6 +96,7 @@ class Rule:
     circling_min_heading_change_deg: float = DEFAULT_CIRCLING_HEADING_CHANGE_DEG
     circling_window_minutes: int = DEFAULT_CIRCLING_WINDOW_MINUTES
     notification_providers: set[str] | None = None
+    quiet_hours: QuietHours = field(default_factory=QuietHours)
 
 
 @dataclass(frozen=True)
@@ -206,6 +218,7 @@ def _validate_rules_shape(rules: list[Any]) -> None:
             raise ValueError(f"{rule_label} requires aircraft_types or categories")
         if "notification_providers" in rule and not isinstance(rule["notification_providers"], list):
             raise ValueError(f"{rule_label} notification_providers must be an array")
+        _validate_quiet_hours_shape(rule, rule_label)
         _validate_numeric_field(rule, "radius_miles", prefix=rule_label)
         _validate_numeric_field(rule, "cooldown_minutes", prefix=rule_label)
 
@@ -242,6 +255,32 @@ def _validate_optional_numeric_field(data: dict[str, Any], key: str, prefix: str
     if key not in data:
         return
     _validate_numeric_field(data, key, prefix)
+
+
+def _validate_quiet_hours_shape(rule: dict[str, Any], rule_label: str) -> None:
+    if "quiet_hours" not in rule or rule["quiet_hours"] is None:
+        return
+    quiet_hours = rule["quiet_hours"]
+    if not isinstance(quiet_hours, dict):
+        raise ValueError(f"{rule_label} quiet_hours must be a JSON object")
+    for key in ("start", "end"):
+        if key in quiet_hours and not _is_hhmm_time(quiet_hours[key]):
+            raise ValueError(f"{rule_label} quiet_hours.{key} must use HH:MM time")
+    if quiet_hours.get("start") == quiet_hours.get("end") and quiet_hours.get("start") is not None:
+        raise ValueError(f"{rule_label} quiet_hours start and end must differ")
+    if "suppress_providers" in quiet_hours and not isinstance(quiet_hours["suppress_providers"], list):
+        raise ValueError(f"{rule_label} quiet_hours.suppress_providers must be an array")
+
+
+def _is_hhmm_time(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    parts = value.split(":")
+    if len(parts) != 2 or not all(part.isdigit() for part in parts):
+        return False
+    hour = int(parts[0])
+    minute = int(parts[1])
+    return len(parts[0]) == 2 and len(parts[1]) == 2 and 0 <= hour <= 23 and 0 <= minute <= 59
 
 
 def _rule_label(rule: dict[str, Any], index: int) -> str:
@@ -343,6 +382,7 @@ def _parse_rule(data: dict[str, Any]) -> Rule:
         ),
         circling_window_minutes=int(data.get("circling_window_minutes", DEFAULT_CIRCLING_WINDOW_MINUTES)),
         notification_providers=_parse_notification_providers(data),
+        quiet_hours=_parse_quiet_hours(data.get("quiet_hours")),
     )
 
 
@@ -358,6 +398,25 @@ def _parse_notification_providers(data: dict[str, Any]) -> set[str] | None:
     if unknown:
         raise ValueError(f"unsupported notification provider: {', '.join(sorted(unknown))}")
     return providers
+
+
+def _parse_quiet_hours(data: dict[str, Any] | None) -> QuietHours:
+    if not isinstance(data, dict):
+        return QuietHours()
+    suppress_providers = {
+        str(provider).strip().lower()
+        for provider in data.get("suppress_providers", PHONE_NOTIFICATION_PROVIDERS)
+        if str(provider).strip()
+    }
+    unknown = suppress_providers - PHONE_NOTIFICATION_PROVIDERS
+    if unknown:
+        raise ValueError(f"unsupported quiet-hours notification provider: {', '.join(sorted(unknown))}")
+    return QuietHours(
+        enabled=_bool_value(data.get("enabled", False)),
+        start=str(data.get("start", DEFAULT_QUIET_HOURS_START)),
+        end=str(data.get("end", DEFAULT_QUIET_HOURS_END)),
+        suppress_providers=suppress_providers,
+    )
 
 
 def _validate_unique_rule_names(rules: list[dict[str, Any]]) -> None:

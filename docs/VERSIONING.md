@@ -1,6 +1,6 @@
 # Versioning and Promotion
 
-ADS-B Notifier is in beta and uses SemVer-style `0.x.y` versions. Release-candidate builds use an explicit prerelease suffix such as `0.1.0-rc.1`; stable cuts drop the prerelease suffix, such as `0.1.0`.
+ADS-B Notifier is in beta and uses SemVer-style `0.x.y` versions. Release-candidate builds use an explicit prerelease suffix such as `0.2.0-rc.1`; stable cuts drop the prerelease suffix, such as `0.2.0`.
 
 ## Source of Truth
 
@@ -9,7 +9,7 @@ The root `VERSION` file is the project version source of truth.
 The current beta version is:
 
 ```text
-0.1.0
+0.1.1
 ```
 
 For now, the worker, API, UI, Python package, Helm chart, and container images all share the project version. Split component versions only when the components need independent release cadence.
@@ -35,7 +35,7 @@ Run `make version` to display the project version and image tags that will be bu
 - Use prerelease suffixes only for release-candidate builds that are feature-complete and ready for soak testing, such as `0.2.0-rc.1`.
 - Avoid alpha/beta prerelease versions unless the project convention intentionally changes.
 - Keep all components on the same version during beta unless there is a strong reason to split them.
-- Avoid deploying `latest` for normal testing. Use the explicit version tag, such as `0.1.0`.
+- Avoid deploying `latest` for normal testing. Use the explicit project version tag.
 
 ## Branch Flow
 
@@ -55,8 +55,8 @@ make version
 
 git switch main
 git merge --no-ff develop
-git tag v0.1.0
-git push origin main v0.1.0
+git tag v0.2.0
+git push origin main v0.2.0
 ```
 
 ## Deployment Tags
@@ -72,9 +72,9 @@ make deploy-helm REGISTRY=registry.example.test HELM_VALUES=charts/adsb-notifier
 This builds and deploys:
 
 ```text
-registry.example.test/adsb-notifier-worker:0.1.0
-registry.example.test/adsb-notifier-api:0.1.0
-registry.example.test/adsb-notifier-ui:0.1.0
+registry.example.test/adsb-notifier-worker:<project-version>
+registry.example.test/adsb-notifier-api:<project-version>
+registry.example.test/adsb-notifier-ui:<project-version>
 ```
 
 Use `IMAGE_TAG=...` only when intentionally testing a nonstandard tag.

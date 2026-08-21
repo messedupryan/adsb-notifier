@@ -111,6 +111,49 @@ def test_read_config_backfills_rule_notification_providers(tmp_path):
     assert config["rules"][0]["notification_providers"] == ["email", "pushover"]
 
 
+def test_read_config_backfills_rule_quiet_hours(tmp_path):
+    path = tmp_path / "config.json"
+    payload = valid_config()
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    config = _read_config(path)
+
+    assert config["rules"][0]["quiet_hours"] == {
+        "enabled": False,
+        "start": "22:00",
+        "end": "07:00",
+        "suppress_providers": ["pushover", "twilio"],
+    }
+
+
+def test_parse_settings_accepts_rule_quiet_hours():
+    payload = valid_config()
+    payload["rules"][0]["quiet_hours"] = {"enabled": True, "start": "21:30", "end": "06:15"}
+
+    settings = parse_settings(payload)
+
+    assert settings.rules[0].quiet_hours.enabled is True
+    assert settings.rules[0].quiet_hours.start == "21:30"
+    assert settings.rules[0].quiet_hours.end == "06:15"
+    assert settings.rules[0].quiet_hours.suppress_providers == {"pushover", "twilio"}
+
+
+def test_config_validation_rejects_invalid_quiet_hours():
+    payload = valid_config()
+    payload["rules"][0]["quiet_hours"] = {"enabled": True, "start": "9:00", "end": "09:00"}
+
+    with pytest.raises(ValueError, match="quiet_hours.start must use HH:MM time"):
+        parse_settings(payload)
+
+
+def test_quiet_hours_reject_email_suppression():
+    payload = valid_config()
+    payload["rules"][0]["quiet_hours"] = {"enabled": True, "start": "22:00", "end": "07:00", "suppress_providers": ["email"]}
+
+    with pytest.raises(ValueError, match="unsupported quiet-hours notification provider: email"):
+        parse_settings(payload)
+
+
 def test_read_config_backfills_new_notification_defaults(tmp_path):
     path = tmp_path / "config.json"
     payload = config_with_email()

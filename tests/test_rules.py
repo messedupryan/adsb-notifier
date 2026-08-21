@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from adsb_notifier.config import Home, Notifications, Rule, Settings
+from adsb_notifier.config import Home, Notifications, QuietHours, Rule, Settings
 from adsb_notifier.models import Aircraft
 from adsb_notifier.rules import RuleEngine
 
@@ -241,6 +241,90 @@ def test_cooldown_suppresses_duplicate_notifications():
     assert len(engine.evaluate(aircraft, now=now)) == 1
     assert engine.evaluate(aircraft, now=now + timedelta(minutes=5)) == []
     assert len(engine.evaluate(aircraft, now=now + timedelta(minutes=31))) == 1
+
+
+def test_quiet_hours_disabled_keeps_selected_phone_provider():
+    now = datetime(2026, 8, 20, 23, 0, tzinfo=timezone.utc)
+    engine = RuleEngine(
+        settings_with(
+            Rule(
+                name="target",
+                event="tail",
+                tail_numbers={"N12345"},
+                radius_miles=10,
+                notification_providers={"pushover"},
+                quiet_hours=QuietHours(enabled=False, start="22:00", end="07:00"),
+            )
+        )
+    )
+
+    sightings = engine.evaluate([Aircraft(hex="A12345", registration="N12345", lat=40.7708, lon=-111.8910)], now=now)
+
+    assert sightings[0].notification_providers == {"pushover"}
+    assert sightings[0].suppressed_notification_providers == set()
+
+
+def test_quiet_hours_suppress_phone_providers_but_keep_email():
+    now = datetime(2026, 8, 20, 23, 0, tzinfo=timezone.utc)
+    engine = RuleEngine(
+        settings_with(
+            Rule(
+                name="target",
+                event="tail",
+                tail_numbers={"N12345"},
+                radius_miles=10,
+                notification_providers={"email", "pushover", "twilio"},
+                quiet_hours=QuietHours(enabled=True, start="22:00", end="07:00"),
+            )
+        )
+    )
+
+    sightings = engine.evaluate([Aircraft(hex="A12345", registration="N12345", lat=40.7708, lon=-111.8910)], now=now)
+
+    assert sightings[0].notification_providers == {"email"}
+    assert sightings[0].suppressed_notification_providers == {"pushover", "twilio"}
+
+
+def test_quiet_hours_outside_window_keeps_all_selected_providers():
+    now = datetime(2026, 8, 20, 15, 0, tzinfo=timezone.utc)
+    engine = RuleEngine(
+        settings_with(
+            Rule(
+                name="target",
+                event="tail",
+                tail_numbers={"N12345"},
+                radius_miles=10,
+                notification_providers={"email", "pushover"},
+                quiet_hours=QuietHours(enabled=True, start="22:00", end="07:00"),
+            )
+        )
+    )
+
+    sightings = engine.evaluate([Aircraft(hex="A12345", registration="N12345", lat=40.7708, lon=-111.8910)], now=now)
+
+    assert sightings[0].notification_providers == {"email", "pushover"}
+    assert sightings[0].suppressed_notification_providers == set()
+
+
+def test_overnight_quiet_hours_are_active_after_midnight():
+    now = datetime(2026, 8, 21, 2, 0, tzinfo=timezone.utc)
+    engine = RuleEngine(
+        settings_with(
+            Rule(
+                name="target",
+                event="tail",
+                tail_numbers={"N12345"},
+                radius_miles=10,
+                notification_providers={"pushover"},
+                quiet_hours=QuietHours(enabled=True, start="22:00", end="07:00"),
+            )
+        )
+    )
+
+    sightings = engine.evaluate([Aircraft(hex="A12345", registration="N12345", lat=40.7708, lon=-111.8910)], now=now)
+
+    assert sightings[0].notification_providers == set()
+    assert sightings[0].suppressed_notification_providers == {"pushover"}
 
 
 def test_circling_rule_detects_accumulated_heading_change():

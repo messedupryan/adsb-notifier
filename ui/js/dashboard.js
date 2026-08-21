@@ -60,10 +60,24 @@ function renderWorkerStatus(status) {
     const time = document.createElement("span");
     time.className = "match-time";
     time.textContent = formatDateTime(match.observed_at) || "Unknown time";
-    item.append(title, meta, time, matchExternalLink(match));
+    item.append(title, meta, notificationStatusLabel(match), time, matchExternalLink(match));
     recentMatches.append(item);
   });
   renderDashboardMap(status);
+}
+
+function notificationStatusLabel(match) {
+  const status = document.createElement("span");
+  status.className = `match-notification-status ${match.notification_status || "sent"}`;
+  const suppressed = match.suppressed_notification_providers || [];
+  if (match.notification_status === "suppressed") {
+    status.textContent = `Notifications suppressed: ${suppressed.map(providerLabel).join(", ")}`;
+  } else if (match.notification_status === "partially_suppressed") {
+    status.textContent = `Phone alerts suppressed: ${suppressed.map(providerLabel).join(", ")}`;
+  } else {
+    status.textContent = `Notifications: ${(match.notification_providers || []).map(providerLabel).join(", ") || "none"}`;
+  }
+  return status;
 }
 
 function renderDashboardMap(status) {
@@ -242,7 +256,7 @@ function renderDashboardFilters(matches) {
   syncFilterOptions(dashboardRuleFilter, uniqueMatchValues(matches, (match) => match.rule_name), "All rules");
   syncFilterOptions(
     dashboardProviderFilter,
-    uniqueMatchValues(matches, (match) => match.notification_providers || []),
+    uniqueMatchValues(matches, (match) => [...(match.notification_providers || []), ...(match.suppressed_notification_providers || [])]),
     "All providers",
     providerLabel
   );
@@ -277,7 +291,12 @@ function filterRecentMatches(matches) {
   return matches.filter((match) => {
     if (eventType && match.event_type !== eventType) return false;
     if (ruleName && match.rule_name !== ruleName) return false;
-    if (provider && !(match.notification_providers || []).includes(provider)) return false;
+    if (
+      provider &&
+      ![...(match.notification_providers || []), ...(match.suppressed_notification_providers || [])].includes(provider)
+    ) {
+      return false;
+    }
     return !search || matchSearchText(match).includes(search);
   });
 }

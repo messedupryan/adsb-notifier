@@ -84,6 +84,17 @@ function validateConfig(payload) {
     if (rule.event === "circling" && !isRequiredNumber(rule.circling_window_minutes)) {
       errors.push(ruleValidationError(`${label} needs a circling window.`, rule, "windowMinutes"));
     }
+    if (rule.quiet_hours?.enabled === true) {
+      if (!isTimeOfDay(rule.quiet_hours.start)) {
+        errors.push(ruleValidationError(`${label} quiet hours need a valid start time.`, rule, "quietStart"));
+      }
+      if (!isTimeOfDay(rule.quiet_hours.end)) {
+        errors.push(ruleValidationError(`${label} quiet hours need a valid end time.`, rule, "quietEnd"));
+      }
+      if (rule.quiet_hours.start === rule.quiet_hours.end) {
+        errors.push(ruleValidationError(`${label} quiet hours start and end must differ.`, rule, ["quietStart", "quietEnd"]));
+      }
+    }
     if (
       rule.enabled !== false &&
       availableProviders.length > 0 &&
@@ -102,6 +113,10 @@ function isRequiredNumber(value) {
 
 function isSquawkCode(value) {
   return /^[0-7]{4}$/.test(String(value).trim());
+}
+
+function isTimeOfDay(value) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value).trim());
 }
 
 function validationError(message, targets = []) {
@@ -128,6 +143,8 @@ function ruleFieldForKey(key) {
     categories: fields.ruleCategories,
     squawkCodes: fields.ruleSquawkCodes,
     notificationProviders: fields.ruleNotificationProviders,
+    quietStart: fields.ruleQuietStart,
+    quietEnd: fields.ruleQuietEnd,
     headingChange: fields.ruleHeadingChange,
     windowMinutes: fields.ruleWindowMinutes,
   }[key];

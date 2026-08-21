@@ -348,7 +348,8 @@ textarea.invalid {
   min-height: 18px;
 }
 
-.rule-notifications {
+.rule-notifications,
+.rule-quiet-hours {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -357,11 +358,18 @@ textarea.invalid {
   padding: 10px 12px 12px;
 }
 
-.rule-notifications legend {
+.rule-notifications legend,
+.rule-quiet-hours legend {
   padding: 0 4px;
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
+}
+
+.inline-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
 }
 
 .settings-group {
@@ -534,6 +542,16 @@ textarea.invalid {
 
 .match-time {
   margin-top: 4px;
+}
+
+.match-notification-status {
+  margin-top: 4px;
+}
+
+.match-notification-status.suppressed,
+.match-notification-status.partially_suppressed {
+  color: var(--danger);
+  font-weight: 700;
 }
 
 .external-match-link {

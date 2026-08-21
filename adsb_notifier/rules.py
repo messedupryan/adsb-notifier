@@ -2,7 +2,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from adsb_notifier.config import Rule, Settings
+from adsb_notifier.config import NOTIFICATION_PROVIDERS, Rule, Settings
 from adsb_notifier.geo import distance_miles
 from adsb_notifier.models import Aircraft, Sighting
 
@@ -62,6 +62,7 @@ class RuleEngine:
 
         if not event_matches:
             return None
+        notification_providers, suppressed_providers = _notification_providers_for_rule(rule, observed_at)
 
         return Sighting(
             aircraft=plane,
@@ -71,7 +72,8 @@ class RuleEngine:
             home_lat=self.settings.home.lat,
             home_lon=self.settings.home.lon,
             rule_radius_miles=rule.radius_miles,
-            notification_providers=rule.notification_providers,
+            notification_providers=notification_providers,
+            suppressed_notification_providers=suppressed_providers,
             observed_at=observed_at,
         )
 
@@ -119,3 +121,28 @@ def _squawk_matches(rule: Rule, plane: Aircraft) -> bool:
 
 def _smallest_heading_delta(start: float, end: float) -> float:
     return abs((end - start + 180) % 360 - 180)
+
+
+def _notification_providers_for_rule(rule: Rule, observed_at: datetime) -> tuple[set[str] | None, set[str]]:
+    if not rule.quiet_hours.enabled or not _quiet_hours_active(rule, observed_at):
+        return rule.notification_providers, set()
+
+    selected = set(rule.notification_providers) if rule.notification_providers is not None else set(NOTIFICATION_PROVIDERS)
+    suppressed = selected & rule.quiet_hours.suppress_providers
+    if not suppressed:
+        return rule.notification_providers, set()
+    return selected - suppressed, suppressed
+
+
+def _quiet_hours_active(rule: Rule, observed_at: datetime) -> bool:
+    start = _time_minutes(rule.quiet_hours.start)
+    end = _time_minutes(rule.quiet_hours.end)
+    current = observed_at.hour * 60 + observed_at.minute
+    if start < end:
+        return start <= current < end
+    return current >= start or current < end
+
+
+def _time_minutes(value: str) -> int:
+    hour, minute = value.split(":", 1)
+    return int(hour) * 60 + int(minute)
