@@ -190,7 +190,7 @@ The map is centered around the configured home location and can show:
 
 ## 🏷️ Versioning
 
-The project is currently in beta and uses SemVer-style `0.x.y` versions, with explicit release-candidate builds like `0.1.4-rc.1` before stable cuts like `0.1.4`. The worker, API, UI, Helm chart, Python package, and container images share the project version during beta.
+The project is currently in beta and uses SemVer-style `0.x.y` versions, with explicit release-candidate builds like `0.1.5-rc.1` before stable cuts like `0.1.5`. The worker, API, UI, Helm chart, Python package, and container images share the project version during beta.
 
 See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, and promotion checklist.
 

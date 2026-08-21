@@ -22,6 +22,8 @@
   --overlay: rgba(23, 32, 42, 0.38);
   --status-enabled-bg: #dff3ea;
   --status-enabled-text: #116149;
+  --dashboard-list-column: minmax(0, 1fr);
+  --dashboard-map-column: minmax(360px, 1fr);
 }
 
 [data-mode="dark"] {
@@ -399,7 +401,7 @@ textarea.invalid {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.9fr);
+  grid-template-columns: var(--dashboard-list-column) var(--dashboard-map-column);
   align-items: start;
   gap: 14px;
 }
