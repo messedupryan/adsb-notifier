@@ -399,7 +399,7 @@ textarea.invalid {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.9fr);
   align-items: start;
   gap: 14px;
 }
@@ -409,11 +409,13 @@ textarea.invalid {
 }
 
 .map-card {
+  min-width: 0;
   position: sticky;
   top: 14px;
 }
 
 .status-card {
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
@@ -440,8 +442,9 @@ textarea.invalid {
 
 .dashboard-filters {
   display: grid;
-  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
   gap: 8px;
+  min-width: 0;
   width: 100%;
 }
 
