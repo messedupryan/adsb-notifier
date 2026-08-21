@@ -158,6 +158,18 @@ def test_exclusion_controls_are_available():
     assert "exclusionsFromFields" in UI_JS
 
 
+def test_rule_match_fields_appear_before_rule_options():
+    radius_index = INDEX_HTML.index('id="rule-radius"')
+    tail_index = INDEX_HTML.index('id="rule-tail-numbers"')
+    notifications_index = INDEX_HTML.index('class="rule-notifications')
+    quiet_hours_index = INDEX_HTML.index('class="rule-quiet-hours')
+    exclusions_index = INDEX_HTML.index('class="rule-exclusions')
+
+    assert radius_index < notifications_index
+    assert tail_index < notifications_index
+    assert notifications_index < quiet_hours_index < exclusions_index
+
+
 def test_dashboard_filter_controls_are_available():
     parser = InputParser()
     parser.feed(INDEX_HTML)
