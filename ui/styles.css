@@ -425,6 +425,12 @@ textarea.invalid {
   border-bottom: 1px solid var(--soft-border);
 }
 
+.recent-card header {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .map-actions {
   display: flex;
   flex-wrap: wrap;
@@ -434,9 +440,9 @@ textarea.invalid {
 
 .dashboard-filters {
   display: grid;
-  grid-template-columns: repeat(3, minmax(110px, 1fr)) minmax(130px, 1.4fr);
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
   gap: 8px;
-  width: min(100%, 640px);
+  width: 100%;
 }
 
 .dashboard-filters input,
@@ -444,6 +450,10 @@ textarea.invalid {
   min-height: 34px;
   min-width: 0;
   width: 100%;
+}
+
+.dashboard-filters input[type="search"] {
+  grid-column: 1 / -1;
 }
 
 .status-list {

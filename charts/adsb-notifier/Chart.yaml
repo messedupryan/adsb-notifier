@@ -2,5 +2,5 @@ apiVersion: v2
 name: adsb-notifier
 description: ADS-B Notifier worker, configuration API, and web UI.
 type: application
-version: 0.1.2
-appVersion: "0.1.2"
+version: 0.1.3
+appVersion: "0.1.3"

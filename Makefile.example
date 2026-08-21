@@ -51,7 +51,7 @@ help:
 		'  make config-export-backups Export PVC config backups to CONFIG_EXPORT_DIR/backups' \
 		'  make config-restore RESTORE_FILE=path.json  Restore a local config into Kubernetes' \
 		'  make version       Show project/component version and image tags' \
-		'  make bump-version NEW_VERSION=0.1.2  Bump project/component version files' \
+		'  make bump-version NEW_VERSION=0.1.3  Bump project/component version files' \
 		'' \
 		'Common overrides:' \
 		'  REGISTRY=registry.example.test IMAGE_TAG=$(PROJECT_VERSION) NAMESPACE=adsb' \
@@ -67,7 +67,7 @@ version:
 		'UI image:        $(UI_IMAGE)'
 
 bump-version:
-	@test -n "$(NEW_VERSION)" || { echo "Usage: make bump-version NEW_VERSION=0.1.2"; exit 1; }
+	@test -n "$(NEW_VERSION)" || { echo "Usage: make bump-version NEW_VERSION=0.1.3"; exit 1; }
 	@echo "$(NEW_VERSION)" | grep -Eq '^0\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$$' || { echo "NEW_VERSION must match beta semver pattern 0.x.y or 0.x.y-rc.n"; exit 1; }
 	@old_version="$(PROJECT_VERSION)"; \
 	if [ "$$old_version" = "$(NEW_VERSION)" ]; then \
