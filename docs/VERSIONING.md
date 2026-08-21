@@ -31,7 +31,9 @@ Run `make version` to display the project version and image tags that will be bu
 
 - Use `0.x.y` while the project is still changing quickly.
 - Increment the patch version for each stable batch of work that should be deployable or eligible for promotion.
-- Use `0.1.0-rc.n` for release-candidate builds that are ready for soak testing before promotion.
+- While building toward the next minor release, use numeric patch versions on `develop` as deployable checkpoints. For example, after stable `0.1.0`, use `0.1.1`, `0.1.2`, and later `0.1.x` while building toward `0.2.0`.
+- Use prerelease suffixes only for release-candidate builds that are feature-complete and ready for soak testing, such as `0.2.0-rc.1`.
+- Avoid alpha/beta prerelease versions unless the project convention intentionally changes.
 - Keep all components on the same version during beta unless there is a strong reason to split them.
 - Avoid deploying `latest` for normal testing. Use the explicit version tag, such as `0.1.0`.
 
