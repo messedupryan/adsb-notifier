@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from adsb_notifier.constants import (
     DEFAULT_ADSB_REQUEST_TIMEOUT_SECONDS,
@@ -12,6 +13,7 @@ from adsb_notifier.constants import (
     DEFAULT_POLL_SECONDS,
     DEFAULT_QUIET_HOURS_END,
     DEFAULT_QUIET_HOURS_START,
+    DEFAULT_QUIET_HOURS_TIME_ZONE,
     DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
     DEFAULT_RULE_COOLDOWN_MINUTES,
     DEFAULT_SOURCE_ERROR_ALERT_COOLDOWN_MINUTES,
@@ -74,6 +76,7 @@ class QuietHours:
     enabled: bool = False
     start: str = DEFAULT_QUIET_HOURS_START
     end: str = DEFAULT_QUIET_HOURS_END
+    time_zone: str = DEFAULT_QUIET_HOURS_TIME_ZONE
     suppress_providers: set[str] = field(default_factory=lambda: set(PHONE_NOTIFICATION_PROVIDERS))
 
 
@@ -268,6 +271,8 @@ def _validate_quiet_hours_shape(rule: dict[str, Any], rule_label: str) -> None:
             raise ValueError(f"{rule_label} quiet_hours.{key} must use HH:MM time")
     if quiet_hours.get("start") == quiet_hours.get("end") and quiet_hours.get("start") is not None:
         raise ValueError(f"{rule_label} quiet_hours start and end must differ")
+    if "time_zone" in quiet_hours:
+        _validate_time_zone(quiet_hours["time_zone"], rule_label)
     if "suppress_providers" in quiet_hours and not isinstance(quiet_hours["suppress_providers"], list):
         raise ValueError(f"{rule_label} quiet_hours.suppress_providers must be an array")
 
@@ -281,6 +286,15 @@ def _is_hhmm_time(value: Any) -> bool:
     hour = int(parts[0])
     minute = int(parts[1])
     return len(parts[0]) == 2 and len(parts[1]) == 2 and 0 <= hour <= 23 and 0 <= minute <= 59
+
+
+def _validate_time_zone(value: Any, rule_label: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{rule_label} quiet_hours.time_zone is required")
+    try:
+        ZoneInfo(value.strip())
+    except ZoneInfoNotFoundError as exc:
+        raise ValueError(f"{rule_label} quiet_hours.time_zone is not recognized") from exc
 
 
 def _rule_label(rule: dict[str, Any], index: int) -> str:
@@ -415,6 +429,7 @@ def _parse_quiet_hours(data: dict[str, Any] | None) -> QuietHours:
         enabled=_bool_value(data.get("enabled", False)),
         start=str(data.get("start", DEFAULT_QUIET_HOURS_START)),
         end=str(data.get("end", DEFAULT_QUIET_HOURS_END)),
+        time_zone=str(data.get("time_zone", DEFAULT_QUIET_HOURS_TIME_ZONE)).strip(),
         suppress_providers=suppress_providers,
     )
 

@@ -122,19 +122,26 @@ def test_read_config_backfills_rule_quiet_hours(tmp_path):
         "enabled": False,
         "start": "22:00",
         "end": "07:00",
+        "time_zone": "America/Denver",
         "suppress_providers": ["pushover", "twilio"],
     }
 
 
 def test_parse_settings_accepts_rule_quiet_hours():
     payload = valid_config()
-    payload["rules"][0]["quiet_hours"] = {"enabled": True, "start": "21:30", "end": "06:15"}
+    payload["rules"][0]["quiet_hours"] = {
+        "enabled": True,
+        "start": "21:30",
+        "end": "06:15",
+        "time_zone": "America/Denver",
+    }
 
     settings = parse_settings(payload)
 
     assert settings.rules[0].quiet_hours.enabled is True
     assert settings.rules[0].quiet_hours.start == "21:30"
     assert settings.rules[0].quiet_hours.end == "06:15"
+    assert settings.rules[0].quiet_hours.time_zone == "America/Denver"
     assert settings.rules[0].quiet_hours.suppress_providers == {"pushover", "twilio"}
 
 
@@ -151,6 +158,14 @@ def test_quiet_hours_reject_email_suppression():
     payload["rules"][0]["quiet_hours"] = {"enabled": True, "start": "22:00", "end": "07:00", "suppress_providers": ["email"]}
 
     with pytest.raises(ValueError, match="unsupported quiet-hours notification provider: email"):
+        parse_settings(payload)
+
+
+def test_quiet_hours_reject_unknown_timezone():
+    payload = valid_config()
+    payload["rules"][0]["quiet_hours"] = {"enabled": True, "start": "22:00", "end": "07:00", "time_zone": "Mars/Base"}
+
+    with pytest.raises(ValueError, match="quiet_hours.time_zone is not recognized"):
         parse_settings(payload)
 
 

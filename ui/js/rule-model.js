@@ -96,6 +96,7 @@ function normalizeQuietHours(quietHours) {
   return {
     ...defaultQuietHours(),
     ...(quietHours || {}),
+    time_zone: quietHours?.time_zone || browserTimeZone(),
   };
 }
 
@@ -104,8 +105,13 @@ function defaultQuietHours() {
     enabled: false,
     start: DEFAULT_QUIET_HOURS_START,
     end: DEFAULT_QUIET_HOURS_END,
+    time_zone: browserTimeZone(),
     suppress_providers: ["pushover", "twilio"],
   };
+}
+
+function browserTimeZone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || DEFAULT_QUIET_HOURS_TIME_ZONE;
 }
 
 function normalizeRuleNotificationProviders(payload) {

@@ -94,6 +94,9 @@ function validateConfig(payload) {
       if (rule.quiet_hours.start === rule.quiet_hours.end) {
         errors.push(ruleValidationError(`${label} quiet hours start and end must differ.`, rule, ["quietStart", "quietEnd"]));
       }
+      if (!String(rule.quiet_hours.time_zone || "").trim()) {
+        errors.push(ruleValidationError(`${label} quiet hours need a timezone.`, rule, "quietTimeZone"));
+      }
     }
     if (
       rule.enabled !== false &&
@@ -145,6 +148,7 @@ function ruleFieldForKey(key) {
     notificationProviders: fields.ruleNotificationProviders,
     quietStart: fields.ruleQuietStart,
     quietEnd: fields.ruleQuietEnd,
+    quietTimeZone: fields.ruleQuietTimeZone,
     headingChange: fields.ruleHeadingChange,
     windowMinutes: fields.ruleWindowMinutes,
   }[key];

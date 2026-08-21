@@ -1,6 +1,7 @@
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from adsb_notifier.config import NOTIFICATION_PROVIDERS, Rule, Settings
 from adsb_notifier.geo import distance_miles
@@ -137,7 +138,8 @@ def _notification_providers_for_rule(rule: Rule, observed_at: datetime) -> tuple
 def _quiet_hours_active(rule: Rule, observed_at: datetime) -> bool:
     start = _time_minutes(rule.quiet_hours.start)
     end = _time_minutes(rule.quiet_hours.end)
-    current = observed_at.hour * 60 + observed_at.minute
+    local_observed_at = observed_at.astimezone(ZoneInfo(rule.quiet_hours.time_zone))
+    current = local_observed_at.hour * 60 + local_observed_at.minute
     if start < end:
         return start <= current < end
     return current >= start or current < end

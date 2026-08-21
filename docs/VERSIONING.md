@@ -9,7 +9,7 @@ The root `VERSION` file is the project version source of truth.
 The current beta version is:
 
 ```text
-0.1.1
+0.1.2
 ```
 
 For now, the worker, API, UI, Python package, Helm chart, and container images all share the project version. Split component versions only when the components need independent release cadence.

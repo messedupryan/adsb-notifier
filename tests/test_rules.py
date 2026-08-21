@@ -274,7 +274,7 @@ def test_quiet_hours_suppress_phone_providers_but_keep_email():
                 tail_numbers={"N12345"},
                 radius_miles=10,
                 notification_providers={"email", "pushover", "twilio"},
-                quiet_hours=QuietHours(enabled=True, start="22:00", end="07:00"),
+                quiet_hours=QuietHours(enabled=True, start="22:00", end="07:00", time_zone="UTC"),
             )
         )
     )
@@ -283,6 +283,32 @@ def test_quiet_hours_suppress_phone_providers_but_keep_email():
 
     assert sightings[0].notification_providers == {"email"}
     assert sightings[0].suppressed_notification_providers == {"pushover", "twilio"}
+
+
+def test_quiet_hours_use_configured_timezone_for_utc_observations():
+    now = datetime(2026, 8, 21, 0, 56, tzinfo=timezone.utc)
+    engine = RuleEngine(
+        settings_with(
+            Rule(
+                name="target",
+                event="tail",
+                tail_numbers={"N12345"},
+                radius_miles=10,
+                notification_providers={"pushover"},
+                quiet_hours=QuietHours(
+                    enabled=True,
+                    start="18:55",
+                    end="19:05",
+                    time_zone="America/Denver",
+                ),
+            )
+        )
+    )
+
+    sightings = engine.evaluate([Aircraft(hex="A12345", registration="N12345", lat=40.7708, lon=-111.8910)], now=now)
+
+    assert sightings[0].notification_providers == set()
+    assert sightings[0].suppressed_notification_providers == {"pushover"}
 
 
 def test_quiet_hours_outside_window_keeps_all_selected_providers():
@@ -316,7 +342,7 @@ def test_overnight_quiet_hours_are_active_after_midnight():
                 tail_numbers={"N12345"},
                 radius_miles=10,
                 notification_providers={"pushover"},
-                quiet_hours=QuietHours(enabled=True, start="22:00", end="07:00"),
+                quiet_hours=QuietHours(enabled=True, start="22:00", end="07:00", time_zone="UTC"),
             )
         )
     )

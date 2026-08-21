@@ -19,6 +19,7 @@ from adsb_notifier.constants import (
     DEFAULT_POLL_SECONDS,
     DEFAULT_QUIET_HOURS_END,
     DEFAULT_QUIET_HOURS_START,
+    DEFAULT_QUIET_HOURS_TIME_ZONE,
     DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
     DEFAULT_RULE_COOLDOWN_MINUTES,
     DEFAULT_RULE_RADIUS_MILES,
@@ -495,6 +496,7 @@ def _default_quiet_hours_config() -> dict[str, Any]:
         "enabled": False,
         "start": DEFAULT_QUIET_HOURS_START,
         "end": DEFAULT_QUIET_HOURS_END,
+        "time_zone": DEFAULT_QUIET_HOURS_TIME_ZONE,
         "suppress_providers": ["pushover", "twilio"],
     }
 

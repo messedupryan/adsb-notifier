@@ -68,6 +68,7 @@
         "enabled": false,
         "start": "22:00",
         "end": "07:00",
+        "time_zone": "America/Denver",
         "suppress_providers": ["pushover", "twilio"]
       }
     },

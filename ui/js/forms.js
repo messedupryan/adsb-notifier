@@ -114,6 +114,7 @@ function renderRuleEditor() {
   fields.ruleQuietEnabled.checked = rule.quiet_hours?.enabled === true;
   fields.ruleQuietStart.value = rule.quiet_hours?.start || DEFAULT_QUIET_HOURS_START;
   fields.ruleQuietEnd.value = rule.quiet_hours?.end || DEFAULT_QUIET_HOURS_END;
+  fields.ruleQuietTimeZone.value = rule.quiet_hours?.time_zone || browserTimeZone();
   renderRuleNotificationProviders(rule);
   updateRuleFieldVisibility(rule.event || "tail");
 }
@@ -226,6 +227,7 @@ function syncSelectedRuleFromForms() {
       enabled: fields.ruleQuietEnabled.checked,
       start: fields.ruleQuietStart.value || DEFAULT_QUIET_HOURS_START,
       end: fields.ruleQuietEnd.value || DEFAULT_QUIET_HOURS_END,
+      time_zone: fields.ruleQuietTimeZone.value.trim() || browserTimeZone(),
     };
     rule.military = rule.event === "military";
     rule.include_tisb = fields.ruleIncludeTisb.checked;
