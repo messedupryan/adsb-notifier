@@ -160,6 +160,12 @@ Example rule:
   "radius_miles": 25,
   "cooldown_minutes": 60,
   "notification_providers": ["pushover", "email"],
+  "exclusions": {
+    "tail_numbers": ["N99999"],
+    "hex_ids": [],
+    "callsigns": [],
+    "aircraft_types": []
+  },
   "quiet_hours": {
     "enabled": true,
     "start": "22:00",
@@ -171,6 +177,8 @@ Example rule:
 ```
 
 Quiet hours are configured per rule. When enabled, matching aircraft still appear in recent matches, but phone-style notifications such as Pushover and Twilio can be suppressed during the configured time window while email remains available through normal rule notification settings. Quiet-hour windows use the configured IANA timezone, such as `America/Denver`, so Kubernetes containers can run in UTC without changing the alert behavior.
+
+Exclusions can be configured globally or per rule. They support tail numbers, ICAO hex IDs, callsigns, and aircraft types. Excluded aircraft do not create recent matches or notifications.
 
 <a id="dashboard"></a>
 
@@ -190,7 +198,7 @@ The map is centered around the configured home location and can show:
 
 ## 🏷️ Versioning
 
-The project is currently in beta and uses SemVer-style `0.x.y` versions, with explicit release-candidate builds like `0.1.6-rc.1` before stable cuts like `0.1.6`. The worker, API, UI, Helm chart, Python package, and container images share the project version during beta.
+The project is currently in beta and uses SemVer-style `0.x.y` versions, with explicit release-candidate builds like `0.2.0-rc.1` before stable cuts like `0.2.0`. The worker, API, UI, Helm chart, Python package, and container images share the project version during beta.
 
 See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, and promotion checklist.
 

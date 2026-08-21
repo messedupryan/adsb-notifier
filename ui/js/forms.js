@@ -18,6 +18,10 @@ function renderForms() {
   fields.pollSeconds.value = config.poll_seconds ?? DEFAULT_POLL_SECONDS;
   fields.staleAircraftSeconds.value = config.stale_aircraft_seconds ?? DEFAULT_STALE_AIRCRAFT_SECONDS;
   fields.recentMatchesWindowHours.value = config.recent_matches_window_hours ?? DEFAULT_RECENT_MATCHES_WINDOW_HOURS;
+  fields.globalExclusionTailNumbers.value = listToText(config.exclusions?.tail_numbers);
+  fields.globalExclusionHexIds.value = listToText(config.exclusions?.hex_ids);
+  fields.globalExclusionCallsigns.value = listToText(config.exclusions?.callsigns);
+  fields.globalExclusionAircraftTypes.value = listToText(config.exclusions?.aircraft_types);
 
   fields.emailEnabled.checked = Boolean(email.enabled);
   fields.emailSmtpHost.value = email.smtp_host || "";
@@ -115,6 +119,10 @@ function renderRuleEditor() {
   fields.ruleQuietStart.value = rule.quiet_hours?.start || DEFAULT_QUIET_HOURS_START;
   fields.ruleQuietEnd.value = rule.quiet_hours?.end || DEFAULT_QUIET_HOURS_END;
   fields.ruleQuietTimeZone.value = rule.quiet_hours?.time_zone || browserTimeZone();
+  fields.ruleExclusionTailNumbers.value = listToText(rule.exclusions?.tail_numbers);
+  fields.ruleExclusionHexIds.value = listToText(rule.exclusions?.hex_ids);
+  fields.ruleExclusionCallsigns.value = listToText(rule.exclusions?.callsigns);
+  fields.ruleExclusionAircraftTypes.value = listToText(rule.exclusions?.aircraft_types);
   renderRuleNotificationProviders(rule);
   updateRuleFieldVisibility(rule.event || "tail");
 }
@@ -153,6 +161,12 @@ function syncFromForms() {
   config.poll_seconds = integerValue(fields.pollSeconds, DEFAULT_POLL_SECONDS);
   config.stale_aircraft_seconds = integerValue(fields.staleAircraftSeconds, DEFAULT_STALE_AIRCRAFT_SECONDS);
   config.recent_matches_window_hours = integerValue(fields.recentMatchesWindowHours, DEFAULT_RECENT_MATCHES_WINDOW_HOURS);
+  config.exclusions = exclusionsFromFields({
+    tailNumbers: fields.globalExclusionTailNumbers,
+    hexIds: fields.globalExclusionHexIds,
+    callsigns: fields.globalExclusionCallsigns,
+    aircraftTypes: fields.globalExclusionAircraftTypes,
+  });
   const notifications = config.notifications || {};
   const existingEmail = notifications.email || {};
   const existingPushover = notifications.pushover || {};
@@ -229,12 +243,27 @@ function syncSelectedRuleFromForms() {
       end: fields.ruleQuietEnd.value || DEFAULT_QUIET_HOURS_END,
       time_zone: fields.ruleQuietTimeZone.value.trim() || browserTimeZone(),
     };
+    rule.exclusions = exclusionsFromFields({
+      tailNumbers: fields.ruleExclusionTailNumbers,
+      hexIds: fields.ruleExclusionHexIds,
+      callsigns: fields.ruleExclusionCallsigns,
+      aircraftTypes: fields.ruleExclusionAircraftTypes,
+    });
     rule.military = rule.event === "military";
     rule.include_tisb = fields.ruleIncludeTisb.checked;
     rule.circling_min_heading_change_deg = numberValue(fields.ruleHeadingChange);
     rule.circling_window_minutes = integerValue(fields.ruleWindowMinutes);
     pruneRuleForEvent(rule);
   }
+}
+
+function exclusionsFromFields(exclusionFields) {
+  return {
+    tail_numbers: textToList(exclusionFields.tailNumbers.value),
+    hex_ids: textToList(exclusionFields.hexIds.value),
+    callsigns: textToList(exclusionFields.callsigns.value),
+    aircraft_types: textToList(exclusionFields.aircraftTypes.value),
+  };
 }
 
 function selectedRuleNotificationProviders() {

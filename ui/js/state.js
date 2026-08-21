@@ -4,7 +4,7 @@ let isDirty = false;
 let isJsonDirty = false;
 let selectedRuleId = null;
 let activeTab = "dashboard";
-const uiVersion = "0.1.6";
+const uiVersion = "0.1.7";
 const redactedSecret = "********";
 const notificationProviderOrder = ["pushover", "email", "twilio"];
 const adsbSourceProviders = ["adsb_lol", "airplanes_live", "direct"];
@@ -40,6 +40,10 @@ const fields = {
   pollSeconds: document.querySelector("#poll-seconds"),
   staleAircraftSeconds: document.querySelector("#stale-aircraft-seconds"),
   recentMatchesWindowHours: document.querySelector("#recent-matches-window-hours"),
+  globalExclusionTailNumbers: document.querySelector("#global-exclusion-tail-numbers"),
+  globalExclusionHexIds: document.querySelector("#global-exclusion-hex-ids"),
+  globalExclusionCallsigns: document.querySelector("#global-exclusion-callsigns"),
+  globalExclusionAircraftTypes: document.querySelector("#global-exclusion-aircraft-types"),
   emailEnabled: document.querySelector("#email-enabled"),
   emailSmtpHost: document.querySelector("#email-smtp-host"),
   emailSmtpPort: document.querySelector("#email-smtp-port"),
@@ -89,6 +93,10 @@ const fields = {
   ruleQuietStart: document.querySelector("#rule-quiet-start"),
   ruleQuietEnd: document.querySelector("#rule-quiet-end"),
   ruleQuietTimeZone: document.querySelector("#rule-quiet-time-zone"),
+  ruleExclusionTailNumbers: document.querySelector("#rule-exclusion-tail-numbers"),
+  ruleExclusionHexIds: document.querySelector("#rule-exclusion-hex-ids"),
+  ruleExclusionCallsigns: document.querySelector("#rule-exclusion-callsigns"),
+  ruleExclusionAircraftTypes: document.querySelector("#rule-exclusion-aircraft-types"),
   ruleMilitary: document.querySelector("#rule-military"),
   ruleIncludeTisb: document.querySelector("#rule-include-tisb"),
   ruleHeadingChange: document.querySelector("#rule-heading-change"),

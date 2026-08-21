@@ -101,6 +101,7 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             config = _ensure_rule_ids(_read_config(self.config_path))
             _check_revision(self.headers.get("If-Match"), config)
             rule = _ensure_rule_id(rule)
+            rule = _normalize_rule_exclusions(rule)
             rule = _normalize_rule_quiet_hours(rule)
             rule = _normalize_rule_notification_providers(rule, config)
             config.setdefault("rules", []).append(rule)
@@ -228,6 +229,7 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             current = _read_config(self.config_path)
             payload = _ensure_rule_ids(_restore_redacted_secrets(self._read_json_body(), current))
             _check_revision(self.headers.get("If-Match"), current)
+            payload = _normalize_global_exclusions(payload)
             payload = _normalize_notification_provider_selections(payload)
             parse_settings(payload)
             payload = _bump_revision(payload, current)
@@ -256,7 +258,10 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             rules = config.get("rules", [])
             for index, existing_rule in enumerate(rules):
                 if existing_rule.get("id") == rule_id:
-                    rules[index] = _normalize_rule_notification_providers(_normalize_rule_quiet_hours(rule), config)
+                    rules[index] = _normalize_rule_notification_providers(
+                        _normalize_rule_quiet_hours(_normalize_rule_exclusions(rule)),
+                        config,
+                    )
                     break
             else:
                 self._send_error(HTTPStatus.NOT_FOUND, "rule not found")
@@ -356,6 +361,7 @@ def _read_config(path: Path) -> dict[str, Any]:
     config = json.loads(path.read_text(encoding="utf-8"))
     normalized = _ensure_rule_ids(config)
     normalized = _ensure_revision(normalized)
+    normalized = _normalize_global_exclusions(normalized)
     normalized = _normalize_notification_blocks(normalized)
     normalized = _apply_notification_defaults(normalized)
     normalized = _normalize_notification_provider_selections(normalized)
@@ -472,10 +478,43 @@ def _notification_status(sighting: Any) -> str:
 def _normalize_notification_provider_selections(config: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(config)
     normalized["rules"] = [
-        _normalize_rule_notification_providers(_normalize_rule_quiet_hours(rule), normalized)
+        _normalize_rule_notification_providers(_normalize_rule_quiet_hours(_normalize_rule_exclusions(rule)), normalized)
         for rule in normalized.get("rules", [])
     ]
     return normalized
+
+
+def _normalize_global_exclusions(config: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(config)
+    normalized["exclusions"] = _normalize_exclusions(normalized.get("exclusions"))
+    return normalized
+
+
+def _normalize_rule_exclusions(rule: dict[str, Any]) -> dict[str, Any]:
+    next_rule = dict(rule)
+    next_rule["exclusions"] = _normalize_exclusions(next_rule.get("exclusions"))
+    return next_rule
+
+
+def _normalize_exclusions(exclusions: Any) -> dict[str, list[str]]:
+    if not isinstance(exclusions, dict):
+        exclusions = {}
+    return {
+        "tail_numbers": _normalized_string_list(exclusions.get("tail_numbers")),
+        "hex_ids": _normalized_hex_list(exclusions.get("hex_ids")),
+        "callsigns": _normalized_string_list(exclusions.get("callsigns")),
+        "aircraft_types": _normalized_string_list(exclusions.get("aircraft_types")),
+    }
+
+
+def _normalized_string_list(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    return sorted({str(value).strip().upper() for value in values if str(value).strip()})
+
+
+def _normalized_hex_list(values: Any) -> list[str]:
+    return [value.removeprefix("~") for value in _normalized_string_list(values)]
 
 
 def _normalize_rule_quiet_hours(rule: dict[str, Any]) -> dict[str, Any]:
@@ -639,6 +678,7 @@ def _default_config() -> dict[str, Any]:
         "poll_seconds": DEFAULT_POLL_SECONDS,
         "stale_aircraft_seconds": DEFAULT_STALE_AIRCRAFT_SECONDS,
         "recent_matches_window_hours": DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
+        "exclusions": _normalize_exclusions(None),
         "notifications": {},
         "rules": [
             {
@@ -649,6 +689,7 @@ def _default_config() -> dict[str, Any]:
                 "tail_numbers": ["N12345"],
                 "cooldown_minutes": DEFAULT_RULE_COOLDOWN_MINUTES,
                 "quiet_hours": _default_quiet_hours_config(),
+                "exclusions": _normalize_exclusions(None),
             }
         ],
     }

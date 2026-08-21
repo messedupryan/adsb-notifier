@@ -351,7 +351,8 @@ textarea.invalid {
 }
 
 .rule-notifications,
-.rule-quiet-hours {
+.rule-quiet-hours,
+.rule-exclusions {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -361,7 +362,8 @@ textarea.invalid {
 }
 
 .rule-notifications legend,
-.rule-quiet-hours legend {
+.rule-quiet-hours legend,
+.rule-exclusions legend {
   padding: 0 4px;
   color: var(--muted);
   font-size: 13px;

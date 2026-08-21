@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from adsb_notifier.config import Home, Notifications, QuietHours, Rule, Settings
+from adsb_notifier.config import Exclusions, Home, Notifications, QuietHours, Rule, Settings
 from adsb_notifier.models import Aircraft
 from adsb_notifier.rules import RuleEngine
 
@@ -14,6 +14,19 @@ def settings_with(rule: Rule) -> Settings:
         stale_aircraft_seconds=90,
         notifications=Notifications(),
         rules=[rule],
+    )
+
+
+def settings_with_rules(rules: list[Rule], exclusions: Exclusions | None = None) -> Settings:
+    return Settings(
+        adsb_url="http://example.test/aircraft.json",
+        adsb_source=None,
+        home=Home(lat=40.7608, lon=-111.8910),
+        poll_seconds=30,
+        stale_aircraft_seconds=90,
+        notifications=Notifications(),
+        exclusions=exclusions or Exclusions(),
+        rules=rules,
     )
 
 
@@ -103,6 +116,76 @@ def test_disabled_rule_does_not_match():
     )
 
     assert sightings == []
+
+
+def test_global_exclusion_prevents_matches_for_any_rule():
+    engine = RuleEngine(
+        settings_with_rules(
+            [
+                Rule(
+                    name="target",
+                    event="tail",
+                    tail_numbers={"N12345"},
+                    radius_miles=10,
+                )
+            ],
+            exclusions=Exclusions(tail_numbers={"N12345"}),
+        )
+    )
+
+    sightings = engine.evaluate([Aircraft(hex="A12345", registration="N12345", lat=40.7708, lon=-111.8910)])
+
+    assert sightings == []
+
+
+def test_per_rule_exclusion_only_blocks_that_rule():
+    engine = RuleEngine(
+        settings_with_rules(
+            [
+                Rule(
+                    name="blocked",
+                    event="tail",
+                    tail_numbers={"N12345"},
+                    radius_miles=10,
+                    exclusions=Exclusions(hex_ids={"A12345"}),
+                ),
+                Rule(
+                    name="allowed",
+                    event="tail",
+                    tail_numbers={"N12345"},
+                    radius_miles=10,
+                ),
+            ]
+        )
+    )
+
+    sightings = engine.evaluate([Aircraft(hex="A12345", registration="N12345", lat=40.7708, lon=-111.8910)])
+
+    assert [sighting.rule_name for sighting in sightings] == ["allowed"]
+
+
+def test_non_excluded_aircraft_still_matches_rule():
+    engine = RuleEngine(
+        settings_with_rules(
+            [
+                Rule(
+                    name="target",
+                    event="aircraft_type",
+                    aircraft_types={"B737"},
+                    radius_miles=10,
+                    exclusions=Exclusions(aircraft_types={"A320"}, callsigns={"UAL123"}),
+                )
+            ],
+            exclusions=Exclusions(hex_ids={"ABC999"}),
+        )
+    )
+
+    sightings = engine.evaluate(
+        [Aircraft(hex="A12345", flight="DAL123", aircraft_type="B737", lat=40.7708, lon=-111.8910)]
+    )
+
+    assert len(sightings) == 1
+    assert sightings[0].rule_name == "target"
 
 
 def test_aircraft_type_rule_matches_type_or_category():

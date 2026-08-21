@@ -8,6 +8,7 @@ function createRule(eventType) {
     cooldown_minutes: DEFAULT_RULE_COOLDOWN_MINUTES,
     notification_providers: enabledNotificationProviders(),
     quiet_hours: defaultQuietHours(),
+    exclusions: defaultExclusions(),
   };
   if (eventType === "tail") {
     return {...base, tail_numbers: ["N12345"]};
@@ -78,6 +79,7 @@ function normalizeConfig(payload) {
     stale_aircraft_seconds: payload.stale_aircraft_seconds ?? DEFAULT_STALE_AIRCRAFT_SECONDS,
     recent_matches_window_hours: payload.recent_matches_window_hours ?? DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
     notifications: payload.notifications || {},
+    exclusions: normalizeExclusions(payload.exclusions),
     rules: normalizeRules(payload.rules),
   });
 }
@@ -89,7 +91,24 @@ function normalizeRules(rules) {
     id: rule.id || createClientRuleId(),
     enabled: rule.enabled !== false,
     quiet_hours: normalizeQuietHours(rule.quiet_hours),
+    exclusions: normalizeExclusions(rule.exclusions),
   }));
+}
+
+function normalizeExclusions(exclusions) {
+  return {
+    ...defaultExclusions(),
+    ...(exclusions || {}),
+  };
+}
+
+function defaultExclusions() {
+  return {
+    tail_numbers: [],
+    hex_ids: [],
+    callsigns: [],
+    aircraft_types: [],
+  };
 }
 
 function normalizeQuietHours(quietHours) {

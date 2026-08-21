@@ -139,6 +139,25 @@ def test_squawk_rule_controls_are_available():
     assert "squawk_codes" in UI_JS
 
 
+def test_exclusion_controls_are_available():
+    parser = InputParser()
+    parser.feed(INDEX_HTML)
+
+    for field_id in [
+        "global-exclusion-tail-numbers",
+        "global-exclusion-hex-ids",
+        "global-exclusion-callsigns",
+        "global-exclusion-aircraft-types",
+        "rule-exclusion-tail-numbers",
+        "rule-exclusion-hex-ids",
+        "rule-exclusion-callsigns",
+        "rule-exclusion-aircraft-types",
+    ]:
+        assert field_id in parser.inputs
+    assert "normalizeExclusions" in UI_JS
+    assert "exclusionsFromFields" in UI_JS
+
+
 def test_dashboard_filter_controls_are_available():
     parser = InputParser()
     parser.feed(INDEX_HTML)

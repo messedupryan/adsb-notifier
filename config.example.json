@@ -56,6 +56,12 @@
       "message_template": "{rule_name}: {aircraft_label} ({aircraft_type}) {distance_miles_1} mi away at {altitude_label}"
     }
   },
+  "exclusions": {
+    "tail_numbers": [],
+    "hex_ids": [],
+    "callsigns": [],
+    "aircraft_types": []
+  },
   "rules": [
     {
       "name": "Tail number near home",
@@ -70,6 +76,12 @@
         "end": "07:00",
         "time_zone": "America/Denver",
         "suppress_providers": ["pushover", "twilio"]
+      },
+      "exclusions": {
+        "tail_numbers": [],
+        "hex_ids": [],
+        "callsigns": [],
+        "aircraft_types": []
       }
     },
     {

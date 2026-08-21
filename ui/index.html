@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="Cache-Control" content="no-store" />
     <title>ADS-B Notifier Config</title>
-    <link id="favicon" rel="icon" type="image/png" href="/images/icon_teal.png?v=0.1.6" />
-    <link id="apple-touch-icon" rel="apple-touch-icon" href="/images/icon_teal.png?v=0.1.6" />
+    <link id="favicon" rel="icon" type="image/png" href="/images/icon_teal.png?v=0.1.7" />
+    <link id="apple-touch-icon" rel="apple-touch-icon" href="/images/icon_teal.png?v=0.1.7" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-    <link rel="stylesheet" href="/styles.css?v=0.1.6" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.7" />
   </head>
   <body>
     <main class="app-shell">
       <section class="toolbar">
         <div class="brand">
-          <h1><img id="app-logo" class="app-logo" src="/images/logo_teal.png?v=0.1.6" alt="ADS-B Notifier" /></h1>
+          <h1><img id="app-logo" class="app-logo" src="/images/logo_teal.png?v=0.1.7" alt="ADS-B Notifier" /></h1>
           <p id="status">Loading configuration...</p>
         </div>
         <div class="actions">
@@ -169,6 +169,15 @@
             Recent matches hours
             <input id="recent-matches-window-hours" name="recent_matches_window_hours" type="number" min="1" step="1" />
           </label>
+          <fieldset class="settings-group wide">
+            <legend>Global Exclusions</legend>
+            <div class="form-grid compact">
+              <label>Tail numbers <input id="global-exclusion-tail-numbers" type="text" /></label>
+              <label>ICAO hex IDs <input id="global-exclusion-hex-ids" type="text" /></label>
+              <label>Callsigns <input id="global-exclusion-callsigns" type="text" /></label>
+              <label>Aircraft types <input id="global-exclusion-aircraft-types" type="text" /></label>
+            </div>
+          </fieldset>
         </div>
         <div class="json-panel settings-json">
           <label for="config-json">Advanced JSON</label>
@@ -310,6 +319,15 @@
                   <label>Timezone <input id="rule-quiet-time-zone" type="text" /></label>
                 </div>
               </fieldset>
+              <fieldset class="rule-exclusions wide">
+                <legend>Rule Exclusions</legend>
+                <div class="form-grid compact">
+                  <label>Tail numbers <input id="rule-exclusion-tail-numbers" type="text" /></label>
+                  <label>ICAO hex IDs <input id="rule-exclusion-hex-ids" type="text" /></label>
+                  <label>Callsigns <input id="rule-exclusion-callsigns" type="text" /></label>
+                  <label>Aircraft types <input id="rule-exclusion-aircraft-types" type="text" /></label>
+                </div>
+              </fieldset>
               <label>Radius miles <input id="rule-radius" type="number" min="0" step="0.1" /></label>
               <label>Cooldown minutes <input id="rule-cooldown" type="number" min="0" step="1" /></label>
               <label>Min altitude ft <input id="rule-min-altitude" type="number" step="100" /></label>
@@ -328,10 +346,10 @@
       </section>
       <footer class="app-footer">
         <div class="footer-brand">
-          <span>ADS-B Notifier 0.1.6</span>
-          <span id="ui-version">UI 0.1.6</span>
+          <span>ADS-B Notifier 0.1.7</span>
+          <span id="ui-version">UI 0.1.7</span>
         </div>
-        <img id="footer-icon" class="footer-icon" src="/images/icon_teal.png?v=0.1.6" alt="" aria-hidden="true" />
+        <img id="footer-icon" class="footer-icon" src="/images/icon_teal.png?v=0.1.7" alt="" aria-hidden="true" />
       </footer>
     </main>
     <div id="confirm-modal" class="modal-overlay hidden" role="presentation">
@@ -345,18 +363,18 @@
       </section>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-    <script src="/js/constants.js?v=0.1.6"></script>
-    <script src="/js/state.js?v=0.1.6"></script>
-    <script src="/js/theme.js?v=0.1.6"></script>
-    <script src="/js/config-flow.js?v=0.1.6"></script>
-    <script src="/js/dashboard.js?v=0.1.6"></script>
-    <script src="/js/forms.js?v=0.1.6"></script>
-    <script src="/js/rule-actions.js?v=0.1.6"></script>
-    <script src="/js/modal.js?v=0.1.6"></script>
-    <script src="/js/validation.js?v=0.1.6"></script>
-    <script src="/js/rule-model.js?v=0.1.6"></script>
-    <script src="/js/map-utils.js?v=0.1.6"></script>
-    <script src="/js/ui-utils.js?v=0.1.6"></script>
-    <script src="/js/bootstrap.js?v=0.1.6"></script>
+    <script src="/js/constants.js?v=0.1.7"></script>
+    <script src="/js/state.js?v=0.1.7"></script>
+    <script src="/js/theme.js?v=0.1.7"></script>
+    <script src="/js/config-flow.js?v=0.1.7"></script>
+    <script src="/js/dashboard.js?v=0.1.7"></script>
+    <script src="/js/forms.js?v=0.1.7"></script>
+    <script src="/js/rule-actions.js?v=0.1.7"></script>
+    <script src="/js/modal.js?v=0.1.7"></script>
+    <script src="/js/validation.js?v=0.1.7"></script>
+    <script src="/js/rule-model.js?v=0.1.7"></script>
+    <script src="/js/map-utils.js?v=0.1.7"></script>
+    <script src="/js/ui-utils.js?v=0.1.7"></script>
+    <script src="/js/bootstrap.js?v=0.1.7"></script>
   </body>
 </html>
