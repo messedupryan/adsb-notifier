@@ -23,7 +23,7 @@ refreshStatusButton.addEventListener("click", () => loadWorkerStatus());
 recenterMapButton.addEventListener("click", () => recenterDashboardMap());
 fitMapButton.addEventListener("click", () => fitDashboardMap());
 selectedMapButton.addEventListener("click", () => zoomSelectedMatch());
-[dashboardEventFilter, dashboardRuleFilter, dashboardProviderFilter, dashboardStatusFilter, dashboardSearch, dashboardDateFrom, dashboardDateTo].forEach((control) => {
+[dashboardEventFilter, dashboardRuleFilter, dashboardProviderFilter, dashboardStatusFilter, dashboardSearch].forEach((control) => {
   control.addEventListener("input", applyDashboardFilters);
   control.addEventListener("change", applyDashboardFilters);
 });

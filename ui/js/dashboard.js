@@ -13,7 +13,8 @@ async function loadWorkerStatus() {
 
 function renderWorkerStatus(status) {
   latestWorkerStatus = status;
-  workerStatusValue.textContent = status.status || "unknown";
+  workerStatusValue.textContent = sourceHealthLabel(status.status);
+  workerStatusValue.className = `status-value ${statusClassName(status.status)}`;
   workerLastPoll.textContent = formatDateTime(status.last_poll_at) || "Never";
   workerAircraftCount.textContent = status.aircraft_count ?? "0";
   workerNotificationCount.textContent = status.notification_count ?? "0";
@@ -23,6 +24,7 @@ function renderWorkerStatus(status) {
   const backoffSeconds = Number(status.rate_limit_backoff_seconds || 0);
   workerRateLimitRetry.textContent = retryAt ? `${retryAt} (${backoffSeconds}s)` : "None";
   workerLastError.textContent = status.last_error || "None";
+  renderSourceHealth(status);
 
   recentMatches.replaceChildren();
   const matches = Array.isArray(status.recent_matches) ? status.recent_matches : [];
@@ -44,6 +46,87 @@ function renderWorkerStatus(status) {
   }
   renderRecentMatchGroups(filteredRecentMatches);
   renderDashboardMap(status);
+}
+
+function renderSourceHealth(status) {
+  const health = normalizedSourceHealth(status);
+  workerSourceHealth.textContent = sourceHealthSummary(health);
+  workerSourceHealth.className = `status-value ${statusClassName(health.status)}`;
+  sourceHealthStatus.textContent = sourceHealthLabel(health.status);
+  sourceHealthStatus.className = `source-health-value ${statusClassName(health.status)}`;
+  sourceHealthProvider.textContent = sourceProviderLabel(health.provider);
+  sourceHealthQuery.textContent = health.query || "Unknown";
+  sourceHealthLastSuccess.textContent = formatDateTime(health.last_success_at) || "Never";
+  sourceHealthLastFailure.textContent = formatDateTime(health.last_failure_at) || "Never";
+  sourceHealthBackoff.textContent = health.backoff_seconds ? `${health.backoff_seconds}s` : "None";
+  sourceHealthRetryAt.textContent = formatDateTime(health.retry_at) || "None";
+  sourceHealthAircraftCount.textContent = health.last_aircraft_count ?? "0";
+  sourceHealthLastError.textContent = health.last_error || "None";
+}
+
+function normalizedSourceHealth(status) {
+  const health = status.source_health && typeof status.source_health === "object" ? status.source_health : {};
+  return {
+    status: health.status || status.status || "unknown",
+    provider: health.provider || sourceProviderFromConfig() || "unknown",
+    query: health.query || sourceQueryFromConfig() || "",
+    last_success_at: health.last_success_at || status.last_poll_at || "",
+    last_failure_at: health.last_failure_at || status.last_error_at || "",
+    retry_at: health.retry_at || status.rate_limit_retry_at || "",
+    backoff_seconds: health.backoff_seconds ?? status.rate_limit_backoff_seconds ?? 0,
+    last_aircraft_count: health.last_aircraft_count ?? status.aircraft_count ?? 0,
+    last_error: health.last_error ?? status.last_error ?? "",
+    consecutive_source_errors: health.consecutive_source_errors ?? status.consecutive_source_errors ?? 0,
+  };
+}
+
+function sourceHealthSummary(health) {
+  const parts = [sourceHealthLabel(health.status), sourceProviderLabel(health.provider)];
+  if (health.backoff_seconds) parts.push(`${health.backoff_seconds}s backoff`);
+  if (health.consecutive_source_errors) parts.push(`${health.consecutive_source_errors} errors`);
+  return parts.filter(Boolean).join(" · ");
+}
+
+function sourceHealthLabel(status) {
+  return {
+    ok: "Healthy",
+    healthy: "Healthy",
+    error: "Failing",
+    failing: "Failing",
+    source_unavailable: "Unavailable",
+    rate_limited: "Rate limited",
+    access_denied: "Access denied",
+    unknown: "Unknown",
+  }[status] || status || "Unknown";
+}
+
+function statusClassName(status) {
+  return {
+    ok: "healthy",
+    healthy: "healthy",
+    unknown: "unknown",
+    rate_limited: "rate-limited",
+    error: "failing",
+    failing: "failing",
+    source_unavailable: "failing",
+    access_denied: "failing",
+  }[status] || "unknown";
+}
+
+function sourceProviderLabel(provider) {
+  return {
+    adsb_lol: "ADSB.lol",
+    airplanes_live: "Airplanes.live",
+    direct: "Direct aircraft.json",
+  }[provider] || provider || "Unknown";
+}
+
+function sourceProviderFromConfig() {
+  return config?.adsb_source?.provider || (config?.adsb_url ? "direct" : "");
+}
+
+function sourceQueryFromConfig() {
+  return config?.adsb_source?.query || (config?.adsb_url ? "aircraft_json" : "");
 }
 
 function renderRecentMatchGroups(matches) {
@@ -115,7 +198,10 @@ function renderRecentMatchItem(match, options = {}) {
   const time = document.createElement("span");
   time.className = "match-time";
   time.textContent = formatDateTime(match.observed_at) || "Unknown time";
-  item.append(title, meta, notificationStatusLabel(match), time, matchActions(matchExternalLink(match), matchDetailButton(match)));
+  item.append(title, meta, notificationStatusLabel(match), time);
+  if (options.nested !== true) {
+    item.append(matchActions(matchExternalLink(match), matchDetailButton(match)));
+  }
   return item;
 }
 
@@ -423,8 +509,6 @@ function filterRecentMatches(matches) {
   const provider = dashboardProviderFilter?.value || "";
   const notificationStatus = dashboardStatusFilter?.value || "";
   const search = (dashboardSearch?.value || "").trim().toLowerCase();
-  const fromDate = dashboardDateFrom?.value || "";
-  const toDate = dashboardDateTo?.value || "";
   return matches.filter((match) => {
     if (eventType && match.event_type !== eventType) return false;
     if (ruleName && match.rule_name !== ruleName) return false;
@@ -435,26 +519,8 @@ function filterRecentMatches(matches) {
     ) {
       return false;
     }
-    if (fromDate && !matchIsOnOrAfterDate(match, fromDate)) return false;
-    if (toDate && !matchIsOnOrBeforeDate(match, toDate)) return false;
     return !search || matchSearchText(match).includes(search);
   });
-}
-
-function matchIsOnOrAfterDate(match, value) {
-  const matchDate = matchDateString(match);
-  return !matchDate || matchDate >= value;
-}
-
-function matchIsOnOrBeforeDate(match, value) {
-  const matchDate = matchDateString(match);
-  return !matchDate || matchDate <= value;
-}
-
-function matchDateString(match) {
-  const date = new Date(match.observed_at || "");
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
 }
 
 function matchSearchText(match) {

@@ -16,6 +16,10 @@
   --danger-strong: #7a1a12;
   --danger-contrast: #ffffff;
   --danger-soft: #fff1f0;
+  --warning: #b7791f;
+  --warning-soft: #fff7d6;
+  --caution: #c05621;
+  --caution-soft: #fff0df;
   --success-border: #9fd5c9;
   --success-soft: #edf8f5;
   --shadow: rgba(23, 32, 42, 0.22);
@@ -43,6 +47,10 @@
   --danger-strong: #ffb0a8;
   --danger-contrast: #28100d;
   --danger-soft: rgba(180, 35, 24, 0.2);
+  --warning: #f7d774;
+  --warning-soft: rgba(183, 121, 31, 0.2);
+  --caution: #ffb26b;
+  --caution-soft: rgba(192, 86, 33, 0.22);
   --success-border: rgba(115, 202, 181, 0.42);
   --success-soft: rgba(31, 122, 109, 0.18);
   --shadow: rgba(0, 0, 0, 0.5);
@@ -475,7 +483,7 @@ textarea.invalid {
 }
 
 .worker-card .status-list {
-  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 10px;
   padding: 12px 16px 16px;
 }
@@ -497,6 +505,18 @@ textarea.invalid {
   padding: 9px 10px;
 }
 
+.worker-card .status-list .worker-primary {
+  grid-column: span 3;
+}
+
+.worker-card .status-list .worker-source {
+  grid-column: span 2;
+}
+
+.worker-card .status-list .source-url {
+  grid-column: span 4;
+}
+
 .status-list div:last-child {
   border-bottom: 0;
 }
@@ -513,6 +533,60 @@ textarea.invalid {
 
 .status-list dd {
   margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.status-value.healthy,
+.source-health-value.healthy {
+  color: var(--status-enabled-text);
+  font-weight: 700;
+}
+
+.status-value.unknown,
+.source-health-value.unknown {
+  color: var(--warning);
+  font-weight: 700;
+}
+
+.status-value.rate-limited,
+.source-health-value.rate-limited {
+  color: var(--caution);
+  font-weight: 700;
+}
+
+.status-value.failing,
+.source-health-value.failing {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.source-health-detail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--soft-border);
+}
+
+.source-health-detail div {
+  min-width: 0;
+  border-bottom: 1px solid var(--soft-border);
+  padding: 8px 0;
+}
+
+.source-health-detail div.wide {
+  grid-column: 1 / -1;
+}
+
+.source-health-detail dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.source-health-detail dd {
+  margin: 3px 0 0;
   overflow-wrap: anywhere;
 }
 
@@ -1071,6 +1145,12 @@ textarea {
 
   .worker-card .status-list {
     grid-template-columns: 1fr;
+  }
+
+  .worker-card .status-list .worker-primary,
+  .worker-card .status-list .worker-source,
+  .worker-card .status-list .source-url {
+    grid-column: 1 / -1;
   }
 
   .map-card {

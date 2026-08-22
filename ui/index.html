@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="Cache-Control" content="no-store" />
     <title>ADS-B Notifier Config</title>
-    <link id="favicon" rel="icon" type="image/png" href="/images/icon_teal.png?v=0.1.12" />
-    <link id="apple-touch-icon" rel="apple-touch-icon" href="/images/icon_teal.png?v=0.1.12" />
+    <link id="favicon" rel="icon" type="image/png" href="/images/icon_teal.png?v=0.1.13" />
+    <link id="apple-touch-icon" rel="apple-touch-icon" href="/images/icon_teal.png?v=0.1.13" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-    <link rel="stylesheet" href="/styles.css?v=0.1.12" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.13" />
   </head>
   <body>
     <main class="app-shell">
       <section class="toolbar">
         <div class="brand">
-          <h1><img id="app-logo" class="app-logo" src="/images/logo_teal.png?v=0.1.12" alt="ADS-B Notifier" /></h1>
+          <h1><img id="app-logo" class="app-logo" src="/images/logo_teal.png?v=0.1.13" alt="ADS-B Notifier" /></h1>
           <p id="status">Loading configuration...</p>
         </div>
         <div class="actions">
@@ -40,14 +40,15 @@
               <button id="refresh-status" type="button">Refresh</button>
             </header>
             <dl class="status-list">
-              <div><dt>Status</dt><dd id="worker-status-value">Unknown</dd></div>
-              <div><dt>Last poll</dt><dd id="worker-last-poll">Never</dd></div>
-              <div><dt>Aircraft</dt><dd id="worker-aircraft-count">0</dd></div>
-              <div><dt>Notifications</dt><dd id="worker-notification-count">0</dd></div>
-              <div><dt>ADS-B source</dt><dd id="worker-adsb-source">Unknown</dd></div>
-              <div><dt>Source errors</dt><dd id="worker-source-errors">0</dd></div>
-              <div><dt>Retry after</dt><dd id="worker-rate-limit-retry">None</dd></div>
-              <div><dt>Last error</dt><dd id="worker-last-error">None</dd></div>
+              <div class="worker-primary"><dt>Status</dt><dd id="worker-status-value">Unknown</dd></div>
+              <div class="worker-primary"><dt>Last poll</dt><dd id="worker-last-poll">Never</dd></div>
+              <div class="worker-primary"><dt>Aircraft</dt><dd id="worker-aircraft-count">0</dd></div>
+              <div class="worker-primary"><dt>Notifications</dt><dd id="worker-notification-count">0</dd></div>
+              <div class="worker-source source-url"><dt>ADS-B source</dt><dd id="worker-adsb-source">Unknown</dd></div>
+              <div class="worker-source"><dt>Source health</dt><dd id="worker-source-health">Unknown</dd></div>
+              <div class="worker-source"><dt>Source errors</dt><dd id="worker-source-errors">0</dd></div>
+              <div class="worker-source"><dt>Retry after</dt><dd id="worker-rate-limit-retry">None</dd></div>
+              <div class="worker-source"><dt>Last error</dt><dd id="worker-last-error">None</dd></div>
             </dl>
           </article>
           <article class="status-card recent-card">
@@ -67,8 +68,6 @@
                   <option value="">All statuses</option>
                 </select>
                 <input id="dashboard-search" type="search" placeholder="Search" aria-label="Search recent matches" data-dashboard-control="true" />
-                <input id="dashboard-date-from" type="date" aria-label="Filter recent matches from date" data-dashboard-control="true" />
-                <input id="dashboard-date-to" type="date" aria-label="Filter recent matches to date" data-dashboard-control="true" />
               </div>
             </header>
             <div id="recent-matches" class="recent-matches"></div>
@@ -153,6 +152,17 @@
                 <input id="adsb-url" name="adsb_url" type="url" />
               </label>
             </div>
+            <dl class="source-health-detail">
+              <div><dt>Health</dt><dd id="source-health-status">Unknown</dd></div>
+              <div><dt>Provider</dt><dd id="source-health-provider">Unknown</dd></div>
+              <div><dt>Query</dt><dd id="source-health-query">Unknown</dd></div>
+              <div><dt>Last success</dt><dd id="source-health-last-success">Never</dd></div>
+              <div><dt>Last failure</dt><dd id="source-health-last-failure">Never</dd></div>
+              <div><dt>Backoff</dt><dd id="source-health-backoff">None</dd></div>
+              <div><dt>Rate-limit reset</dt><dd id="source-health-retry-at">None</dd></div>
+              <div><dt>Last aircraft count</dt><dd id="source-health-aircraft-count">0</dd></div>
+              <div class="wide"><dt>Last error</dt><dd id="source-health-last-error">None</dd></div>
+            </dl>
           </fieldset>
           <label>
             Home latitude
@@ -382,10 +392,10 @@
       </section>
       <footer class="app-footer">
         <div class="footer-brand">
-          <span>ADS-B Notifier 0.1.12</span>
-          <span id="ui-version">UI 0.1.12</span>
+          <span>ADS-B Notifier 0.1.13</span>
+          <span id="ui-version">UI 0.1.13</span>
         </div>
-        <img id="footer-icon" class="footer-icon" src="/images/icon_teal.png?v=0.1.12" alt="" aria-hidden="true" />
+        <img id="footer-icon" class="footer-icon" src="/images/icon_teal.png?v=0.1.13" alt="" aria-hidden="true" />
       </footer>
     </main>
     <div id="confirm-modal" class="modal-overlay hidden" role="presentation">
@@ -415,18 +425,18 @@
       </section>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-    <script src="/js/constants.js?v=0.1.12"></script>
-    <script src="/js/state.js?v=0.1.12"></script>
-    <script src="/js/theme.js?v=0.1.12"></script>
-    <script src="/js/config-flow.js?v=0.1.12"></script>
-    <script src="/js/dashboard.js?v=0.1.12"></script>
-    <script src="/js/forms.js?v=0.1.12"></script>
-    <script src="/js/rule-actions.js?v=0.1.12"></script>
-    <script src="/js/modal.js?v=0.1.12"></script>
-    <script src="/js/validation.js?v=0.1.12"></script>
-    <script src="/js/rule-model.js?v=0.1.12"></script>
-    <script src="/js/map-utils.js?v=0.1.12"></script>
-    <script src="/js/ui-utils.js?v=0.1.12"></script>
-    <script src="/js/bootstrap.js?v=0.1.12"></script>
+    <script src="/js/constants.js?v=0.1.13"></script>
+    <script src="/js/state.js?v=0.1.13"></script>
+    <script src="/js/theme.js?v=0.1.13"></script>
+    <script src="/js/config-flow.js?v=0.1.13"></script>
+    <script src="/js/dashboard.js?v=0.1.13"></script>
+    <script src="/js/forms.js?v=0.1.13"></script>
+    <script src="/js/rule-actions.js?v=0.1.13"></script>
+    <script src="/js/modal.js?v=0.1.13"></script>
+    <script src="/js/validation.js?v=0.1.13"></script>
+    <script src="/js/rule-model.js?v=0.1.13"></script>
+    <script src="/js/map-utils.js?v=0.1.13"></script>
+    <script src="/js/ui-utils.js?v=0.1.13"></script>
+    <script src="/js/bootstrap.js?v=0.1.13"></script>
   </body>
 </html>

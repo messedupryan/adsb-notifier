@@ -14,10 +14,13 @@ from adsb_notifier.models import Sighting
 
 def write_poll_status(path: str | Path, settings: Settings, aircraft_count: int, sightings: list[Sighting]) -> None:
     recent_matches = _recent_matches(path, settings, sightings)
+    now = _now_iso()
+    existing = read_status(path)
+    adsb_url = build_adsb_url(settings)
     payload = {
         "status": "ok",
-        "last_poll_at": _now_iso(),
-        "adsb_url": build_adsb_url(settings),
+        "last_poll_at": now,
+        "adsb_url": adsb_url,
         "aircraft_count": aircraft_count,
         "notification_count": len(sightings),
         "recent_matches_window_hours": settings.recent_matches_window_hours,
@@ -26,18 +29,35 @@ def write_poll_status(path: str | Path, settings: Settings, aircraft_count: int,
         "consecutive_source_errors": 0,
         "rate_limit_retry_at": None,
         "rate_limit_backoff_seconds": 0,
+        "source_health": _source_health(
+            status="healthy",
+            settings=settings,
+            adsb_url=adsb_url,
+            last_success_at=now,
+            last_failure_at=existing.get("source_health", {}).get("last_failure_at") or existing.get("last_error_at"),
+            last_aircraft_count=aircraft_count,
+        ),
     }
     write_status(path, payload)
 
 
 def write_error_status(path: str | Path, error: BaseException) -> None:
     existing = read_status(path)
+    now = _now_iso()
+    consecutive_source_errors = _next_source_error_count(existing)
     existing.update(
         {
             "status": "error",
             "last_error": str(error),
-            "last_error_at": _now_iso(),
-            "consecutive_source_errors": _next_source_error_count(existing),
+            "last_error_at": now,
+            "consecutive_source_errors": consecutive_source_errors,
+            "source_health": _source_health(
+                status="failing",
+                existing=existing,
+                last_failure_at=now,
+                last_error=str(error),
+                consecutive_source_errors=consecutive_source_errors,
+            ),
         }
     )
     write_status(path, existing)
@@ -51,18 +71,75 @@ def write_rate_limit_status(
 ) -> None:
     existing = read_status(path)
     now = datetime.now(timezone.utc)
+    status = _source_error_status(error)
+    retry_at = (now + timedelta(seconds=backoff_seconds)).isoformat()
+    adsb_url = build_adsb_url(settings)
+    consecutive_source_errors = _next_source_error_count(existing)
     existing.update(
         {
-            "status": _source_error_status(error),
-            "adsb_url": build_adsb_url(settings),
+            "status": status,
+            "adsb_url": adsb_url,
             "last_error": str(error),
             "last_error_at": now.isoformat(),
-            "consecutive_source_errors": _next_source_error_count(existing),
+            "consecutive_source_errors": consecutive_source_errors,
             "rate_limit_backoff_seconds": backoff_seconds,
-            "rate_limit_retry_at": (now + timedelta(seconds=backoff_seconds)).isoformat(),
+            "rate_limit_retry_at": retry_at,
+            "source_health": _source_health(
+                status=status,
+                settings=settings,
+                adsb_url=adsb_url,
+                existing=existing,
+                last_failure_at=now.isoformat(),
+                retry_at=retry_at,
+                backoff_seconds=backoff_seconds,
+                last_error=str(error),
+                consecutive_source_errors=consecutive_source_errors,
+            ),
         }
     )
     write_status(path, existing)
+
+
+def _source_health(
+    *,
+    status: str,
+    settings: Settings | None = None,
+    adsb_url: str | None = None,
+    existing: dict[str, Any] | None = None,
+    last_success_at: str | None = None,
+    last_failure_at: str | None = None,
+    retry_at: str | None = None,
+    backoff_seconds: int = 0,
+    last_aircraft_count: int | None = None,
+    last_error: str | None = None,
+    consecutive_source_errors: int = 0,
+) -> dict[str, Any]:
+    previous = existing.get("source_health", {}) if isinstance(existing, dict) else {}
+    return {
+        "status": status,
+        "provider": _source_provider(settings) if settings else previous.get("provider") or "unknown",
+        "query": _source_query(settings) if settings else previous.get("query") or "",
+        "url": adsb_url or previous.get("url") or (existing or {}).get("adsb_url") or "",
+        "last_success_at": last_success_at or previous.get("last_success_at") or (existing or {}).get("last_poll_at"),
+        "last_failure_at": last_failure_at or previous.get("last_failure_at") or (existing or {}).get("last_error_at"),
+        "retry_at": retry_at,
+        "backoff_seconds": backoff_seconds,
+        "last_aircraft_count": last_aircraft_count if last_aircraft_count is not None else previous.get("last_aircraft_count") or (existing or {}).get("aircraft_count"),
+        "last_error": last_error,
+        "consecutive_source_errors": consecutive_source_errors,
+    }
+
+
+def _source_provider(settings: Settings) -> str:
+    if settings.adsb_source is None:
+        return "direct"
+    return settings.adsb_source.provider
+
+
+def _source_query(settings: Settings) -> str:
+    if settings.adsb_source is None:
+        return "aircraft_json"
+    return settings.adsb_source.query
 
 
 def _source_error_status(error: BaseException) -> str:

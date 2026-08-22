@@ -202,10 +202,16 @@ def test_dashboard_filter_controls_are_available():
     assert "dashboard-provider-filter" in parser.selects
     assert "dashboard-status-filter" in parser.selects
     assert "dashboard-search" in parser.inputs
-    assert "dashboard-date-from" in parser.inputs
-    assert "dashboard-date-to" in parser.inputs
     assert 'data-dashboard-control="true"' in INDEX_HTML
     assert "function filterRecentMatches" in UI_JS
+
+
+def test_worker_status_summary_has_source_row_and_status_classes():
+    assert "worker-primary" in INDEX_HTML
+    assert "worker-source source-url" in INDEX_HTML
+    assert "status-value" in UI_JS
+    assert "function statusClassName" in UI_JS
+    assert "rate-limited" in UI_JS
 
 
 def test_recent_match_detail_view_is_available():
@@ -216,6 +222,25 @@ def test_recent_match_detail_view_is_available():
     assert "function openMatchDetail" in UI_JS
     assert "function renderMatchDetailSummary" in UI_JS
     assert "aircraft_payload" in UI_JS
+
+
+def test_source_health_controls_are_available():
+    assert "worker-source-health" in INDEX_HTML
+    for field_id in [
+        "source-health-status",
+        "source-health-provider",
+        "source-health-query",
+        "source-health-last-success",
+        "source-health-last-failure",
+        "source-health-backoff",
+        "source-health-retry-at",
+        "source-health-aircraft-count",
+        "source-health-last-error",
+    ]:
+        assert field_id in INDEX_HTML
+    assert "function renderSourceHealth" in UI_JS
+    assert "function normalizedSourceHealth" in UI_JS
+    assert "source_health" in UI_JS
 
 
 def test_dashboard_repeat_alert_grouping_helpers_are_available():

@@ -57,6 +57,7 @@ function renderForms() {
   fields.twilioFrom.value = twilio.from || "";
   fields.twilioTo.value = twilio.to || "";
   fields.twilioBodyTemplate.value = twilio.body_template || twilio.message_template || twilio.template || "";
+  renderSourceHealth(latestWorkerStatus || {status: "unknown", recent_matches: []});
   renderRuleEditor();
 }
 
