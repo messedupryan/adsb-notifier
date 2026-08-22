@@ -9,7 +9,7 @@ The root `VERSION` file is the project version source of truth.
 The current beta version is:
 
 ```text
-0.1.10
+0.1.11
 ```
 
 For now, the worker, API, UI, Python package, Helm chart, and container images all share the project version. Split component versions only when the components need independent release cadence.
@@ -80,6 +80,8 @@ registry.example.test/adsb-notifier-ui:<project-version>
 Use `IMAGE_TAG=...` only when intentionally testing a nonstandard tag.
 
 ## Version Bump Checklist
+
+For normal feature work, bump the version after the current feature slice has been locally validated, deployed/validated in the cluster when needed, and committed at the current version. The bump prepares the next feature checkpoint.
 
 When preparing the next beta version:
 

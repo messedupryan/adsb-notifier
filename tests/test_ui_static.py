@@ -205,6 +205,15 @@ def test_dashboard_filter_controls_are_available():
     assert "function filterRecentMatches" in UI_JS
 
 
+def test_dashboard_repeat_alert_grouping_helpers_are_available():
+    assert "function groupRecentMatches" in UI_JS
+    assert "function renderRecentMatchGroup" in UI_JS
+    assert "function toggleMatchGroup" in UI_JS
+    assert "expandedMatchGroupKeys" in UI_JS
+    assert "match-group-toggle" in UI_JS
+    assert "match-count" in UI_JS
+
+
 def test_ui_bootstrap_helpers_are_defined():
     for helper in [
         "normalizeConfig",

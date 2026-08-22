@@ -42,28 +42,81 @@ function renderWorkerStatus(status) {
     renderDashboardMap(status);
     return;
   }
-  filteredRecentMatches.slice(0, RECENT_MATCH_LIST_LIMIT).forEach((match) => {
-    const key = matchKey(match);
-    const item = document.createElement("div");
-    item.className = "match-item";
-    item.classList.toggle("selected", key === selectedRecentMatchKey);
-    item.role = "button";
-    item.tabIndex = 0;
-    item.dataset.matchKey = key;
-    const title = document.createElement("strong");
-    title.textContent = `${match.rule_name || "Rule"}: ${match.aircraft_label || match.hex || "Aircraft"}`;
-    const meta = document.createElement("span");
-    const type = match.aircraft_type || "unknown type";
-    const distance = match.distance_miles ?? "unknown";
-    const altitude = match.altitude_ft === null || match.altitude_ft === undefined ? "unknown altitude" : `${match.altitude_ft} ft`;
-    meta.textContent = `${type} · ${distance} mi · ${altitude}`;
-    const time = document.createElement("span");
-    time.className = "match-time";
-    time.textContent = formatDateTime(match.observed_at) || "Unknown time";
-    item.append(title, meta, notificationStatusLabel(match), time, matchExternalLink(match));
-    recentMatches.append(item);
-  });
+  renderRecentMatchGroups(filteredRecentMatches);
   renderDashboardMap(status);
+}
+
+function renderRecentMatchGroups(matches) {
+  groupRecentMatches(matches).slice(0, RECENT_MATCH_LIST_LIMIT).forEach((group) => {
+    if (group.matches.length === 1) {
+      recentMatches.append(renderRecentMatchItem(group.latest));
+      return;
+    }
+    recentMatches.append(renderRecentMatchGroup(group));
+    if (expandedMatchGroupKeys.has(group.key)) {
+      group.matches.forEach((match) => recentMatches.append(renderRecentMatchItem(match, {nested: true})));
+    }
+  });
+}
+
+function renderRecentMatchGroup(group) {
+  const item = document.createElement("div");
+  item.className = "match-item match-group";
+  item.classList.toggle("selected", group.matches.some((match) => matchKey(match) === selectedRecentMatchKey));
+  item.role = "button";
+  item.tabIndex = 0;
+  item.dataset.matchKey = matchKey(group.latest);
+  item.dataset.groupKey = group.key;
+
+  const header = document.createElement("div");
+  header.className = "match-group-header";
+  const title = document.createElement("strong");
+  title.textContent = `${group.ruleName}: ${group.aircraftLabel}`;
+  const count = document.createElement("span");
+  count.className = "match-count";
+  count.textContent = `${group.matches.length} alerts`;
+  const toggle = document.createElement("button");
+  toggle.className = "match-group-toggle";
+  toggle.type = "button";
+  toggle.dataset.groupKey = group.key;
+  toggle.textContent = expandedMatchGroupKeys.has(group.key) ? "Hide" : "Show";
+  header.append(title, count, toggle);
+
+  const meta = document.createElement("span");
+  const latestPosition = hasPosition(group.latestPosition)
+    ? `${Number(group.latestPosition.lat).toFixed(4)}, ${Number(group.latestPosition.lon).toFixed(4)}`
+    : "unknown position";
+  meta.textContent = `${group.type} · ${group.distance} mi · latest ${latestPosition}`;
+
+  const timeWindow = document.createElement("span");
+  timeWindow.className = "match-time";
+  timeWindow.textContent = `First ${formatDateTime(group.firstSeen) || "unknown"} · Last ${formatDateTime(group.lastSeen) || "unknown"}`;
+
+  item.append(header, meta, notificationStatusLabel(group.latest), timeWindow, matchExternalLink(group.latest));
+  return item;
+}
+
+function renderRecentMatchItem(match, options = {}) {
+  const key = matchKey(match);
+  const item = document.createElement("div");
+  item.className = "match-item";
+  item.classList.toggle("nested", options.nested === true);
+  item.classList.toggle("selected", key === selectedRecentMatchKey);
+  item.role = "button";
+  item.tabIndex = 0;
+  item.dataset.matchKey = key;
+  const title = document.createElement("strong");
+  title.textContent = `${match.rule_name || "Rule"}: ${match.aircraft_label || match.hex || "Aircraft"}`;
+  const meta = document.createElement("span");
+  const type = match.aircraft_type || "unknown type";
+  const distance = match.distance_miles ?? "unknown";
+  const altitude = match.altitude_ft === null || match.altitude_ft === undefined ? "unknown altitude" : `${match.altitude_ft} ft`;
+  meta.textContent = `${type} · ${distance} mi · ${altitude}`;
+  const time = document.createElement("span");
+  time.className = "match-time";
+  time.textContent = formatDateTime(match.observed_at) || "Unknown time";
+  item.append(title, meta, notificationStatusLabel(match), time, matchExternalLink(match));
+  return item;
 }
 
 function notificationStatusLabel(match) {
@@ -78,6 +131,47 @@ function notificationStatusLabel(match) {
     status.textContent = `Notifications: ${(match.notification_providers || []).map(providerLabel).join(", ") || "none"}`;
   }
   return status;
+}
+
+function groupRecentMatches(matches) {
+  const groups = new Map();
+  matches.forEach((match) => {
+    const key = matchGroupKey(match);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+    groups.get(key).push(match);
+  });
+  return Array.from(groups.entries()).map(([key, groupMatches]) => {
+    const sortedMatches = [...groupMatches].sort((a, b) => observedTimeMs(b) - observedTimeMs(a));
+    const latest = sortedMatches[0];
+    const oldest = sortedMatches[sortedMatches.length - 1];
+    const latestPosition = sortedMatches.find(hasPosition) || latest;
+    return {
+      key,
+      matches: sortedMatches,
+      latest,
+      latestPosition,
+      firstSeen: oldest?.observed_at,
+      lastSeen: latest?.observed_at,
+      ruleName: latest.rule_name || "Rule",
+      aircraftLabel: latest.aircraft_label || latest.registration || latest.hex || "Aircraft",
+      type: latest.aircraft_type || latest.category || "unknown type",
+      distance: latest.distance_miles ?? "unknown",
+    };
+  });
+}
+
+function matchGroupKey(match) {
+  return [
+    String(match.rule_name || "").trim().toLowerCase(),
+    String(match.hex || match.registration || match.aircraft_label || "").trim().toLowerCase(),
+  ].join("|");
+}
+
+function observedTimeMs(match) {
+  const value = Date.parse(match?.observed_at || "");
+  return Number.isFinite(value) ? value : 0;
 }
 
 function renderDashboardMap(status) {
@@ -231,17 +325,34 @@ function updateMapActionState() {
 
 recentMatches.addEventListener("click", (event) => {
   if (event.target.closest("a")) return;
+  const toggle = event.target.closest(".match-group-toggle");
+  if (toggle?.dataset.groupKey) {
+    toggleMatchGroup(toggle.dataset.groupKey);
+    return;
+  }
   const item = event.target.closest(".match-item");
   if (!item?.dataset.matchKey) return;
   selectRecentMatch(item.dataset.matchKey);
 });
 recentMatches.addEventListener("keydown", (event) => {
   if (!["Enter", " "].includes(event.key)) return;
+  if (event.target.closest(".match-group-toggle")) return;
   const item = event.target.closest(".match-item");
   if (!item?.dataset.matchKey) return;
   event.preventDefault();
   selectRecentMatch(item.dataset.matchKey);
 });
+
+function toggleMatchGroup(key) {
+  if (expandedMatchGroupKeys.has(key)) {
+    expandedMatchGroupKeys.delete(key);
+  } else {
+    expandedMatchGroupKeys.add(key);
+  }
+  if (latestWorkerStatus) {
+    renderWorkerStatus(latestWorkerStatus);
+  }
+}
 
 function selectRecentMatch(key) {
   selectedRecentMatchKey = selectedRecentMatchKey === key ? null : key;

@@ -52,7 +52,7 @@ API_HOST=127.0.0.1
 API_PORT=8765
 UI_PORT=8766
 REGISTRY=registry.example.test
-IMAGE_TAG=0.1.10
+IMAGE_TAG=0.1.11
 NAMESPACE=adsb
 RELEASE=adsb-notifier
 HELM_VALUES=charts/adsb-notifier/values.yaml
@@ -100,17 +100,33 @@ Run one worker poll against a local or port-forwarded ADS-B feed:
 pipenv run adsb-notifier --config config.dev.json --adsb-url http://127.0.0.1:8080/tar1090/data/aircraft.json --once
 ```
 
-## Local-First Feature Workflow
+## Current-Version Feature Workflow
 
-During normal feature work, prefer local iteration before committing or deploying:
+During normal feature work, keep iteration on the current project version until the slice is validated:
 
-1. Make the code changes locally.
+1. Make the code changes on the current version.
 2. Run focused tests while iterating.
-3. Run the full test suite before treating the slice as ready.
-4. Start the local API/UI for manual validation when the web UI changes.
-5. Commit, build images, and deploy only after the feature slice is coherent and worth promoting as a checkpoint.
+3. Start the local API/UI for manual validation when it is useful and the local data/config can exercise the change.
+4. Run the full test suite before treating the slice as ready.
+5. If local validation is insufficient, build/push/deploy the current version to the cluster and validate there.
+6. Validate the cluster deployment.
+7. Commit the feature at the current version.
+8. After the commit, bump the version to prepare the next feature checkpoint.
 
-This keeps small UI and behavior tweaks cheap to adjust without creating unnecessary commits or cluster deploys. Version bumps remain appropriate for deployable checkpoints, but a version bump does not require immediate deployment while local validation is still underway.
+For quick cluster validation without changing Helm values, rebuild and push the same tag, then restart pods so Kubernetes pulls the current registry images:
+
+```bash
+make build-push
+make restart
+```
+
+For a checkpoint deployment, use:
+
+```bash
+make release
+```
+
+Local testing is a time-saving measure, not a gate. Because this is a personal app and brief cluster disruption is acceptable, use `make release` whenever the cluster is the most realistic or fastest way to validate a feature. The version bump is the handoff to the next feature, not the first step of the current one.
 
 ## Testing
 

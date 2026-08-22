@@ -5,7 +5,7 @@ let isJsonDirty = false;
 let selectedRuleId = null;
 let selectedRuleIds = new Set();
 let activeTab = "dashboard";
-const uiVersion = "0.1.10";
+const uiVersion = "0.1.11";
 const redactedSecret = "********";
 const notificationProviderOrder = ["pushover", "email", "twilio"];
 const adsbSourceProviders = ["adsb_lol", "airplanes_live", "direct"];
@@ -27,6 +27,7 @@ let latestWorkerStatus = null;
 let dashboardMap = null;
 let dashboardMapLayers = null;
 let selectedRecentMatchKey = null;
+let expandedMatchGroupKeys = new Set();
 let filteredRecentMatches = [];
 
 const fields = {

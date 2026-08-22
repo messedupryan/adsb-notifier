@@ -547,14 +547,51 @@ textarea.invalid {
   box-shadow: inset 3px 0 0 #dc2626;
 }
 
+.match-item.match-group {
+  border-color: var(--border);
+  background: var(--panel-muted);
+}
+
+.match-item.nested {
+  margin-left: 16px;
+  width: calc(100% - 16px);
+  border-left: 3px solid var(--soft-border);
+}
+
+.match-group-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
 .match-item strong,
 .match-item span {
   display: block;
 }
 
+.match-group-header strong {
+  min-width: 0;
+}
+
 .match-item span {
   color: var(--muted);
   font-size: 13px;
+}
+
+.match-count {
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.match-group-toggle {
+  min-width: 52px;
+  padding: 4px 8px;
+  font-size: 12px;
 }
 
 .match-time {
