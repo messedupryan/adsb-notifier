@@ -119,12 +119,45 @@ def _sighting_summary(sighting: Sighting) -> dict[str, Any]:
         "distance_miles": round(sighting.distance_miles, 2),
         "altitude_ft": plane.altitude_ft,
         "track_deg": plane.track_deg,
+        "ground_speed_kt": _first_present(plane.raw, "gs", "speed", "ground_speed", "ground_speed_kt"),
+        "vertical_rate_fpm": _first_present(plane.raw, "baro_rate", "geom_rate", "vertical_rate", "vertical_rate_fpm"),
         "squawk": plane.squawk,
         "notification_providers": sorted(sighting.notification_providers or []),
         "suppressed_notification_providers": sorted(sighting.suppressed_notification_providers),
         "notification_status": _notification_status(sighting),
         "observed_at": sighting.observed_at.isoformat(),
+        "aircraft_payload": _aircraft_payload(plane),
     }
+
+
+def _aircraft_payload(plane: Any) -> dict[str, Any]:
+    return {
+        "hex": plane.hex,
+        "flight": plane.flight,
+        "registration": plane.registration,
+        "aircraft_type": plane.aircraft_type,
+        "category": plane.category,
+        "source_type": plane.source_type,
+        "lat": plane.lat,
+        "lon": plane.lon,
+        "altitude_ft": plane.altitude_ft,
+        "track_deg": plane.track_deg,
+        "ground_speed_kt": _first_present(plane.raw, "gs", "speed", "ground_speed", "ground_speed_kt"),
+        "vertical_rate_fpm": _first_present(plane.raw, "baro_rate", "geom_rate", "vertical_rate", "vertical_rate_fpm"),
+        "seen_seconds": plane.seen_seconds,
+        "squawk": plane.squawk,
+        "emergency": plane.emergency,
+        "military": plane.military,
+        "is_tisb": plane.is_tisb,
+        "raw": plane.raw,
+    }
+
+
+def _first_present(values: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in values and values[key] not in (None, ""):
+            return values[key]
+    return None
 
 
 def _notification_status(sighting: Sighting) -> str:

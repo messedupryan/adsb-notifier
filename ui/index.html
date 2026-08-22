@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="Cache-Control" content="no-store" />
     <title>ADS-B Notifier Config</title>
-    <link id="favicon" rel="icon" type="image/png" href="/images/icon_teal.png?v=0.1.11" />
-    <link id="apple-touch-icon" rel="apple-touch-icon" href="/images/icon_teal.png?v=0.1.11" />
+    <link id="favicon" rel="icon" type="image/png" href="/images/icon_teal.png?v=0.1.12" />
+    <link id="apple-touch-icon" rel="apple-touch-icon" href="/images/icon_teal.png?v=0.1.12" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-    <link rel="stylesheet" href="/styles.css?v=0.1.11" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.12" />
   </head>
   <body>
     <main class="app-shell">
       <section class="toolbar">
         <div class="brand">
-          <h1><img id="app-logo" class="app-logo" src="/images/logo_teal.png?v=0.1.11" alt="ADS-B Notifier" /></h1>
+          <h1><img id="app-logo" class="app-logo" src="/images/logo_teal.png?v=0.1.12" alt="ADS-B Notifier" /></h1>
           <p id="status">Loading configuration...</p>
         </div>
         <div class="actions">
@@ -63,7 +63,12 @@
                 <select id="dashboard-provider-filter" aria-label="Filter recent matches by notification provider" data-dashboard-control="true">
                   <option value="">All providers</option>
                 </select>
+                <select id="dashboard-status-filter" aria-label="Filter recent matches by notification status" data-dashboard-control="true">
+                  <option value="">All statuses</option>
+                </select>
                 <input id="dashboard-search" type="search" placeholder="Search" aria-label="Search recent matches" data-dashboard-control="true" />
+                <input id="dashboard-date-from" type="date" aria-label="Filter recent matches from date" data-dashboard-control="true" />
+                <input id="dashboard-date-to" type="date" aria-label="Filter recent matches to date" data-dashboard-control="true" />
               </div>
             </header>
             <div id="recent-matches" class="recent-matches"></div>
@@ -377,10 +382,10 @@
       </section>
       <footer class="app-footer">
         <div class="footer-brand">
-          <span>ADS-B Notifier 0.1.11</span>
-          <span id="ui-version">UI 0.1.11</span>
+          <span>ADS-B Notifier 0.1.12</span>
+          <span id="ui-version">UI 0.1.12</span>
         </div>
-        <img id="footer-icon" class="footer-icon" src="/images/icon_teal.png?v=0.1.11" alt="" aria-hidden="true" />
+        <img id="footer-icon" class="footer-icon" src="/images/icon_teal.png?v=0.1.12" alt="" aria-hidden="true" />
       </footer>
     </main>
     <div id="confirm-modal" class="modal-overlay hidden" role="presentation">
@@ -393,19 +398,35 @@
         </div>
       </section>
     </div>
+    <div id="match-detail-modal" class="modal-overlay hidden" role="presentation">
+      <section class="modal match-detail-modal" role="dialog" aria-modal="true" aria-labelledby="match-detail-title">
+        <header>
+          <div>
+            <h2 id="match-detail-title">Match Details</h2>
+            <a id="match-detail-link" class="match-detail-link" href="#" target="_blank" rel="noopener noreferrer">Airplanes.live</a>
+          </div>
+          <button id="match-detail-close" type="button" aria-label="Close match details">Close</button>
+        </header>
+        <dl id="match-detail-summary" class="match-detail-summary"></dl>
+        <details class="match-payload-details">
+          <summary>Normalized aircraft payload</summary>
+          <pre id="match-detail-payload"></pre>
+        </details>
+      </section>
+    </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-    <script src="/js/constants.js?v=0.1.11"></script>
-    <script src="/js/state.js?v=0.1.11"></script>
-    <script src="/js/theme.js?v=0.1.11"></script>
-    <script src="/js/config-flow.js?v=0.1.11"></script>
-    <script src="/js/dashboard.js?v=0.1.11"></script>
-    <script src="/js/forms.js?v=0.1.11"></script>
-    <script src="/js/rule-actions.js?v=0.1.11"></script>
-    <script src="/js/modal.js?v=0.1.11"></script>
-    <script src="/js/validation.js?v=0.1.11"></script>
-    <script src="/js/rule-model.js?v=0.1.11"></script>
-    <script src="/js/map-utils.js?v=0.1.11"></script>
-    <script src="/js/ui-utils.js?v=0.1.11"></script>
-    <script src="/js/bootstrap.js?v=0.1.11"></script>
+    <script src="/js/constants.js?v=0.1.12"></script>
+    <script src="/js/state.js?v=0.1.12"></script>
+    <script src="/js/theme.js?v=0.1.12"></script>
+    <script src="/js/config-flow.js?v=0.1.12"></script>
+    <script src="/js/dashboard.js?v=0.1.12"></script>
+    <script src="/js/forms.js?v=0.1.12"></script>
+    <script src="/js/rule-actions.js?v=0.1.12"></script>
+    <script src="/js/modal.js?v=0.1.12"></script>
+    <script src="/js/validation.js?v=0.1.12"></script>
+    <script src="/js/rule-model.js?v=0.1.12"></script>
+    <script src="/js/map-utils.js?v=0.1.12"></script>
+    <script src="/js/ui-utils.js?v=0.1.12"></script>
+    <script src="/js/bootstrap.js?v=0.1.12"></script>
   </body>
 </html>

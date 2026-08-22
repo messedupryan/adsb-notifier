@@ -52,6 +52,7 @@ def test_write_poll_status_records_worker_summary(tmp_path):
             lat=40.77,
             lon=-111.9,
             track_deg=183,
+            raw={"gs": 122, "baro_rate": -320},
         ),
         distance_miles=4.2,
         rule_name="target",
@@ -71,7 +72,11 @@ def test_write_poll_status_records_worker_summary(tmp_path):
     assert status["recent_matches"][0]["lat"] == 40.77
     assert status["recent_matches"][0]["lon"] == -111.9
     assert status["recent_matches"][0]["track_deg"] == 183
+    assert status["recent_matches"][0]["ground_speed_kt"] == 122
+    assert status["recent_matches"][0]["vertical_rate_fpm"] == -320
     assert status["recent_matches"][0]["source_type"] == "adsb_icao"
+    assert status["recent_matches"][0]["aircraft_payload"]["registration"] == "N12345"
+    assert status["recent_matches"][0]["aircraft_payload"]["raw"] == {"baro_rate": -320, "gs": 122}
     assert status["recent_matches"][0]["airplanes_live_url"] == "https://globe.airplanes.live/?icao=ABC123"
     assert status["recent_matches"][0]["notification_status"] == "partially_suppressed"
     assert status["recent_matches"][0]["suppressed_notification_providers"] == ["twilio"]

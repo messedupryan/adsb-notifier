@@ -92,7 +92,7 @@ function renderRecentMatchGroup(group) {
   timeWindow.className = "match-time";
   timeWindow.textContent = `First ${formatDateTime(group.firstSeen) || "unknown"} · Last ${formatDateTime(group.lastSeen) || "unknown"}`;
 
-  item.append(header, meta, notificationStatusLabel(group.latest), timeWindow, matchExternalLink(group.latest));
+  item.append(header, meta, notificationStatusLabel(group.latest), timeWindow, matchActions(matchExternalLink(group.latest), matchDetailButton(group.latest)));
   return item;
 }
 
@@ -115,8 +115,24 @@ function renderRecentMatchItem(match, options = {}) {
   const time = document.createElement("span");
   time.className = "match-time";
   time.textContent = formatDateTime(match.observed_at) || "Unknown time";
-  item.append(title, meta, notificationStatusLabel(match), time, matchExternalLink(match));
+  item.append(title, meta, notificationStatusLabel(match), time, matchActions(matchExternalLink(match), matchDetailButton(match)));
   return item;
+}
+
+function matchActions(...actions) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "match-actions";
+  wrapper.append(...actions);
+  return wrapper;
+}
+
+function matchDetailButton(match) {
+  const button = document.createElement("button");
+  button.className = "match-detail-button";
+  button.type = "button";
+  button.dataset.matchKey = matchKey(match);
+  button.textContent = "Details";
+  return button;
 }
 
 function notificationStatusLabel(match) {
@@ -325,6 +341,11 @@ function updateMapActionState() {
 
 recentMatches.addEventListener("click", (event) => {
   if (event.target.closest("a")) return;
+  const detailButton = event.target.closest(".match-detail-button");
+  if (detailButton?.dataset.matchKey) {
+    openMatchDetail(detailButton.dataset.matchKey);
+    return;
+  }
   const toggle = event.target.closest(".match-group-toggle");
   if (toggle?.dataset.groupKey) {
     toggleMatchGroup(toggle.dataset.groupKey);
@@ -336,6 +357,7 @@ recentMatches.addEventListener("click", (event) => {
 });
 recentMatches.addEventListener("keydown", (event) => {
   if (!["Enter", " "].includes(event.key)) return;
+  if (event.target.closest(".match-detail-button")) return;
   if (event.target.closest(".match-group-toggle")) return;
   const item = event.target.closest(".match-item");
   if (!item?.dataset.matchKey) return;
@@ -371,6 +393,7 @@ function renderDashboardFilters(matches) {
     "All providers",
     providerLabel
   );
+  syncFilterOptions(dashboardStatusFilter, uniqueMatchValues(matches, (match) => match.notification_status || "sent"), "All statuses", notificationStatusText);
 }
 
 function syncFilterOptions(select, values, allLabel, labelForValue = (value) => value) {
@@ -398,18 +421,40 @@ function filterRecentMatches(matches) {
   const eventType = dashboardEventFilter?.value || "";
   const ruleName = dashboardRuleFilter?.value || "";
   const provider = dashboardProviderFilter?.value || "";
+  const notificationStatus = dashboardStatusFilter?.value || "";
   const search = (dashboardSearch?.value || "").trim().toLowerCase();
+  const fromDate = dashboardDateFrom?.value || "";
+  const toDate = dashboardDateTo?.value || "";
   return matches.filter((match) => {
     if (eventType && match.event_type !== eventType) return false;
     if (ruleName && match.rule_name !== ruleName) return false;
+    if (notificationStatus && (match.notification_status || "sent") !== notificationStatus) return false;
     if (
       provider &&
       ![...(match.notification_providers || []), ...(match.suppressed_notification_providers || [])].includes(provider)
     ) {
       return false;
     }
+    if (fromDate && !matchIsOnOrAfterDate(match, fromDate)) return false;
+    if (toDate && !matchIsOnOrBeforeDate(match, toDate)) return false;
     return !search || matchSearchText(match).includes(search);
   });
+}
+
+function matchIsOnOrAfterDate(match, value) {
+  const matchDate = matchDateString(match);
+  return !matchDate || matchDate >= value;
+}
+
+function matchIsOnOrBeforeDate(match, value) {
+  const matchDate = matchDateString(match);
+  return !matchDate || matchDate <= value;
+}
+
+function matchDateString(match) {
+  const date = new Date(match.observed_at || "");
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
 }
 
 function matchSearchText(match) {
@@ -434,4 +479,59 @@ function applyDashboardFilters() {
   if (latestWorkerStatus) {
     renderWorkerStatus(latestWorkerStatus);
   }
+}
+
+function openMatchDetail(key) {
+  const match = (latestWorkerStatus?.recent_matches || []).find((candidate) => matchKey(candidate) === key);
+  if (!match) return;
+  matchDetailTitle.textContent = `${match.rule_name || "Rule"}: ${match.aircraft_label || match.hex || "Aircraft"}`;
+  const airplanesLiveUrl = match.airplanes_live_url || match.adsb_exchange_url || "";
+  matchDetailLink.href = airplanesLiveUrl || "#";
+  matchDetailLink.classList.toggle("hidden", !airplanesLiveUrl);
+  renderMatchDetailSummary(match);
+  matchDetailPayload.textContent = JSON.stringify(match.aircraft_payload || match, null, 2);
+  matchDetailModal.classList.remove("hidden");
+  matchDetailCloseButton.focus();
+}
+
+function renderMatchDetailSummary(match) {
+  matchDetailSummary.replaceChildren();
+  [
+    ["Aircraft", match.aircraft_label || match.registration || match.hex || ""],
+    ["Registration", match.registration || ""],
+    ["Flight", match.flight || ""],
+    ["ICAO hex", match.hex || ""],
+    ["Aircraft type", match.aircraft_type || ""],
+    ["Category", match.category || ""],
+    ["Observed", formatDateTime(match.observed_at) || ""],
+    ["Position", hasPosition(match) ? `${Number(match.lat).toFixed(4)}, ${Number(match.lon).toFixed(4)}` : ""],
+    ["Distance", match.distance_miles === null || match.distance_miles === undefined ? "" : `${match.distance_miles} mi`],
+    ["Altitude", match.altitude_ft === null || match.altitude_ft === undefined ? "" : `${match.altitude_ft} ft`],
+    ["Speed", match.ground_speed_kt === null || match.ground_speed_kt === undefined ? "" : `${match.ground_speed_kt} kt`],
+    ["Heading", match.track_deg === null || match.track_deg === undefined ? "" : `${match.track_deg} deg`],
+    ["Vertical rate", match.vertical_rate_fpm === null || match.vertical_rate_fpm === undefined ? "" : `${match.vertical_rate_fpm} fpm`],
+    ["Squawk", match.squawk || ""],
+  ].forEach(([label, value]) => appendDetailRow(label, value || "unknown"));
+}
+
+function appendDetailRow(label, value) {
+  const wrapper = document.createElement("div");
+  const term = document.createElement("dt");
+  const description = document.createElement("dd");
+  term.textContent = label;
+  description.textContent = value;
+  wrapper.append(term, description);
+  matchDetailSummary.append(wrapper);
+}
+
+function closeMatchDetail() {
+  matchDetailModal.classList.add("hidden");
+}
+
+function notificationStatusText(value) {
+  return {
+    sent: "Sent",
+    suppressed: "Suppressed",
+    partially_suppressed: "Partially suppressed",
+  }[value] || value || "Unknown";
 }

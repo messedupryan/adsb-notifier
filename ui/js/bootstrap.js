@@ -23,7 +23,7 @@ refreshStatusButton.addEventListener("click", () => loadWorkerStatus());
 recenterMapButton.addEventListener("click", () => recenterDashboardMap());
 fitMapButton.addEventListener("click", () => fitDashboardMap());
 selectedMapButton.addEventListener("click", () => zoomSelectedMatch());
-[dashboardEventFilter, dashboardRuleFilter, dashboardProviderFilter, dashboardSearch].forEach((control) => {
+[dashboardEventFilter, dashboardRuleFilter, dashboardProviderFilter, dashboardStatusFilter, dashboardSearch, dashboardDateFrom, dashboardDateTo].forEach((control) => {
   control.addEventListener("input", applyDashboardFilters);
   control.addEventListener("change", applyDashboardFilters);
 });
@@ -92,12 +92,17 @@ window.addEventListener("beforeunload", (event) => {
 });
 confirmCancelButton.addEventListener("click", () => closeConfirm(false));
 confirmAcceptButton.addEventListener("click", () => closeConfirm(true));
+matchDetailCloseButton.addEventListener("click", closeMatchDetail);
 confirmModal.addEventListener("click", (event) => {
   if (event.target === confirmModal) closeConfirm(false);
 });
+matchDetailModal.addEventListener("click", (event) => {
+  if (event.target === matchDetailModal) closeMatchDetail();
+});
 window.addEventListener("keydown", (event) => {
-  if (confirmModal.classList.contains("hidden")) return;
-  if (event.key === "Escape") closeConfirm(false);
+  if (event.key !== "Escape") return;
+  if (!confirmModal.classList.contains("hidden")) closeConfirm(false);
+  if (!matchDetailModal.classList.contains("hidden")) closeMatchDetail();
 });
 window.addEventListener("error", (event) => {
   showErrors([`UI error: ${event.message}`]);

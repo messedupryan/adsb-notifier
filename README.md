@@ -50,6 +50,7 @@ The app can run locally during development or as containers in Kubernetes. See [
 - Optional square alert snapshots in HTML email notifications.
 - Worker status and recent match history.
 - Dashboard map with home location, active rule radii, grouped recent matches, filtered recent match markers, selected-match highlighting, and Airplanes.live aircraft links.
+- Recent match detail view with aircraft identifiers, notification status, position, movement details, and collapsible normalized payload.
 - Light/dark UI modes, accent themes, themed logo assets, and theme-aware favicon.
 
 <a id="ui"></a>
@@ -196,6 +197,8 @@ The map is centered around the configured home location and can show:
 - Selected match highlighting
 
 Repeated dashboard alerts are grouped by aircraft and rule so noisy repeat matches are easier to scan while the underlying recent match history still preserves each individual event.
+
+Recent matches can be filtered by event, rule, provider, notification status, aircraft text, and date range. Each row has a detail view for troubleshooting the normalized aircraft payload behind the alert.
 
 <a id="versioning"></a>
 

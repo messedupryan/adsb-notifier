@@ -200,9 +200,22 @@ def test_dashboard_filter_controls_are_available():
     assert "dashboard-event-filter" in parser.selects
     assert "dashboard-rule-filter" in parser.selects
     assert "dashboard-provider-filter" in parser.selects
+    assert "dashboard-status-filter" in parser.selects
     assert "dashboard-search" in parser.inputs
+    assert "dashboard-date-from" in parser.inputs
+    assert "dashboard-date-to" in parser.inputs
     assert 'data-dashboard-control="true"' in INDEX_HTML
     assert "function filterRecentMatches" in UI_JS
+
+
+def test_recent_match_detail_view_is_available():
+    assert "match-detail-modal" in INDEX_HTML
+    assert "match-detail-link" in INDEX_HTML
+    assert "match-detail-summary" in INDEX_HTML
+    assert "match-detail-payload" in INDEX_HTML
+    assert "function openMatchDetail" in UI_JS
+    assert "function renderMatchDetailSummary" in UI_JS
+    assert "aircraft_payload" in UI_JS
 
 
 def test_dashboard_repeat_alert_grouping_helpers_are_available():
