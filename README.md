@@ -204,9 +204,9 @@ Recent matches can be filtered by event, rule, provider, notification status, an
 
 ## 🏷️ Versioning
 
-The project is currently in beta and uses SemVer-style `0.x.y` versions, with explicit release-candidate builds like `0.2.0-rc.1` before stable cuts like `0.2.0`. The worker, API, UI, Helm chart, Python package, and container images share the project version during beta.
+The project is currently in beta and uses SemVer-style `0.x.y` versions, with explicit release-candidate builds like `0.x.0-rc.n` before stable cuts like `0.x.0`. The worker, API, UI, Helm chart, Python package, and container images share the project version during beta.
 
-Use `make release-rc RC_VERSION=0.2.0-rc.1` from a clean worktree to prepare, build, push, deploy, and roll out a release candidate. See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, RC workflow, and promotion checklist.
+Use `make release-rc` from a clean worktree to prepare, build, push, deploy, and roll out the next release candidate. The target derives the next RC from the current project version, either from the latest numeric checkpoint to the next minor `rc.1`, or from one RC to the next. See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, RC workflow, and promotion checklist.
 
 <a id="security-model"></a>
 

@@ -1,6 +1,6 @@
 # Versioning and Promotion
 
-ADS-B Notifier is in beta and uses SemVer-style `0.x.y` versions. Release-candidate builds use an explicit prerelease suffix such as `0.2.0-rc.1`; stable cuts drop the prerelease suffix, such as `0.2.0`.
+ADS-B Notifier is in beta and uses SemVer-style `0.x.y` versions. Release-candidate builds use an explicit prerelease suffix such as `0.x.0-rc.n`; stable cuts drop the prerelease suffix, such as `0.x.0`.
 
 ## Source of Truth
 
@@ -9,7 +9,7 @@ The root `VERSION` file is the project version source of truth.
 The current beta version is:
 
 ```text
-0.1.14
+0.2.0-rc.1
 ```
 
 For now, the worker, API, UI, Python package, Helm chart, and container images all share the project version. Split component versions only when the components need independent release cadence.
@@ -32,7 +32,7 @@ Run `make version` to display the project version and image tags that will be bu
 - Use `0.x.y` while the project is still changing quickly.
 - Increment the patch version for each stable batch of work that should be deployable or eligible for promotion.
 - While building toward the next minor release, use numeric patch versions on `develop` as deployable checkpoints. For example, after stable `0.1.0`, use `0.1.1`, `0.1.2`, and later `0.1.x` while building toward `0.2.0`.
-- Use prerelease suffixes only for release-candidate builds that are feature-complete and ready for soak testing, such as `0.2.0-rc.1`.
+- Use prerelease suffixes only for release-candidate builds that are feature-complete and ready for soak testing, such as `0.x.0-rc.n`.
 - Avoid alpha/beta prerelease versions unless the project convention intentionally changes.
 - Keep all components on the same version during beta unless there is a strong reason to split them.
 - Avoid deploying `latest` for normal testing. Use the explicit project version tag.
@@ -87,17 +87,17 @@ After the committed `0.2.0` scope is complete on `develop`, use the one-command 
 git switch develop
 pipenv run pytest -q
 helm lint charts/adsb-notifier
-make release-rc RC_VERSION=0.2.0-rc.1
+make release-rc
 ```
 
-The `release-rc` target fails early if the git worktree is dirty. When clean, it bumps all version-managed files to `RC_VERSION`, builds and pushes the worker/API/UI images with that tag, deploys the Helm chart with the same tag, and waits for rollout.
+The `release-rc` target fails early if the git worktree is dirty. When clean, it derives the next RC from the current `VERSION`, either from the latest numeric checkpoint to the next minor `rc.1`, or from one RC to the next. It then bumps all version-managed files to `RC_VERSION`, builds and pushes the worker/API/UI images with that tag, deploys the Helm chart with the same tag, and waits for rollout. Pass `RC_VERSION=...` only when you need to override the inferred next candidate.
 
 After the deployed RC looks good, commit the RC version bump and tag the committed candidate:
 
 ```bash
 git add VERSION pyproject.toml adsb_notifier/version.py charts/adsb-notifier/Chart.yaml charts/adsb-notifier/values.example.yaml ui docs README.md Makefile.example tests/test_versioning.py
-git commit -m "chore(release): prepare 0.2.0-rc.1"
-git tag v0.2.0-rc.1
+git commit -m "chore(release): prepare <rc-version>"
+git tag v<rc-version>
 ```
 
 ## Version Bump Checklist

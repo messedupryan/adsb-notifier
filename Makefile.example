@@ -9,7 +9,8 @@ HELM_CHART ?= charts/adsb-notifier
 HELM_VALUES ?= charts/adsb-notifier/values.example.yaml
 HELM_ADOPT ?= false
 HELM_ARGS ?=
-RC_VERSION ?= 0.2.0-rc.1
+NEXT_RC_VERSION := $(shell python3 -m adsb_notifier.release next-rc "$(PROJECT_VERSION)")
+RC_VERSION ?= $(NEXT_RC_VERSION)
 
 LOCAL_CONFIG ?= config.dev.json
 API_HOST ?= 127.0.0.1
@@ -42,7 +43,7 @@ help:
 		'  make push          Push worker, API, and UI container images' \
 		'  make build-push    Build and push all images' \
 		'  make release       Build/push images, deploy Helm chart, and wait for rollout' \
-		'  make release-rc    Clean-worktree bump/build/push/deploy RC_VERSION=0.2.0-rc.1' \
+		'  make release-rc    Clean-worktree bump/build/push/deploy next RC version' \
 		'  make k8s-secret    Create/update Kubernetes secret from .env' \
 		'  make deploy-k8s    Apply raw Kubernetes manifests' \
 		'  make deploy-helm   Deploy Helm chart with helm upgrade --install' \
@@ -54,12 +55,12 @@ help:
 		'  make config-export-backups Export PVC config backups to CONFIG_EXPORT_DIR/backups' \
 		'  make config-restore RESTORE_FILE=path.json  Restore a local config into Kubernetes' \
 		'  make version       Show project/component version and image tags' \
-		'  make bump-version NEW_VERSION=0.1.14  Bump project/component version files' \
+		'  make bump-version NEW_VERSION=0.2.0-rc.1  Bump project/component version files' \
 		'' \
 		'Common overrides:' \
 		'  REGISTRY=registry.example.test IMAGE_TAG=$(PROJECT_VERSION) NAMESPACE=adsb' \
 		'  LOCAL_CONFIG=config.dev.json API_PORT=8765 UI_PORT=8766' \
-		'  RC_VERSION=0.2.0-rc.1' \
+		'  RC_VERSION=$(NEXT_RC_VERSION)' \
 		'  HELM_CHART=charts/adsb-notifier HELM_VALUES=charts/adsb-notifier/values.example.yaml' \
 		'  HELM_ADOPT=true HELM_ARGS="--set image.tag=$(PROJECT_VERSION)"'
 
@@ -80,7 +81,7 @@ check-clean:
 	}
 
 bump-version:
-	@test -n "$(NEW_VERSION)" || { echo "Usage: make bump-version NEW_VERSION=0.1.14"; exit 1; }
+	@test -n "$(NEW_VERSION)" || { echo "Usage: make bump-version NEW_VERSION=0.2.0-rc.1"; exit 1; }
 	@echo "$(NEW_VERSION)" | grep -Eq '^0\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$$' || { echo "NEW_VERSION must match beta semver pattern 0.x.y or 0.x.y-rc.n"; exit 1; }
 	@old_version="$(PROJECT_VERSION)"; \
 	if [ "$$old_version" = "$(NEW_VERSION)" ]; then \

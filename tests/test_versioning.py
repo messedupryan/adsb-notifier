@@ -84,10 +84,11 @@ def test_makefile_release_candidate_target_is_guarded_and_versioned():
 
     assert "release-rc:" in makefile
     assert "check-clean:" in makefile
+    assert "NEXT_RC_VERSION" in makefile
+    assert 'python3 -m adsb_notifier.release next-rc "$(PROJECT_VERSION)"' in makefile
     assert "Git worktree must be clean before release work starts." in makefile
     assert 'bump-version NEW_VERSION="$(RC_VERSION)"' in makefile
     assert 'release PROJECT_VERSION="$(RC_VERSION)" IMAGE_TAG="$(RC_VERSION)"' in makefile
-    assert "0.2.0-rc.1" in makefile
 
 
 def test_local_deploy_files_are_ignored():

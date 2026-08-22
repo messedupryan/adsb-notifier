@@ -53,11 +53,11 @@ API_HOST=127.0.0.1
 API_PORT=8765
 UI_PORT=8766
 REGISTRY=registry.example.test
-IMAGE_TAG=0.1.14
+IMAGE_TAG=0.2.0-rc.1
 NAMESPACE=adsb
 RELEASE=adsb-notifier
 HELM_VALUES=charts/adsb-notifier/values.yaml
-RC_VERSION=0.2.0-rc.1
+RC_VERSION=<override>
 ```
 
 The public example defaults live in `Makefile.example` and `charts/adsb-notifier/values.example.yaml`. Local deploy-ready files live at `Makefile` and `charts/adsb-notifier/values.yaml`; both local files are ignored by Git so registry names, ingress hosts, namespaces, and other environment-specific values do not leak into commits.
@@ -132,13 +132,13 @@ Local testing is a time-saving measure, not a gate. Because this is a personal a
 
 ## Release Candidate Workflow
 
-When the committed `0.2.0` scope is feature-complete and the current checkpoint is committed, prepare and deploy the first release candidate with one command:
+When the committed `0.2.0` scope is feature-complete and the current checkpoint is committed, prepare and deploy the next release candidate with one command:
 
 ```bash
-make release-rc RC_VERSION=0.2.0-rc.1
+make release-rc
 ```
 
-`release-rc` requires a clean git worktree before it starts. It then bumps all version-managed files to `RC_VERSION`, builds and pushes worker/API/UI images with that tag, deploys the Helm chart with the same image tag, and waits for rollout. After validating the deployed RC, commit the RC version bump and tag the committed RC when ready.
+`release-rc` requires a clean git worktree before it starts. It derives the next RC version from `VERSION`, either from the latest numeric checkpoint to the next minor `rc.1`, or from one RC to the next. It then bumps all version-managed files to `RC_VERSION`, builds and pushes worker/API/UI images with that tag, deploys the Helm chart with the same image tag, and waits for rollout. Override `RC_VERSION=...` only when preparing a nonstandard candidate. After validating the deployed RC, commit the RC version bump and tag the committed RC when ready.
 
 ## Testing
 
@@ -231,7 +231,7 @@ make release REGISTRY=registry.example.test NAMESPACE=adsb RELEASE=adsb-notifier
 Prepare and deploy a release candidate from a clean worktree:
 
 ```bash
-make release-rc RC_VERSION=0.2.0-rc.1 REGISTRY=registry.example.test NAMESPACE=adsb RELEASE=adsb-notifier
+make release-rc REGISTRY=registry.example.test NAMESPACE=adsb RELEASE=adsb-notifier
 ```
 
 Individual images:
