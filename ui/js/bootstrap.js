@@ -13,6 +13,9 @@ addRuleButton.addEventListener("click", addRule);
 testRuleButton.addEventListener("click", testSelectedRule);
 duplicateRuleButton.addEventListener("click", duplicateSelectedRule);
 deleteRuleButton.addEventListener("click", deleteSelectedRule);
+toggleVisibleRulesButton.addEventListener("click", toggleVisibleRuleSelection);
+bulkEnableRulesButton.addEventListener("click", () => bulkSetSelectedRulesEnabled(true));
+bulkDisableRulesButton.addEventListener("click", () => bulkSetSelectedRulesEnabled(false));
 testEmailButton.addEventListener("click", () => testNotification("email"));
 testPushoverButton.addEventListener("click", () => testNotification("pushover"));
 testTwilioButton.addEventListener("click", () => testNotification("twilio"));
@@ -25,8 +28,30 @@ selectedMapButton.addEventListener("click", () => zoomSelectedMatch());
   control.addEventListener("change", applyDashboardFilters);
 });
 fields.ruleNotificationProviders.addEventListener("change", handleInput);
+[
+  ruleSearch,
+  ruleTypeFilter,
+  ruleStateFilter,
+].forEach((control) => {
+  control.addEventListener("input", applyRuleListFilters);
+  control.addEventListener("change", applyRuleListFilters);
+});
 ruleList.addEventListener("click", async (event) => {
-  const item = event.target.closest(".rule-item");
+  const selection = event.target.closest(".rule-select input");
+  if (selection) {
+    const item = selection.closest(".rule-item");
+    const ruleId = item?.dataset.ruleId;
+    if (!ruleId) return;
+    if (selection.checked) {
+      selectedRuleIds.add(ruleId);
+    } else {
+      selectedRuleIds.delete(ruleId);
+    }
+    renderRuleList();
+    return;
+  }
+
+  const item = event.target.closest(".rule-open");
   if (!item) return;
   const nextRuleId = item.dataset.ruleId;
   if (!nextRuleId) return;
@@ -56,6 +81,7 @@ ruleList.addEventListener("click", async (event) => {
 document.querySelectorAll("input, select, textarea").forEach((input) => {
   if (input.dataset.themeControl) return;
   if (input.dataset.dashboardControl) return;
+  if (input.dataset.ruleControl) return;
   input.addEventListener("input", handleInput);
   input.addEventListener("change", handleInput);
 });

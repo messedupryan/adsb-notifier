@@ -27,7 +27,7 @@ UI_IMAGE := $(REGISTRY)/adsb-notifier-ui:$(IMAGE_TAG)
 
 VERSION_FILES := VERSION pyproject.toml charts/adsb-notifier/Chart.yaml charts/adsb-notifier/values.example.yaml ui/index.html ui/js/bootstrap.js ui/js/config-flow.js ui/js/dashboard.js ui/js/forms.js ui/js/map-utils.js ui/js/modal.js ui/js/rule-actions.js ui/js/rule-model.js ui/js/state.js ui/js/theme.js ui/js/ui-utils.js ui/js/validation.js adsb_notifier/version.py docs/DEVELOPMENT.md docs/VERSIONING.md README.md Dockerfile Dockerfile.api Dockerfile.ui Makefile.example tests/test_versioning.py
 
-.PHONY: help version bump-version test local local-api local-ui worker-once build build-worker build-api build-ui push build-push release k8s-secret deploy-k8s deploy-helm rollout status config-export config-backups config-export-backups config-restore
+.PHONY: help version bump-version test local local-api local-ui worker-once build build-worker build-api build-ui push build-push release k8s-secret deploy-k8s deploy-helm restart rollout status config-export config-backups config-export-backups config-restore
 
 help:
 	@printf '%s\n' \
@@ -44,6 +44,7 @@ help:
 		'  make k8s-secret    Create/update Kubernetes secret from .env' \
 		'  make deploy-k8s    Apply raw Kubernetes manifests' \
 		'  make deploy-helm   Deploy Helm chart with helm upgrade --install' \
+		'  make restart       Restart Kubernetes deployments and wait for rollout' \
 		'  make rollout       Wait for Kubernetes deployments to roll out' \
 		'  make status        Show Kubernetes resources' \
 		'  make config-export Export live Kubernetes config to CONFIG_EXPORT_DIR' \
@@ -51,7 +52,7 @@ help:
 		'  make config-export-backups Export PVC config backups to CONFIG_EXPORT_DIR/backups' \
 		'  make config-restore RESTORE_FILE=path.json  Restore a local config into Kubernetes' \
 		'  make version       Show project/component version and image tags' \
-		'  make bump-version NEW_VERSION=0.1.8  Bump project/component version files' \
+		'  make bump-version NEW_VERSION=0.1.10  Bump project/component version files' \
 		'' \
 		'Common overrides:' \
 		'  REGISTRY=registry.example.test IMAGE_TAG=$(PROJECT_VERSION) NAMESPACE=adsb' \
@@ -67,7 +68,7 @@ version:
 		'UI image:        $(UI_IMAGE)'
 
 bump-version:
-	@test -n "$(NEW_VERSION)" || { echo "Usage: make bump-version NEW_VERSION=0.1.8"; exit 1; }
+	@test -n "$(NEW_VERSION)" || { echo "Usage: make bump-version NEW_VERSION=0.1.10"; exit 1; }
 	@echo "$(NEW_VERSION)" | grep -Eq '^0\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$$' || { echo "NEW_VERSION must match beta semver pattern 0.x.y or 0.x.y-rc.n"; exit 1; }
 	@old_version="$(PROJECT_VERSION)"; \
 	if [ "$$old_version" = "$(NEW_VERSION)" ]; then \
@@ -150,10 +151,14 @@ deploy-helm:
 	if [ "$(HELM_ADOPT)" = "true" ]; then adopt_arg="--take-ownership"; fi; \
 	helm upgrade --install "$(RELEASE)" "$(HELM_CHART)" --namespace "$(NAMESPACE)" --create-namespace $$values_arg --set image.tag="$(IMAGE_TAG)" $$adopt_arg $(HELM_ARGS)
 
+restart:
+	kubectl -n "$(NAMESPACE)" rollout restart deployment/$(RELEASE)-api deployment/$(RELEASE)-ui deployment/$(RELEASE)-worker
+	$(MAKE) rollout NAMESPACE="$(NAMESPACE)" RELEASE="$(RELEASE)"
+
 rollout:
-	kubectl -n "$(NAMESPACE)" rollout status deployment/adsb-notifier-api --timeout=120s
-	kubectl -n "$(NAMESPACE)" rollout status deployment/adsb-notifier-ui --timeout=120s
-	kubectl -n "$(NAMESPACE)" rollout status deployment/adsb-notifier-worker --timeout=120s
+	kubectl -n "$(NAMESPACE)" rollout status deployment/$(RELEASE)-api --timeout=120s
+	kubectl -n "$(NAMESPACE)" rollout status deployment/$(RELEASE)-ui --timeout=120s
+	kubectl -n "$(NAMESPACE)" rollout status deployment/$(RELEASE)-worker --timeout=120s
 
 status:
 	kubectl -n "$(NAMESPACE)" get pods,svc,ingress,pvc

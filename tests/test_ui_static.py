@@ -170,6 +170,29 @@ def test_rule_match_fields_appear_before_rule_options():
     assert notifications_index < quiet_hours_index < exclusions_index
 
 
+def test_rule_search_filter_and_bulk_controls_are_available():
+    parser = InputParser()
+    parser.feed(INDEX_HTML)
+
+    assert "rule-search" in parser.inputs
+    assert "rule-type-filter" in parser.selects
+    assert "rule-state-filter" in parser.selects
+    assert "rule-selected-count" in INDEX_HTML
+    assert "toggle-visible-rules" in INDEX_HTML
+    assert "bulk-enable-rules" in INDEX_HTML
+    assert "bulk-disable-rules" in INDEX_HTML
+    assert 'data-rule-control="true"' in INDEX_HTML
+    assert "function ruleMatchesListFilters" in UI_JS
+    assert "function toggleVisibleRuleSelection" in UI_JS
+    assert "function bulkSetSelectedRulesEnabled" in UI_JS
+
+
+def test_rule_bulk_actions_save_full_config():
+    assert 'fetch(`${apiBase}/config`, {' in UI_JS
+    assert "selectedRuleIds" in UI_JS
+    assert "syncRuleSelectionToVisible" in UI_JS
+
+
 def test_dashboard_filter_controls_are_available():
     parser = InputParser()
     parser.feed(INDEX_HTML)

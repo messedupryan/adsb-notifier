@@ -92,6 +92,7 @@ async function saveConfig(options = {}) {
 function handleInput(event) {
   if (!config) return;
   if (event.target === newRuleType) return;
+  if (event.target.dataset.ruleControl) return;
   if (event.target === fields.json) {
     isJsonDirty = true;
     setDirty(true);
@@ -122,6 +123,12 @@ function handleInput(event) {
   }
   setDirty(true);
   clearMessage();
+}
+
+function applyRuleListFilters() {
+  if (!config) return;
+  syncRuleSelectionToVisible();
+  renderRuleList();
 }
 
 async function requestTabChange(tabName) {

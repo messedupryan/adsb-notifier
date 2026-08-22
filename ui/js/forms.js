@@ -65,16 +65,38 @@ function renderRuleList() {
   const rules = config?.rules || [];
   if (rules.length === 0) {
     ruleList.append(emptyState("No rules configured"));
+    renderRuleBulkState();
     return;
   }
 
-  rules.forEach((rule) => {
+  const filteredRules = visibleRules();
+  syncRuleSelectionToVisible();
+  if (filteredRules.length === 0) {
+    ruleList.append(emptyState("No rules match these filters"));
+    renderRuleBulkState();
+    return;
+  }
+
+  filteredRules.forEach((rule) => {
+    const item = document.createElement("div");
+    item.className = "rule-item";
+    item.dataset.ruleId = rule.id;
+    item.classList.toggle("selected", rule.id === selectedRuleId);
+    item.classList.toggle("disabled", rule.enabled === false);
+    item.classList.toggle("bulk-selected", selectedRuleIds.has(rule.id));
+
+    const selectorLabel = document.createElement("label");
+    selectorLabel.className = "rule-select";
+    const selector = document.createElement("input");
+    selector.type = "checkbox";
+    selector.checked = selectedRuleIds.has(rule.id);
+    selector.setAttribute("aria-label", `Select ${rule.name || "unnamed rule"} for bulk actions`);
+    selectorLabel.append(selector);
+
     const button = document.createElement("button");
-    button.className = "rule-item";
+    button.className = "rule-open";
     button.type = "button";
     button.dataset.ruleId = rule.id;
-    button.classList.toggle("selected", rule.id === selectedRuleId);
-    button.classList.toggle("disabled", rule.enabled === false);
 
     const title = document.createElement("strong");
     const status = document.createElement("span");
@@ -84,8 +106,21 @@ function renderRuleList() {
     const meta = document.createElement("span");
     meta.textContent = `${eventLabel(rule.event)} · ${ruleSummary(rule)} · ${rule.radius_miles ?? "unset"} mi`;
     button.append(title, meta);
-    ruleList.append(button);
+    item.append(selectorLabel, button);
+    ruleList.append(item);
   });
+  renderRuleBulkState();
+}
+
+function renderRuleBulkState() {
+  const selectedCount = selectedRuleIds.size;
+  const visibleRuleIds = visibleRules().map((rule) => rule.id);
+  const allVisibleSelected = visibleRuleIds.length > 0 && visibleRuleIds.every((ruleId) => selectedRuleIds.has(ruleId));
+  ruleSelectedCount.textContent = `${selectedCount} selected`;
+  toggleVisibleRulesButton.textContent = allVisibleSelected ? "Deselect visible" : "Select visible";
+  toggleVisibleRulesButton.disabled = visibleRuleIds.length === 0;
+  bulkEnableRulesButton.disabled = selectedCount === 0;
+  bulkDisableRulesButton.disabled = selectedCount === 0;
 }
 
 function renderRuleEditor() {

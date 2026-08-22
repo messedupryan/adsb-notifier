@@ -642,6 +642,58 @@ textarea.invalid {
   min-width: 140px;
 }
 
+.rule-list-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--soft-border);
+}
+
+.rule-search-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rule-filter-row,
+.rule-selection-row,
+.rule-bulk-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rule-filter-row select {
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.rule-bulk-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rule-selection-row {
+  justify-content: space-between;
+}
+
+.rule-bulk-action-row {
+  justify-content: flex-start;
+}
+
+.rule-selection-row span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.rule-bulk-actions button {
+  min-width: 76px;
+  padding-inline: 10px;
+  font-size: 13px;
+}
+
 .provider .form-grid {
   padding: 16px;
 }
@@ -670,10 +722,15 @@ textarea.invalid {
 }
 
 .rule-item {
-  display: block;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 8px;
   min-height: 64px;
-  padding: 10px 12px;
-  text-align: left;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
 }
 
 .rule-item.selected {
@@ -691,19 +748,53 @@ textarea.invalid {
   color: var(--muted);
 }
 
-.rule-item strong,
-.rule-item span {
+.rule-item.bulk-selected {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.rule-select {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rule-select input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+}
+
+.rule-open {
+  display: block;
+  min-width: 0;
+  min-height: 48px;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  box-shadow: none;
+}
+
+.rule-open:hover {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.rule-open strong,
+.rule-open span {
   display: block;
 }
 
-.rule-item strong {
+.rule-open strong {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 5px;
 }
 
-.rule-item span {
+.rule-open span {
   color: var(--muted);
   font-size: 13px;
 }

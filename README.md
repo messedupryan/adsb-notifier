@@ -43,6 +43,7 @@ The app can run locally during development or as containers in Kubernetes. See [
 - Military matching that understands readsb/Airplanes.live `dbFlags`.
 - Optional TIS-B inclusion for military rules.
 - Per-rule notification provider selection from globally enabled providers.
+- Rule list search/filter and selected-rule bulk enable/disable actions.
 - Live rule testing against the configured ADS-B source.
 - Shared configuration validation for required sections, supported fields, home coordinates, rule shape, and notification providers.
 - Provider-specific notification templates.

@@ -39,6 +39,7 @@ make build-push
 make release
 make k8s-secret
 make deploy-helm
+make restart
 make rollout
 make status
 ```
@@ -51,7 +52,7 @@ API_HOST=127.0.0.1
 API_PORT=8765
 UI_PORT=8766
 REGISTRY=registry.example.test
-IMAGE_TAG=0.1.8
+IMAGE_TAG=0.1.10
 NAMESPACE=adsb
 RELEASE=adsb-notifier
 HELM_VALUES=charts/adsb-notifier/values.yaml
@@ -98,6 +99,18 @@ Run one worker poll against a local or port-forwarded ADS-B feed:
 ```bash
 pipenv run adsb-notifier --config config.dev.json --adsb-url http://127.0.0.1:8080/tar1090/data/aircraft.json --once
 ```
+
+## Local-First Feature Workflow
+
+During normal feature work, prefer local iteration before committing or deploying:
+
+1. Make the code changes locally.
+2. Run focused tests while iterating.
+3. Run the full test suite before treating the slice as ready.
+4. Start the local API/UI for manual validation when the web UI changes.
+5. Commit, build images, and deploy only after the feature slice is coherent and worth promoting as a checkpoint.
+
+This keeps small UI and behavior tweaks cheap to adjust without creating unnecessary commits or cluster deploys. Version bumps remain appropriate for deployable checkpoints, but a version bump does not require immediate deployment while local validation is still underway.
 
 ## Testing
 
@@ -245,6 +258,12 @@ Wait for rollout:
 
 ```bash
 make rollout NAMESPACE=adsb
+```
+
+After rebuilding and pushing the same image tag during local validation, restart the deployments so Kubernetes creates new pods and pulls the current registry images:
+
+```bash
+make restart NAMESPACE=adsb RELEASE=adsb-notifier
 ```
 
 Check resources:

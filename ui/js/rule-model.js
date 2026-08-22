@@ -191,6 +191,45 @@ function getSelectedRule() {
   return config?.rules?.find((rule) => rule.id === selectedRuleId) || null;
 }
 
+function visibleRules() {
+  return (config?.rules || []).filter(ruleMatchesListFilters);
+}
+
+function ruleMatchesListFilters(rule) {
+  const query = String(ruleSearch?.value || "").trim().toLowerCase();
+  const type = ruleTypeFilter?.value || "";
+  const state = ruleStateFilter?.value || "";
+  if (type && rule.event !== type) return false;
+  if (state === "enabled" && rule.enabled === false) return false;
+  if (state === "disabled" && rule.enabled !== false) return false;
+  if (!query) return true;
+  return ruleSearchText(rule).includes(query);
+}
+
+function ruleSearchText(rule) {
+  return [
+    rule.name,
+    eventLabel(rule.event),
+    rule.event,
+    ...(rule.tail_numbers || []),
+    ...(rule.aircraft_types || []),
+    ...(rule.categories || []),
+    ...(rule.squawk_codes || []),
+    ...(rule.exclusions?.tail_numbers || []),
+    ...(rule.exclusions?.hex_ids || []),
+    ...(rule.exclusions?.callsigns || []),
+    ...(rule.exclusions?.aircraft_types || []),
+  ]
+    .filter((value) => value !== null && value !== undefined)
+    .join(" ")
+    .toLowerCase();
+}
+
+function syncRuleSelectionToVisible() {
+  const visibleIds = new Set(visibleRules().map((rule) => rule.id));
+  selectedRuleIds = new Set(Array.from(selectedRuleIds).filter((ruleId) => visibleIds.has(ruleId)));
+}
+
 function selectedRuleIndex() {
   return Math.max(0, (config?.rules || []).findIndex((rule) => rule.id === selectedRuleId));
 }
