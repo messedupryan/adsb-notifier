@@ -198,7 +198,7 @@ The map is centered around the configured home location and can show:
 
 Repeated dashboard alerts are grouped by aircraft and rule so noisy repeat matches are easier to scan while the underlying recent match history still preserves each individual event.
 
-Recent matches can be filtered by event, rule, provider, notification status, aircraft text, and date range. Each row has a detail view for troubleshooting the normalized aircraft payload behind the alert.
+Recent matches can be filtered by event, rule, provider, notification status, and aircraft text. Each row has a detail view for troubleshooting the normalized aircraft payload behind the alert.
 
 <a id="versioning"></a>
 
@@ -206,7 +206,7 @@ Recent matches can be filtered by event, rule, provider, notification status, ai
 
 The project is currently in beta and uses SemVer-style `0.x.y` versions, with explicit release-candidate builds like `0.2.0-rc.1` before stable cuts like `0.2.0`. The worker, API, UI, Helm chart, Python package, and container images share the project version during beta.
 
-See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, and promotion checklist.
+Use `make release-rc RC_VERSION=0.2.0-rc.1` from a clean worktree to prepare, build, push, deploy, and roll out a release candidate. See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, RC workflow, and promotion checklist.
 
 <a id="security-model"></a>
 

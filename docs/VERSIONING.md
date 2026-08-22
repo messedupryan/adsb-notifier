@@ -9,7 +9,7 @@ The root `VERSION` file is the project version source of truth.
 The current beta version is:
 
 ```text
-0.1.13
+0.1.14
 ```
 
 For now, the worker, API, UI, Python package, Helm chart, and container images all share the project version. Split component versions only when the components need independent release cadence.
@@ -78,6 +78,27 @@ registry.example.test/adsb-notifier-ui:<project-version>
 ```
 
 Use `IMAGE_TAG=...` only when intentionally testing a nonstandard tag.
+
+## Release Candidate Builds
+
+After the committed `0.2.0` scope is complete on `develop`, use the one-command RC workflow from a clean worktree:
+
+```bash
+git switch develop
+pipenv run pytest -q
+helm lint charts/adsb-notifier
+make release-rc RC_VERSION=0.2.0-rc.1
+```
+
+The `release-rc` target fails early if the git worktree is dirty. When clean, it bumps all version-managed files to `RC_VERSION`, builds and pushes the worker/API/UI images with that tag, deploys the Helm chart with the same tag, and waits for rollout.
+
+After the deployed RC looks good, commit the RC version bump and tag the committed candidate:
+
+```bash
+git add VERSION pyproject.toml adsb_notifier/version.py charts/adsb-notifier/Chart.yaml charts/adsb-notifier/values.example.yaml ui docs README.md Makefile.example tests/test_versioning.py
+git commit -m "chore(release): prepare 0.2.0-rc.1"
+git tag v0.2.0-rc.1
+```
 
 ## Version Bump Checklist
 

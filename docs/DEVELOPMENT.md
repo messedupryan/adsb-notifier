@@ -37,6 +37,7 @@ make build
 make push
 make build-push
 make release
+make release-rc
 make k8s-secret
 make deploy-helm
 make restart
@@ -52,10 +53,11 @@ API_HOST=127.0.0.1
 API_PORT=8765
 UI_PORT=8766
 REGISTRY=registry.example.test
-IMAGE_TAG=0.1.13
+IMAGE_TAG=0.1.14
 NAMESPACE=adsb
 RELEASE=adsb-notifier
 HELM_VALUES=charts/adsb-notifier/values.yaml
+RC_VERSION=0.2.0-rc.1
 ```
 
 The public example defaults live in `Makefile.example` and `charts/adsb-notifier/values.example.yaml`. Local deploy-ready files live at `Makefile` and `charts/adsb-notifier/values.yaml`; both local files are ignored by Git so registry names, ingress hosts, namespaces, and other environment-specific values do not leak into commits.
@@ -127,6 +129,16 @@ make release
 ```
 
 Local testing is a time-saving measure, not a gate. Because this is a personal app and brief cluster disruption is acceptable, use `make release` whenever the cluster is the most realistic or fastest way to validate a feature. The version bump is the handoff to the next feature, not the first step of the current one.
+
+## Release Candidate Workflow
+
+When the committed `0.2.0` scope is feature-complete and the current checkpoint is committed, prepare and deploy the first release candidate with one command:
+
+```bash
+make release-rc RC_VERSION=0.2.0-rc.1
+```
+
+`release-rc` requires a clean git worktree before it starts. It then bumps all version-managed files to `RC_VERSION`, builds and pushes worker/API/UI images with that tag, deploys the Helm chart with the same image tag, and waits for rollout. After validating the deployed RC, commit the RC version bump and tag the committed RC when ready.
 
 ## Testing
 
@@ -214,6 +226,12 @@ Build, push, deploy the Helm chart, and wait for rollout:
 
 ```bash
 make release REGISTRY=registry.example.test NAMESPACE=adsb RELEASE=adsb-notifier
+```
+
+Prepare and deploy a release candidate from a clean worktree:
+
+```bash
+make release-rc RC_VERSION=0.2.0-rc.1 REGISTRY=registry.example.test NAMESPACE=adsb RELEASE=adsb-notifier
 ```
 
 Individual images:
