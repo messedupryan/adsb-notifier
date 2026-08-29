@@ -108,6 +108,7 @@ function defaultExclusions() {
     hex_ids: [],
     callsigns: [],
     aircraft_types: [],
+    categories: [],
   };
 }
 
@@ -219,6 +220,7 @@ function ruleSearchText(rule) {
     ...(rule.exclusions?.hex_ids || []),
     ...(rule.exclusions?.callsigns || []),
     ...(rule.exclusions?.aircraft_types || []),
+    ...(rule.exclusions?.categories || []),
   ]
     .filter((value) => value !== null && value !== undefined)
     .join(" ")

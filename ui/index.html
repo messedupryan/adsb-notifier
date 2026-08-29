@@ -191,6 +191,7 @@
               <label>ICAO hex IDs <input id="global-exclusion-hex-ids" type="text" /></label>
               <label>Callsigns <input id="global-exclusion-callsigns" type="text" /></label>
               <label>Aircraft types <input id="global-exclusion-aircraft-types" type="text" /></label>
+              <label>Categories <input id="global-exclusion-categories" type="text" list="category-exclusion-options" /></label>
             </div>
           </fieldset>
         </div>
@@ -384,12 +385,35 @@
                   <label>ICAO hex IDs <input id="rule-exclusion-hex-ids" type="text" /></label>
                   <label>Callsigns <input id="rule-exclusion-callsigns" type="text" /></label>
                   <label>Aircraft types <input id="rule-exclusion-aircraft-types" type="text" /></label>
+                  <label>Categories <input id="rule-exclusion-categories" type="text" list="category-exclusion-options" /></label>
                 </div>
               </fieldset>
             </div>
           </article>
         </div>
       </section>
+      <datalist id="category-exclusion-options">
+        <option value="A0">No category information</option>
+        <option value="A1">Light aircraft</option>
+        <option value="A2">Small aircraft</option>
+        <option value="A3">Large aircraft</option>
+        <option value="A4">High vortex large aircraft</option>
+        <option value="A5">Heavy aircraft</option>
+        <option value="A6">High performance aircraft</option>
+        <option value="A7">Rotorcraft</option>
+        <option value="B1">Glider</option>
+        <option value="B2">Lighter-than-air</option>
+        <option value="B3">Parachutist</option>
+        <option value="B4">Ultralight</option>
+        <option value="B6">UAV</option>
+        <option value="B7">Space vehicle</option>
+        <option value="C1">Emergency vehicle</option>
+        <option value="C2">Service vehicle</option>
+        <option value="C3">Point obstacle</option>
+        <option value="C4">Cluster obstacle</option>
+        <option value="C5">Line obstacle</option>
+        <option value="UNKNOWN">Unknown or missing category</option>
+      </datalist>
       <footer class="app-footer">
         <div class="footer-brand">
           <span>ADS-B Notifier 0.2.3</span>

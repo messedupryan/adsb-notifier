@@ -134,7 +134,7 @@ def test_read_config_backfills_global_and_rule_exclusions(tmp_path):
 
     config = _read_config(path)
 
-    expected = {"tail_numbers": [], "hex_ids": [], "callsigns": [], "aircraft_types": []}
+    expected = {"tail_numbers": [], "hex_ids": [], "callsigns": [], "aircraft_types": [], "categories": []}
     assert config["exclusions"] == expected
     assert config["rules"][0]["exclusions"] == expected
 
@@ -147,6 +147,7 @@ def test_read_config_normalizes_exclusions(tmp_path):
         "hex_ids": ["~abc123"],
         "callsigns": ["dal123"],
         "aircraft_types": ["b739"],
+        "categories": ["a7", "unknown"],
     }
     payload["rules"][0]["exclusions"] = {"hex_ids": ["~def456"]}
     path.write_text(json.dumps(payload), encoding="utf-8")
@@ -158,6 +159,7 @@ def test_read_config_normalizes_exclusions(tmp_path):
         "hex_ids": ["ABC123"],
         "callsigns": ["DAL123"],
         "aircraft_types": ["B739"],
+        "categories": ["A7", "UNKNOWN"],
     }
     assert config["rules"][0]["exclusions"]["hex_ids"] == ["DEF456"]
 
@@ -182,8 +184,14 @@ def test_parse_settings_accepts_rule_quiet_hours():
 
 def test_parse_settings_accepts_exclusions():
     payload = valid_config()
-    payload["exclusions"] = {"tail_numbers": ["n12345"], "hex_ids": ["~abc123"], "callsigns": ["dal123"], "aircraft_types": ["b739"]}
-    payload["rules"][0]["exclusions"] = {"aircraft_types": ["b738"]}
+    payload["exclusions"] = {
+        "tail_numbers": ["n12345"],
+        "hex_ids": ["~abc123"],
+        "callsigns": ["dal123"],
+        "aircraft_types": ["b739"],
+        "categories": ["a7", "unknown"],
+    }
+    payload["rules"][0]["exclusions"] = {"aircraft_types": ["b738"], "categories": ["a3"]}
 
     settings = parse_settings(payload)
 
@@ -191,14 +199,16 @@ def test_parse_settings_accepts_exclusions():
     assert settings.exclusions.hex_ids == {"ABC123"}
     assert settings.exclusions.callsigns == {"DAL123"}
     assert settings.exclusions.aircraft_types == {"B739"}
+    assert settings.exclusions.categories == {"A7", "UNKNOWN"}
     assert settings.rules[0].exclusions.aircraft_types == {"B738"}
+    assert settings.rules[0].exclusions.categories == {"A3"}
 
 
 def test_config_validation_rejects_unknown_exclusion_fields():
     payload = valid_config()
-    payload["exclusions"] = {"categories": ["A7"]}
+    payload["exclusions"] = {"operators": ["Example Air"]}
 
-    with pytest.raises(ValueError, match="config.exclusions contains unsupported field: categories"):
+    with pytest.raises(ValueError, match="config.exclusions contains unsupported field: operators"):
         parse_settings(payload)
 
 

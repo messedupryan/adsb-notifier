@@ -538,6 +538,7 @@ def _normalize_exclusions(exclusions: Any) -> dict[str, list[str]]:
         "hex_ids": _normalized_hex_list(exclusions.get("hex_ids")),
         "callsigns": _normalized_string_list(exclusions.get("callsigns")),
         "aircraft_types": _normalized_string_list(exclusions.get("aircraft_types")),
+        "categories": _normalized_string_list(exclusions.get("categories")),
     }
 
 

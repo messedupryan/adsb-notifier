@@ -87,6 +87,7 @@ class Exclusions:
     hex_ids: set[str] = field(default_factory=set)
     callsigns: set[str] = field(default_factory=set)
     aircraft_types: set[str] = field(default_factory=set)
+    categories: set[str] = field(default_factory=set)
 
 
 @dataclass(frozen=True)
@@ -265,10 +266,10 @@ def _validate_exclusions_shape(data: Any, label: str) -> None:
         return
     if not isinstance(data, dict):
         raise ValueError(f"{label} must be a JSON object")
-    unknown_keys = sorted(set(data) - {"tail_numbers", "hex_ids", "callsigns", "aircraft_types"})
+    unknown_keys = sorted(set(data) - {"tail_numbers", "hex_ids", "callsigns", "aircraft_types", "categories"})
     if unknown_keys:
         raise ValueError(f"{label} contains unsupported field: {', '.join(unknown_keys)}")
-    for key in ("tail_numbers", "hex_ids", "callsigns", "aircraft_types"):
+    for key in ("tail_numbers", "hex_ids", "callsigns", "aircraft_types", "categories"):
         if key in data and not isinstance(data[key], list):
             raise ValueError(f"{label}.{key} must be an array")
 
@@ -471,6 +472,7 @@ def _parse_exclusions(data: dict[str, Any] | None) -> Exclusions:
         hex_ids={_normalize_hex_id(value) for value in data.get("hex_ids", []) if str(value).strip()},
         callsigns=_uppercase_values(data.get("callsigns", [])),
         aircraft_types=_uppercase_values(data.get("aircraft_types", [])),
+        categories=_uppercase_values(data.get("categories", [])),
     )
 
 

@@ -22,6 +22,7 @@ function renderForms() {
   fields.globalExclusionHexIds.value = listToText(config.exclusions?.hex_ids);
   fields.globalExclusionCallsigns.value = listToText(config.exclusions?.callsigns);
   fields.globalExclusionAircraftTypes.value = listToText(config.exclusions?.aircraft_types);
+  fields.globalExclusionCategories.value = listToText(config.exclusions?.categories);
 
   fields.emailEnabled.checked = Boolean(email.enabled);
   fields.emailSmtpHost.value = email.smtp_host || "";
@@ -159,6 +160,7 @@ function renderRuleEditor() {
   fields.ruleExclusionHexIds.value = listToText(rule.exclusions?.hex_ids);
   fields.ruleExclusionCallsigns.value = listToText(rule.exclusions?.callsigns);
   fields.ruleExclusionAircraftTypes.value = listToText(rule.exclusions?.aircraft_types);
+  fields.ruleExclusionCategories.value = listToText(rule.exclusions?.categories);
   renderRuleNotificationProviders(rule);
   updateRuleFieldVisibility(rule.event || "tail");
 }
@@ -202,6 +204,7 @@ function syncFromForms() {
     hexIds: fields.globalExclusionHexIds,
     callsigns: fields.globalExclusionCallsigns,
     aircraftTypes: fields.globalExclusionAircraftTypes,
+    categories: fields.globalExclusionCategories,
   });
   const notifications = config.notifications || {};
   const existingEmail = notifications.email || {};
@@ -284,6 +287,7 @@ function syncSelectedRuleFromForms() {
       hexIds: fields.ruleExclusionHexIds,
       callsigns: fields.ruleExclusionCallsigns,
       aircraftTypes: fields.ruleExclusionAircraftTypes,
+      categories: fields.ruleExclusionCategories,
     });
     rule.military = rule.event === "military";
     rule.include_tisb = fields.ruleIncludeTisb.checked;
@@ -299,6 +303,7 @@ function exclusionsFromFields(exclusionFields) {
     hex_ids: textToList(exclusionFields.hexIds.value),
     callsigns: textToList(exclusionFields.callsigns.value),
     aircraft_types: textToList(exclusionFields.aircraftTypes.value),
+    categories: textToList(exclusionFields.categories.value),
   };
 }
 

@@ -125,13 +125,14 @@ def _squawk_matches(rule: Rule, plane: Aircraft) -> bool:
 
 
 def _is_excluded(exclusions: Exclusions, plane: Aircraft) -> bool:
-    if not any((exclusions.tail_numbers, exclusions.hex_ids, exclusions.callsigns, exclusions.aircraft_types)):
+    if not any((exclusions.tail_numbers, exclusions.hex_ids, exclusions.callsigns, exclusions.aircraft_types, exclusions.categories)):
         return False
     return (
         bool(_tail_candidates(plane) & exclusions.tail_numbers)
         or _normalize_hex_id(plane.hex) in exclusions.hex_ids
         or bool(_callsign_candidates(plane) & exclusions.callsigns)
         or bool(_type_candidates(plane) & exclusions.aircraft_types)
+        or bool(_category_candidates(plane) & exclusions.categories)
     )
 
 
@@ -145,6 +146,10 @@ def _callsign_candidates(plane: Aircraft) -> set[str]:
 
 def _type_candidates(plane: Aircraft) -> set[str]:
     return {plane.aircraft_type.upper()} if plane.aircraft_type else set()
+
+
+def _category_candidates(plane: Aircraft) -> set[str]:
+    return {plane.category.upper()} if plane.category else {"UNKNOWN"}
 
 
 def _normalize_hex_id(value: str) -> str:

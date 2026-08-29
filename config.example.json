@@ -60,7 +60,8 @@
     "tail_numbers": [],
     "hex_ids": [],
     "callsigns": [],
-    "aircraft_types": []
+    "aircraft_types": [],
+    "categories": []
   },
   "rules": [
     {
@@ -81,7 +82,8 @@
         "tail_numbers": [],
         "hex_ids": [],
         "callsigns": [],
-        "aircraft_types": []
+        "aircraft_types": [],
+        "categories": []
       }
     },
     {

@@ -148,12 +148,17 @@ def test_exclusion_controls_are_available():
         "global-exclusion-hex-ids",
         "global-exclusion-callsigns",
         "global-exclusion-aircraft-types",
+        "global-exclusion-categories",
         "rule-exclusion-tail-numbers",
         "rule-exclusion-hex-ids",
         "rule-exclusion-callsigns",
         "rule-exclusion-aircraft-types",
+        "rule-exclusion-categories",
     ]:
         assert field_id in parser.inputs
+    assert 'id="category-exclusion-options"' in INDEX_HTML
+    assert 'value="A7"' in INDEX_HTML
+    assert 'value="UNKNOWN"' in INDEX_HTML
     assert "normalizeExclusions" in UI_JS
     assert "exclusionsFromFields" in UI_JS
 

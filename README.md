@@ -166,7 +166,8 @@ Example rule:
     "tail_numbers": ["N99999"],
     "hex_ids": [],
     "callsigns": [],
-    "aircraft_types": []
+    "aircraft_types": [],
+    "categories": ["A7", "UNKNOWN"]
   },
   "quiet_hours": {
     "enabled": true,
@@ -180,7 +181,7 @@ Example rule:
 
 Quiet hours are configured per rule. When enabled, matching aircraft still appear in recent matches, but phone-style notifications such as Pushover and Twilio can be suppressed during the configured time window while email remains available through normal rule notification settings. Quiet-hour windows use the configured IANA timezone, such as `America/Denver`, so Kubernetes containers can run in UTC without changing the alert behavior.
 
-Exclusions can be configured globally or per rule. They support tail numbers, ICAO hex IDs, callsigns, and aircraft types. Excluded aircraft do not create recent matches or notifications.
+Exclusions can be configured globally or per rule. They support tail numbers, ICAO hex IDs, callsigns, aircraft types, and ADS-B category values. Use `UNKNOWN` to exclude aircraft with missing category data. Excluded aircraft do not create recent matches or notifications.
 
 <a id="dashboard"></a>
 
