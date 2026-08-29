@@ -53,7 +53,7 @@ API_HOST=127.0.0.1
 API_PORT=8765
 UI_PORT=8766
 REGISTRY=registry.example.test
-IMAGE_TAG=0.2.0
+IMAGE_TAG=0.2.1
 NAMESPACE=adsb
 RELEASE=adsb-notifier
 HELM_VALUES=charts/adsb-notifier/values.yaml
@@ -132,7 +132,7 @@ Local testing is a time-saving measure, not a gate. Because this is a personal a
 
 ## Release Candidate Workflow
 
-When the committed `0.2.0` scope is feature-complete and the current checkpoint is committed, prepare and deploy the next release candidate with one command:
+When the committed next-minor scope is feature-complete and the current checkpoint is committed, prepare and deploy the next release candidate with one command:
 
 ```bash
 make release-rc

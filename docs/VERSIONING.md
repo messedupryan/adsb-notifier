@@ -9,7 +9,7 @@ The root `VERSION` file is the project version source of truth.
 The current beta version is:
 
 ```text
-0.2.0
+0.2.1
 ```
 
 For now, the worker, API, UI, Python package, Helm chart, and container images all share the project version. Split component versions only when the components need independent release cadence.
@@ -31,7 +31,7 @@ Run `make version` to display the project version and image tags that will be bu
 
 - Use `0.x.y` while the project is still changing quickly.
 - Increment the patch version for each stable batch of work that should be deployable or eligible for promotion.
-- While building toward the next minor release, use numeric patch versions on `develop` as deployable checkpoints. For example, after stable `0.1.0`, use `0.1.1`, `0.1.2`, and later `0.1.x` while building toward `0.2.0`.
+- While building toward the next minor release, use numeric patch versions on `develop` as deployable checkpoints. For example, after stable `0.2.0`, use `0.2.1`, `0.2.2`, and later `0.2.x` while building toward `0.3.0`.
 - Use prerelease suffixes only for release-candidate builds that are feature-complete and ready for soak testing, such as `0.x.0-rc.n`.
 - Avoid alpha/beta prerelease versions unless the project convention intentionally changes.
 - Keep all components on the same version during beta unless there is a strong reason to split them.
@@ -55,9 +55,11 @@ make version
 
 git switch main
 git merge --no-ff develop
-git tag v0.2.0
-git push origin main v0.2.0
+git tag v0.3.0
+git push origin main v0.3.0
 ```
+
+Release-note drafts live under `docs/releases/` and are written for GitHub Releases. Stable minor releases should have a concise public summary before or during promotion; patch checkpoints and release candidates do not need formal release notes unless there is a specific operational reason.
 
 ## Deployment Tags
 
@@ -81,7 +83,7 @@ Use `IMAGE_TAG=...` only when intentionally testing a nonstandard tag.
 
 ## Release Candidate Builds
 
-After the committed `0.2.0` scope is complete on `develop`, use the one-command RC workflow from a clean worktree:
+After the committed next-minor scope is complete on `develop`, use the one-command RC workflow from a clean worktree:
 
 ```bash
 git switch develop
