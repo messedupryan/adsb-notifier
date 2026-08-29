@@ -1,8 +1,9 @@
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
-from adsb_notifier.config import Rule, Settings
+from adsb_notifier.config import Exclusions, NOTIFICATION_PROVIDERS, Rule, Settings
 from adsb_notifier.geo import distance_miles
 from adsb_notifier.models import Aircraft, Sighting
 
@@ -25,10 +26,14 @@ class RuleEngine:
         for plane in aircraft:
             if plane.seen_seconds and plane.seen_seconds > self.settings.stale_aircraft_seconds:
                 continue
+            if _is_excluded(self.settings.exclusions, plane):
+                continue
             if plane.track_deg is not None:
                 self._record_track(plane.hex, plane.track_deg, observed_at)
             for rule in self.settings.rules:
                 if not rule.enabled:
+                    continue
+                if _is_excluded(rule.exclusions, plane):
                     continue
                 sighting = self._evaluate_rule(rule, plane, observed_at)
                 if sighting and self._should_send(rule, plane, observed_at):
@@ -62,6 +67,7 @@ class RuleEngine:
 
         if not event_matches:
             return None
+        notification_providers, suppressed_providers = _notification_providers_for_rule(rule, observed_at)
 
         return Sighting(
             aircraft=plane,
@@ -71,7 +77,8 @@ class RuleEngine:
             home_lat=self.settings.home.lat,
             home_lon=self.settings.home.lon,
             rule_radius_miles=rule.radius_miles,
-            notification_providers=rule.notification_providers,
+            notification_providers=notification_providers,
+            suppressed_notification_providers=suppressed_providers,
             observed_at=observed_at,
         )
 
@@ -117,5 +124,58 @@ def _squawk_matches(rule: Rule, plane: Aircraft) -> bool:
     return plane.squawk in rule.squawk_codes
 
 
+def _is_excluded(exclusions: Exclusions, plane: Aircraft) -> bool:
+    if not any((exclusions.tail_numbers, exclusions.hex_ids, exclusions.callsigns, exclusions.aircraft_types)):
+        return False
+    return (
+        bool(_tail_candidates(plane) & exclusions.tail_numbers)
+        or _normalize_hex_id(plane.hex) in exclusions.hex_ids
+        or bool(_callsign_candidates(plane) & exclusions.callsigns)
+        or bool(_type_candidates(plane) & exclusions.aircraft_types)
+    )
+
+
+def _tail_candidates(plane: Aircraft) -> set[str]:
+    return {plane.registration.upper()} if plane.registration else set()
+
+
+def _callsign_candidates(plane: Aircraft) -> set[str]:
+    return {plane.flight.upper()} if plane.flight else set()
+
+
+def _type_candidates(plane: Aircraft) -> set[str]:
+    return {plane.aircraft_type.upper()} if plane.aircraft_type else set()
+
+
+def _normalize_hex_id(value: str) -> str:
+    return value.strip().upper().removeprefix("~")
+
+
 def _smallest_heading_delta(start: float, end: float) -> float:
     return abs((end - start + 180) % 360 - 180)
+
+
+def _notification_providers_for_rule(rule: Rule, observed_at: datetime) -> tuple[set[str] | None, set[str]]:
+    if not rule.quiet_hours.enabled or not _quiet_hours_active(rule, observed_at):
+        return rule.notification_providers, set()
+
+    selected = set(rule.notification_providers) if rule.notification_providers is not None else set(NOTIFICATION_PROVIDERS)
+    suppressed = selected & rule.quiet_hours.suppress_providers
+    if not suppressed:
+        return rule.notification_providers, set()
+    return selected - suppressed, suppressed
+
+
+def _quiet_hours_active(rule: Rule, observed_at: datetime) -> bool:
+    start = _time_minutes(rule.quiet_hours.start)
+    end = _time_minutes(rule.quiet_hours.end)
+    local_observed_at = observed_at.astimezone(ZoneInfo(rule.quiet_hours.time_zone))
+    current = local_observed_at.hour * 60 + local_observed_at.minute
+    if start < end:
+        return start <= current < end
+    return current >= start or current < end
+
+
+def _time_minutes(value: str) -> int:
+    hour, minute = value.split(":", 1)
+    return int(hour) * 60 + int(minute)

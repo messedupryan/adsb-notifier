@@ -56,6 +56,12 @@
       "message_template": "{rule_name}: {aircraft_label} ({aircraft_type}) {distance_miles_1} mi away at {altitude_label}"
     }
   },
+  "exclusions": {
+    "tail_numbers": [],
+    "hex_ids": [],
+    "callsigns": [],
+    "aircraft_types": []
+  },
   "rules": [
     {
       "name": "Tail number near home",
@@ -63,7 +69,20 @@
       "tail_numbers": ["N12345"],
       "radius_miles": 25,
       "max_altitude_ft": 12000,
-      "cooldown_minutes": 60
+      "cooldown_minutes": 60,
+      "quiet_hours": {
+        "enabled": false,
+        "start": "22:00",
+        "end": "07:00",
+        "time_zone": "America/Denver",
+        "suppress_providers": ["pushover", "twilio"]
+      },
+      "exclusions": {
+        "tail_numbers": [],
+        "hex_ids": [],
+        "callsigns": [],
+        "aircraft_types": []
+      }
     },
     {
       "name": "Military nearby",

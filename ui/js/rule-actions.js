@@ -40,6 +40,7 @@ async function deleteSelectedRule() {
       throw new Error(payload.error || "Unable to delete rule");
     }
     config.rules = config.rules.filter((rule) => rule.id !== ruleId);
+    selectedRuleIds.delete(ruleId);
     config.config_revision = payload.config_revision ?? config.config_revision;
     savedConfig = cloneConfig(config);
     isJsonDirty = false;
@@ -147,6 +148,7 @@ async function createRuleOnServer(rule, action) {
     savedConfig = cloneConfig(config);
     isJsonDirty = false;
     selectedRuleId = savedRule.id;
+    selectedRuleIds = new Set();
     setDirty(false);
     renderAll();
     showSuccess(`${action}: ${savedRule.name}`);
@@ -155,6 +157,69 @@ async function createRuleOnServer(rule, action) {
   } finally {
     setBusy(false);
   }
+}
+
+async function bulkSetSelectedRulesEnabled(enabled) {
+  if (!config || selectedRuleIds.size === 0) return;
+  if (!commitCurrentView()) return;
+
+  const selectedIds = new Set(selectedRuleIds);
+  const changedRules = config.rules.filter((rule) => selectedIds.has(rule.id) && (rule.enabled !== false) !== enabled);
+  if (changedRules.length === 0) {
+    showSuccess(`${selectedIds.size} selected rule${selectedIds.size === 1 ? "" : "s"} already ${enabled ? "enabled" : "disabled"}.`);
+    return;
+  }
+
+  config.rules = config.rules.map((rule) => (selectedIds.has(rule.id) ? {...rule, enabled} : rule));
+  normalizeRuleNotificationProviders(config);
+
+  const errors = validateConfig(config);
+  if (errors.length > 0) {
+    showErrors(errors);
+    return;
+  }
+
+  clearMessage();
+  setStatus(`${enabled ? "Enabling" : "Disabling"} ${changedRules.length} rule${changedRules.length === 1 ? "" : "s"}...`);
+  setBusy(true);
+  try {
+    const response = await fetch(`${apiBase}/config`, {
+      method: "PUT",
+      headers: writeHeaders(),
+      body: JSON.stringify(config),
+    });
+    const saved = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(saved.error || "Unable to save bulk rule update");
+    }
+    config = normalizeConfig(saved);
+    savedConfig = cloneConfig(config);
+    selectedRuleId = selectExistingRuleId(selectedRuleId);
+    selectedRuleIds = new Set(Array.from(selectedIds).filter((ruleId) => config.rules.some((rule) => rule.id === ruleId)));
+    isJsonDirty = false;
+    setDirty(false);
+    renderAll();
+    showSuccess(`${enabled ? "Enabled" : "Disabled"} ${changedRules.length} selected rule${changedRules.length === 1 ? "" : "s"}.`);
+  } catch (error) {
+    showErrors([error.message || "Unable to save bulk rule update"]);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function toggleVisibleRuleSelection() {
+  if (!config) return;
+  const visibleRuleIds = visibleRules().map((rule) => rule.id);
+  if (visibleRuleIds.length === 0) return;
+  const shouldSelect = !visibleRuleIds.every((ruleId) => selectedRuleIds.has(ruleId));
+  visibleRuleIds.forEach((ruleId) => {
+    if (shouldSelect) {
+      selectedRuleIds.add(ruleId);
+    } else {
+      selectedRuleIds.delete(ruleId);
+    }
+  });
+  renderRuleList();
 }
 
 async function discardChanges() {
@@ -173,6 +238,7 @@ async function discardChanges() {
   config = cloneConfig(savedConfig);
   isJsonDirty = false;
   selectedRuleId = selectExistingRuleId(selectedRuleId);
+  selectedRuleIds = new Set();
   setDirty(false);
   renderAll();
   clearMessage();

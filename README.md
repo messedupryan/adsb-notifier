@@ -43,12 +43,14 @@ The app can run locally during development or as containers in Kubernetes. See [
 - Military matching that understands readsb/Airplanes.live `dbFlags`.
 - Optional TIS-B inclusion for military rules.
 - Per-rule notification provider selection from globally enabled providers.
+- Rule list search/filter and selected-rule bulk enable/disable actions.
 - Live rule testing against the configured ADS-B source.
 - Shared configuration validation for required sections, supported fields, home coordinates, rule shape, and notification providers.
 - Provider-specific notification templates.
 - Optional square alert snapshots in HTML email notifications.
 - Worker status and recent match history.
-- Dashboard map with home location, active rule radii, filtered recent match markers, selected-match highlighting, and Airplanes.live aircraft links.
+- Dashboard map with home location, active rule radii, grouped recent matches, filtered recent match markers, selected-match highlighting, and Airplanes.live aircraft links.
+- Recent match detail view with aircraft identifiers, notification status, position, movement details, and collapsible normalized payload.
 - Light/dark UI modes, accent themes, themed logo assets, and theme-aware favicon.
 
 <a id="ui"></a>
@@ -159,9 +161,26 @@ Example rule:
   "tail_numbers": ["N12345"],
   "radius_miles": 25,
   "cooldown_minutes": 60,
-  "notification_providers": ["pushover", "email"]
+  "notification_providers": ["pushover", "email"],
+  "exclusions": {
+    "tail_numbers": ["N99999"],
+    "hex_ids": [],
+    "callsigns": [],
+    "aircraft_types": []
+  },
+  "quiet_hours": {
+    "enabled": true,
+    "start": "22:00",
+    "end": "07:00",
+    "time_zone": "America/Denver",
+    "suppress_providers": ["pushover", "twilio"]
+  }
 }
 ```
+
+Quiet hours are configured per rule. When enabled, matching aircraft still appear in recent matches, but phone-style notifications such as Pushover and Twilio can be suppressed during the configured time window while email remains available through normal rule notification settings. Quiet-hour windows use the configured IANA timezone, such as `America/Denver`, so Kubernetes containers can run in UTC without changing the alert behavior.
+
+Exclusions can be configured globally or per rule. They support tail numbers, ICAO hex IDs, callsigns, and aircraft types. Excluded aircraft do not create recent matches or notifications.
 
 <a id="dashboard"></a>
 
@@ -177,13 +196,17 @@ The map is centered around the configured home location and can show:
 - Track direction hints
 - Selected match highlighting
 
+Repeated dashboard alerts are grouped by aircraft and rule so noisy repeat matches are easier to scan while the underlying recent match history still preserves each individual event.
+
+Recent matches can be filtered by event, rule, provider, notification status, and aircraft text. Each row has a detail view for troubleshooting the normalized aircraft payload behind the alert.
+
 <a id="versioning"></a>
 
 ## 🏷️ Versioning
 
-The project is currently in beta and uses SemVer-style `0.x.y` versions, with explicit release-candidate builds like `0.1.0-rc.1` before stable cuts like `0.1.0`. The worker, API, UI, Helm chart, Python package, and container images share the project version during beta.
+The project is currently in beta and uses SemVer-style `0.x.y` versions, with explicit release-candidate builds like `0.x.0-rc.n` before stable cuts like `0.x.0`. The worker, API, UI, Helm chart, Python package, and container images share the project version during beta.
 
-See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, and promotion checklist.
+Use `make release-rc` from a clean worktree to prepare, build, push, deploy, and roll out the next release candidate. The target derives the next RC from the current project version, either from the latest numeric checkpoint to the next minor `rc.1`, or from one RC to the next. See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, RC workflow, and promotion checklist.
 
 <a id="security-model"></a>
 

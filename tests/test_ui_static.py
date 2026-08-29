@@ -139,6 +139,60 @@ def test_squawk_rule_controls_are_available():
     assert "squawk_codes" in UI_JS
 
 
+def test_exclusion_controls_are_available():
+    parser = InputParser()
+    parser.feed(INDEX_HTML)
+
+    for field_id in [
+        "global-exclusion-tail-numbers",
+        "global-exclusion-hex-ids",
+        "global-exclusion-callsigns",
+        "global-exclusion-aircraft-types",
+        "rule-exclusion-tail-numbers",
+        "rule-exclusion-hex-ids",
+        "rule-exclusion-callsigns",
+        "rule-exclusion-aircraft-types",
+    ]:
+        assert field_id in parser.inputs
+    assert "normalizeExclusions" in UI_JS
+    assert "exclusionsFromFields" in UI_JS
+
+
+def test_rule_match_fields_appear_before_rule_options():
+    radius_index = INDEX_HTML.index('id="rule-radius"')
+    tail_index = INDEX_HTML.index('id="rule-tail-numbers"')
+    notifications_index = INDEX_HTML.index('class="rule-notifications')
+    quiet_hours_index = INDEX_HTML.index('class="rule-quiet-hours')
+    exclusions_index = INDEX_HTML.index('class="rule-exclusions')
+
+    assert radius_index < notifications_index
+    assert tail_index < notifications_index
+    assert notifications_index < quiet_hours_index < exclusions_index
+
+
+def test_rule_search_filter_and_bulk_controls_are_available():
+    parser = InputParser()
+    parser.feed(INDEX_HTML)
+
+    assert "rule-search" in parser.inputs
+    assert "rule-type-filter" in parser.selects
+    assert "rule-state-filter" in parser.selects
+    assert "rule-selected-count" in INDEX_HTML
+    assert "toggle-visible-rules" in INDEX_HTML
+    assert "bulk-enable-rules" in INDEX_HTML
+    assert "bulk-disable-rules" in INDEX_HTML
+    assert 'data-rule-control="true"' in INDEX_HTML
+    assert "function ruleMatchesListFilters" in UI_JS
+    assert "function toggleVisibleRuleSelection" in UI_JS
+    assert "function bulkSetSelectedRulesEnabled" in UI_JS
+
+
+def test_rule_bulk_actions_save_full_config():
+    assert 'fetch(`${apiBase}/config`, {' in UI_JS
+    assert "selectedRuleIds" in UI_JS
+    assert "syncRuleSelectionToVisible" in UI_JS
+
+
 def test_dashboard_filter_controls_are_available():
     parser = InputParser()
     parser.feed(INDEX_HTML)
@@ -146,9 +200,56 @@ def test_dashboard_filter_controls_are_available():
     assert "dashboard-event-filter" in parser.selects
     assert "dashboard-rule-filter" in parser.selects
     assert "dashboard-provider-filter" in parser.selects
+    assert "dashboard-status-filter" in parser.selects
     assert "dashboard-search" in parser.inputs
     assert 'data-dashboard-control="true"' in INDEX_HTML
     assert "function filterRecentMatches" in UI_JS
+
+
+def test_worker_status_summary_has_source_row_and_status_classes():
+    assert "worker-primary" in INDEX_HTML
+    assert "worker-source source-url" in INDEX_HTML
+    assert "status-value" in UI_JS
+    assert "function statusClassName" in UI_JS
+    assert "rate-limited" in UI_JS
+
+
+def test_recent_match_detail_view_is_available():
+    assert "match-detail-modal" in INDEX_HTML
+    assert "match-detail-link" in INDEX_HTML
+    assert "match-detail-summary" in INDEX_HTML
+    assert "match-detail-payload" in INDEX_HTML
+    assert "function openMatchDetail" in UI_JS
+    assert "function renderMatchDetailSummary" in UI_JS
+    assert "aircraft_payload" in UI_JS
+
+
+def test_source_health_controls_are_available():
+    assert "worker-source-health" in INDEX_HTML
+    for field_id in [
+        "source-health-status",
+        "source-health-provider",
+        "source-health-query",
+        "source-health-last-success",
+        "source-health-last-failure",
+        "source-health-backoff",
+        "source-health-retry-at",
+        "source-health-aircraft-count",
+        "source-health-last-error",
+    ]:
+        assert field_id in INDEX_HTML
+    assert "function renderSourceHealth" in UI_JS
+    assert "function normalizedSourceHealth" in UI_JS
+    assert "source_health" in UI_JS
+
+
+def test_dashboard_repeat_alert_grouping_helpers_are_available():
+    assert "function groupRecentMatches" in UI_JS
+    assert "function renderRecentMatchGroup" in UI_JS
+    assert "function toggleMatchGroup" in UI_JS
+    assert "expandedMatchGroupKeys" in UI_JS
+    assert "match-group-toggle" in UI_JS
+    assert "match-count" in UI_JS
 
 
 def test_ui_bootstrap_helpers_are_defined():

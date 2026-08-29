@@ -37,8 +37,10 @@ make build
 make push
 make build-push
 make release
+make release-rc
 make k8s-secret
 make deploy-helm
+make restart
 make rollout
 make status
 ```
@@ -51,10 +53,11 @@ API_HOST=127.0.0.1
 API_PORT=8765
 UI_PORT=8766
 REGISTRY=registry.example.test
-IMAGE_TAG=0.1.0
+IMAGE_TAG=0.2.0
 NAMESPACE=adsb
 RELEASE=adsb-notifier
 HELM_VALUES=charts/adsb-notifier/values.yaml
+RC_VERSION=<override>
 ```
 
 The public example defaults live in `Makefile.example` and `charts/adsb-notifier/values.example.yaml`. Local deploy-ready files live at `Makefile` and `charts/adsb-notifier/values.yaml`; both local files are ignored by Git so registry names, ingress hosts, namespaces, and other environment-specific values do not leak into commits.
@@ -98,6 +101,44 @@ Run one worker poll against a local or port-forwarded ADS-B feed:
 ```bash
 pipenv run adsb-notifier --config config.dev.json --adsb-url http://127.0.0.1:8080/tar1090/data/aircraft.json --once
 ```
+
+## Current-Version Feature Workflow
+
+During normal feature work, keep iteration on the current project version until the slice is validated:
+
+1. Make the code changes on the current version.
+2. Run focused tests while iterating.
+3. Start the local API/UI for manual validation when it is useful and the local data/config can exercise the change.
+4. Run the full test suite before treating the slice as ready.
+5. If local validation is insufficient, build/push/deploy the current version to the cluster and validate there.
+6. Validate the cluster deployment.
+7. Commit the feature at the current version.
+8. After the commit, bump the version to prepare the next feature checkpoint.
+
+For quick cluster validation without changing Helm values, rebuild and push the same tag, then restart pods so Kubernetes pulls the current registry images:
+
+```bash
+make build-push
+make restart
+```
+
+For a checkpoint deployment, use:
+
+```bash
+make release
+```
+
+Local testing is a time-saving measure, not a gate. Because this is a personal app and brief cluster disruption is acceptable, use `make release` whenever the cluster is the most realistic or fastest way to validate a feature. The version bump is the handoff to the next feature, not the first step of the current one.
+
+## Release Candidate Workflow
+
+When the committed `0.2.0` scope is feature-complete and the current checkpoint is committed, prepare and deploy the next release candidate with one command:
+
+```bash
+make release-rc
+```
+
+`release-rc` requires a clean git worktree before it starts. It derives the next RC version from `VERSION`, either from the latest numeric checkpoint to the next minor `rc.1`, or from one RC to the next. It then bumps all version-managed files to `RC_VERSION`, builds and pushes worker/API/UI images with that tag, deploys the Helm chart with the same image tag, and waits for rollout. Override `RC_VERSION=...` only when preparing a nonstandard candidate. After validating the deployed RC, commit the RC version bump and tag the committed RC when ready.
 
 ## Testing
 
@@ -187,6 +228,12 @@ Build, push, deploy the Helm chart, and wait for rollout:
 make release REGISTRY=registry.example.test NAMESPACE=adsb RELEASE=adsb-notifier
 ```
 
+Prepare and deploy a release candidate from a clean worktree:
+
+```bash
+make release-rc REGISTRY=registry.example.test NAMESPACE=adsb RELEASE=adsb-notifier
+```
+
 Individual images:
 
 ```bash
@@ -245,6 +292,12 @@ Wait for rollout:
 
 ```bash
 make rollout NAMESPACE=adsb
+```
+
+After rebuilding and pushing the same image tag during local validation, restart the deployments so Kubernetes creates new pods and pulls the current registry images:
+
+```bash
+make restart NAMESPACE=adsb RELEASE=adsb-notifier
 ```
 
 Check resources:

@@ -17,6 +17,9 @@ from adsb_notifier.constants import (
     DEFAULT_API_PORT,
     DEFAULT_CONFIG_BACKUP_RETENTION,
     DEFAULT_POLL_SECONDS,
+    DEFAULT_QUIET_HOURS_END,
+    DEFAULT_QUIET_HOURS_START,
+    DEFAULT_QUIET_HOURS_TIME_ZONE,
     DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
     DEFAULT_RULE_COOLDOWN_MINUTES,
     DEFAULT_RULE_RADIUS_MILES,
@@ -98,6 +101,8 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             config = _ensure_rule_ids(_read_config(self.config_path))
             _check_revision(self.headers.get("If-Match"), config)
             rule = _ensure_rule_id(rule)
+            rule = _normalize_rule_exclusions(rule)
+            rule = _normalize_rule_quiet_hours(rule)
             rule = _normalize_rule_notification_providers(rule, config)
             config.setdefault("rules", []).append(rule)
             config = _normalize_notification_provider_selections(config)
@@ -170,7 +175,7 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
                 "rule": rule,
                 "matched": bool(sightings),
                 "match_count": len(sightings),
-                "sent_count": len(sightings),
+                "sent_count": sum(1 for sighting in sightings if sighting.notification_providers is None or sighting.notification_providers),
                 "matches": [_sighting_summary(sighting) for sighting in sightings],
             }
         )
@@ -224,6 +229,7 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             current = _read_config(self.config_path)
             payload = _ensure_rule_ids(_restore_redacted_secrets(self._read_json_body(), current))
             _check_revision(self.headers.get("If-Match"), current)
+            payload = _normalize_global_exclusions(payload)
             payload = _normalize_notification_provider_selections(payload)
             parse_settings(payload)
             payload = _bump_revision(payload, current)
@@ -252,7 +258,10 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             rules = config.get("rules", [])
             for index, existing_rule in enumerate(rules):
                 if existing_rule.get("id") == rule_id:
-                    rules[index] = _normalize_rule_notification_providers(rule, config)
+                    rules[index] = _normalize_rule_notification_providers(
+                        _normalize_rule_quiet_hours(_normalize_rule_exclusions(rule)),
+                        config,
+                    )
                     break
             else:
                 self._send_error(HTTPStatus.NOT_FOUND, "rule not found")
@@ -352,6 +361,7 @@ def _read_config(path: Path) -> dict[str, Any]:
     config = json.loads(path.read_text(encoding="utf-8"))
     normalized = _ensure_rule_ids(config)
     normalized = _ensure_revision(normalized)
+    normalized = _normalize_global_exclusions(normalized)
     normalized = _normalize_notification_blocks(normalized)
     normalized = _apply_notification_defaults(normalized)
     normalized = _normalize_notification_provider_selections(normalized)
@@ -450,18 +460,118 @@ def _sighting_summary(sighting: Any) -> dict[str, Any]:
         "aircraft_type": plane.aircraft_type or plane.category,
         "distance_miles": round(sighting.distance_miles, 2),
         "altitude_ft": plane.altitude_ft,
+        "track_deg": plane.track_deg,
+        "ground_speed_kt": _first_present(plane.raw, "gs", "speed", "ground_speed", "ground_speed_kt"),
+        "vertical_rate_fpm": _first_present(plane.raw, "baro_rate", "geom_rate", "vertical_rate", "vertical_rate_fpm"),
         "squawk": plane.squawk,
         "notification_providers": sorted(sighting.notification_providers or []),
+        "suppressed_notification_providers": sorted(sighting.suppressed_notification_providers),
+        "notification_status": _notification_status(sighting),
+        "aircraft_payload": _aircraft_payload(plane),
     }
+
+
+def _aircraft_payload(plane: Any) -> dict[str, Any]:
+    return {
+        "hex": plane.hex,
+        "flight": plane.flight,
+        "registration": plane.registration,
+        "aircraft_type": plane.aircraft_type,
+        "category": plane.category,
+        "source_type": plane.source_type,
+        "lat": plane.lat,
+        "lon": plane.lon,
+        "altitude_ft": plane.altitude_ft,
+        "track_deg": plane.track_deg,
+        "ground_speed_kt": _first_present(plane.raw, "gs", "speed", "ground_speed", "ground_speed_kt"),
+        "vertical_rate_fpm": _first_present(plane.raw, "baro_rate", "geom_rate", "vertical_rate", "vertical_rate_fpm"),
+        "seen_seconds": plane.seen_seconds,
+        "squawk": plane.squawk,
+        "emergency": plane.emergency,
+        "military": plane.military,
+        "is_tisb": plane.is_tisb,
+        "raw": plane.raw,
+    }
+
+
+def _first_present(values: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in values and values[key] not in (None, ""):
+            return values[key]
+    return None
+
+
+def _notification_status(sighting: Any) -> str:
+    if not sighting.suppressed_notification_providers:
+        return "sent"
+    if sighting.notification_providers:
+        return "partially_suppressed"
+    return "suppressed"
 
 
 def _normalize_notification_provider_selections(config: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(config)
     normalized["rules"] = [
-        _normalize_rule_notification_providers(rule, normalized)
+        _normalize_rule_notification_providers(_normalize_rule_quiet_hours(_normalize_rule_exclusions(rule)), normalized)
         for rule in normalized.get("rules", [])
     ]
     return normalized
+
+
+def _normalize_global_exclusions(config: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(config)
+    normalized["exclusions"] = _normalize_exclusions(normalized.get("exclusions"))
+    return normalized
+
+
+def _normalize_rule_exclusions(rule: dict[str, Any]) -> dict[str, Any]:
+    next_rule = dict(rule)
+    next_rule["exclusions"] = _normalize_exclusions(next_rule.get("exclusions"))
+    return next_rule
+
+
+def _normalize_exclusions(exclusions: Any) -> dict[str, list[str]]:
+    if not isinstance(exclusions, dict):
+        exclusions = {}
+    return {
+        "tail_numbers": _normalized_string_list(exclusions.get("tail_numbers")),
+        "hex_ids": _normalized_hex_list(exclusions.get("hex_ids")),
+        "callsigns": _normalized_string_list(exclusions.get("callsigns")),
+        "aircraft_types": _normalized_string_list(exclusions.get("aircraft_types")),
+    }
+
+
+def _normalized_string_list(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    return sorted({str(value).strip().upper() for value in values if str(value).strip()})
+
+
+def _normalized_hex_list(values: Any) -> list[str]:
+    return [value.removeprefix("~") for value in _normalized_string_list(values)]
+
+
+def _normalize_rule_quiet_hours(rule: dict[str, Any]) -> dict[str, Any]:
+    next_rule = dict(rule)
+    quiet_hours = next_rule.get("quiet_hours")
+    if not isinstance(quiet_hours, dict):
+        next_rule["quiet_hours"] = _default_quiet_hours_config()
+        return next_rule
+    next_rule["quiet_hours"] = {
+        **_default_quiet_hours_config(),
+        **quiet_hours,
+    }
+    return next_rule
+
+
+def _default_quiet_hours_config() -> dict[str, Any]:
+    return {
+        "enabled": False,
+        "start": DEFAULT_QUIET_HOURS_START,
+        "end": DEFAULT_QUIET_HOURS_END,
+        "time_zone": DEFAULT_QUIET_HOURS_TIME_ZONE,
+        "suppress_providers": ["pushover", "twilio"],
+    }
 
 
 def _normalize_notification_blocks(config: dict[str, Any]) -> dict[str, Any]:
@@ -602,6 +712,7 @@ def _default_config() -> dict[str, Any]:
         "poll_seconds": DEFAULT_POLL_SECONDS,
         "stale_aircraft_seconds": DEFAULT_STALE_AIRCRAFT_SECONDS,
         "recent_matches_window_hours": DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
+        "exclusions": _normalize_exclusions(None),
         "notifications": {},
         "rules": [
             {
@@ -611,6 +722,8 @@ def _default_config() -> dict[str, Any]:
                 "radius_miles": DEFAULT_RULE_RADIUS_MILES,
                 "tail_numbers": ["N12345"],
                 "cooldown_minutes": DEFAULT_RULE_COOLDOWN_MINUTES,
+                "quiet_hours": _default_quiet_hours_config(),
+                "exclusions": _normalize_exclusions(None),
             }
         ],
     }

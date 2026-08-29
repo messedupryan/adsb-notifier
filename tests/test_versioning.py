@@ -79,6 +79,18 @@ def test_makefile_bump_version_target_covers_version_managed_files():
         assert path in makefile
 
 
+def test_makefile_release_candidate_target_is_guarded_and_versioned():
+    makefile = (ROOT / "Makefile.example").read_text(encoding="utf-8")
+
+    assert "release-rc:" in makefile
+    assert "check-clean:" in makefile
+    assert "NEXT_RC_VERSION" in makefile
+    assert 'python3 -m adsb_notifier.release next-rc "$(PROJECT_VERSION)"' in makefile
+    assert "Git worktree must be clean before release work starts." in makefile
+    assert 'bump-version NEW_VERSION="$(RC_VERSION)"' in makefile
+    assert 'release PROJECT_VERSION="$(RC_VERSION)" IMAGE_TAG="$(RC_VERSION)"' in makefile
+
+
 def test_local_deploy_files_are_ignored():
     gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
 

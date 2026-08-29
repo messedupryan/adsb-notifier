@@ -52,11 +52,13 @@ def test_write_poll_status_records_worker_summary(tmp_path):
             lat=40.77,
             lon=-111.9,
             track_deg=183,
+            raw={"gs": 122, "baro_rate": -320},
         ),
         distance_miles=4.2,
         rule_name="target",
         event_type="tail",
         notification_providers={"pushover"},
+        suppressed_notification_providers={"twilio"},
     )
     status_path = tmp_path / "status.json"
 
@@ -70,9 +72,20 @@ def test_write_poll_status_records_worker_summary(tmp_path):
     assert status["recent_matches"][0]["lat"] == 40.77
     assert status["recent_matches"][0]["lon"] == -111.9
     assert status["recent_matches"][0]["track_deg"] == 183
+    assert status["recent_matches"][0]["ground_speed_kt"] == 122
+    assert status["recent_matches"][0]["vertical_rate_fpm"] == -320
     assert status["recent_matches"][0]["source_type"] == "adsb_icao"
+    assert status["recent_matches"][0]["aircraft_payload"]["registration"] == "N12345"
+    assert status["recent_matches"][0]["aircraft_payload"]["raw"] == {"baro_rate": -320, "gs": 122}
     assert status["recent_matches"][0]["airplanes_live_url"] == "https://globe.airplanes.live/?icao=ABC123"
+    assert status["recent_matches"][0]["notification_status"] == "partially_suppressed"
+    assert status["recent_matches"][0]["suppressed_notification_providers"] == ["twilio"]
     assert status["recent_matches_window_hours"] == 24
+    assert status["source_health"]["status"] == "healthy"
+    assert status["source_health"]["provider"] == "direct"
+    assert status["source_health"]["query"] == "aircraft_json"
+    assert status["source_health"]["last_success_at"] == status["last_poll_at"]
+    assert status["source_health"]["last_aircraft_count"] == 12
 
 
 def test_write_poll_status_preserves_recent_match_history(tmp_path):
@@ -175,6 +188,11 @@ def test_write_rate_limit_status_records_retry_details(tmp_path):
     assert status["rate_limit_retry_at"]
     assert status["last_error"] == "ADS-B source rate limit reached"
     assert status["consecutive_source_errors"] == 1
+    assert status["source_health"]["status"] == "rate_limited"
+    assert status["source_health"]["provider"] == "direct"
+    assert status["source_health"]["retry_at"] == status["rate_limit_retry_at"]
+    assert status["source_health"]["backoff_seconds"] == 120
+    assert status["source_health"]["last_error"] == "ADS-B source rate limit reached"
 
 
 def test_write_source_status_records_access_denied(tmp_path):
@@ -196,6 +214,8 @@ def test_write_source_status_records_access_denied(tmp_path):
     assert status["rate_limit_backoff_seconds"] == 120
     assert status["last_error"] == "ADS-B source access denied; backing off"
     assert status["consecutive_source_errors"] == 1
+    assert status["source_health"]["status"] == "access_denied"
+    assert status["source_health"]["last_failure_at"] == status["last_error_at"]
 
 
 def test_write_source_unavailable_status_records_network_failure(tmp_path):
@@ -216,6 +236,7 @@ def test_write_source_unavailable_status_records_network_failure(tmp_path):
     assert status["status"] == "source_unavailable"
     assert status["rate_limit_backoff_seconds"] == 60
     assert status["consecutive_source_errors"] == 1
+    assert status["source_health"]["status"] == "source_unavailable"
 
 
 def test_source_error_alert_waits_for_threshold_and_respects_cooldown():

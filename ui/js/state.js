@@ -3,8 +3,9 @@ let savedConfig = null;
 let isDirty = false;
 let isJsonDirty = false;
 let selectedRuleId = null;
+let selectedRuleIds = new Set();
 let activeTab = "dashboard";
-const uiVersion = "0.1.0";
+const uiVersion = "0.2.0";
 const redactedSecret = "********";
 const notificationProviderOrder = ["pushover", "email", "twilio"];
 const adsbSourceProviders = ["adsb_lol", "airplanes_live", "direct"];
@@ -26,6 +27,7 @@ let latestWorkerStatus = null;
 let dashboardMap = null;
 let dashboardMapLayers = null;
 let selectedRecentMatchKey = null;
+let expandedMatchGroupKeys = new Set();
 let filteredRecentMatches = [];
 
 const fields = {
@@ -40,6 +42,10 @@ const fields = {
   pollSeconds: document.querySelector("#poll-seconds"),
   staleAircraftSeconds: document.querySelector("#stale-aircraft-seconds"),
   recentMatchesWindowHours: document.querySelector("#recent-matches-window-hours"),
+  globalExclusionTailNumbers: document.querySelector("#global-exclusion-tail-numbers"),
+  globalExclusionHexIds: document.querySelector("#global-exclusion-hex-ids"),
+  globalExclusionCallsigns: document.querySelector("#global-exclusion-callsigns"),
+  globalExclusionAircraftTypes: document.querySelector("#global-exclusion-aircraft-types"),
   emailEnabled: document.querySelector("#email-enabled"),
   emailSmtpHost: document.querySelector("#email-smtp-host"),
   emailSmtpPort: document.querySelector("#email-smtp-port"),
@@ -85,6 +91,14 @@ const fields = {
   ruleSquawkCodes: document.querySelector("#rule-squawk-codes"),
   ruleNotificationProviders: document.querySelector("#rule-notification-providers"),
   ruleNotificationEmpty: document.querySelector("#rule-notification-empty"),
+  ruleQuietEnabled: document.querySelector("#rule-quiet-enabled"),
+  ruleQuietStart: document.querySelector("#rule-quiet-start"),
+  ruleQuietEnd: document.querySelector("#rule-quiet-end"),
+  ruleQuietTimeZone: document.querySelector("#rule-quiet-time-zone"),
+  ruleExclusionTailNumbers: document.querySelector("#rule-exclusion-tail-numbers"),
+  ruleExclusionHexIds: document.querySelector("#rule-exclusion-hex-ids"),
+  ruleExclusionCallsigns: document.querySelector("#rule-exclusion-callsigns"),
+  ruleExclusionAircraftTypes: document.querySelector("#rule-exclusion-aircraft-types"),
   ruleMilitary: document.querySelector("#rule-military"),
   ruleIncludeTisb: document.querySelector("#rule-include-tisb"),
   ruleHeadingChange: document.querySelector("#rule-heading-change"),
@@ -99,6 +113,13 @@ const reloadButton = document.querySelector("#reload");
 const discardButton = document.querySelector("#discard");
 const saveButton = document.querySelector("#save");
 const ruleList = document.querySelector("#rule-list");
+const ruleSearch = document.querySelector("#rule-search");
+const ruleTypeFilter = document.querySelector("#rule-type-filter");
+const ruleStateFilter = document.querySelector("#rule-state-filter");
+const ruleSelectedCount = document.querySelector("#rule-selected-count");
+const toggleVisibleRulesButton = document.querySelector("#toggle-visible-rules");
+const bulkEnableRulesButton = document.querySelector("#bulk-enable-rules");
+const bulkDisableRulesButton = document.querySelector("#bulk-disable-rules");
 const newRuleType = document.querySelector("#new-rule-type");
 const addRuleButton = document.querySelector("#add-rule");
 const testRuleButton = document.querySelector("#test-rule");
@@ -113,13 +134,24 @@ const workerLastPoll = document.querySelector("#worker-last-poll");
 const workerAircraftCount = document.querySelector("#worker-aircraft-count");
 const workerNotificationCount = document.querySelector("#worker-notification-count");
 const workerAdsbSource = document.querySelector("#worker-adsb-source");
+const workerSourceHealth = document.querySelector("#worker-source-health");
 const workerSourceErrors = document.querySelector("#worker-source-errors");
 const workerRateLimitRetry = document.querySelector("#worker-rate-limit-retry");
 const workerLastError = document.querySelector("#worker-last-error");
+const sourceHealthStatus = document.querySelector("#source-health-status");
+const sourceHealthProvider = document.querySelector("#source-health-provider");
+const sourceHealthQuery = document.querySelector("#source-health-query");
+const sourceHealthLastSuccess = document.querySelector("#source-health-last-success");
+const sourceHealthLastFailure = document.querySelector("#source-health-last-failure");
+const sourceHealthBackoff = document.querySelector("#source-health-backoff");
+const sourceHealthRetryAt = document.querySelector("#source-health-retry-at");
+const sourceHealthAircraftCount = document.querySelector("#source-health-aircraft-count");
+const sourceHealthLastError = document.querySelector("#source-health-last-error");
 const recentMatches = document.querySelector("#recent-matches");
 const dashboardEventFilter = document.querySelector("#dashboard-event-filter");
 const dashboardRuleFilter = document.querySelector("#dashboard-rule-filter");
 const dashboardProviderFilter = document.querySelector("#dashboard-provider-filter");
+const dashboardStatusFilter = document.querySelector("#dashboard-status-filter");
 const dashboardSearch = document.querySelector("#dashboard-search");
 const alertMap = document.querySelector("#alert-map");
 const alertMapEmpty = document.querySelector("#alert-map-empty");
@@ -134,6 +166,12 @@ const confirmTitle = document.querySelector("#confirm-title");
 const confirmMessage = document.querySelector("#confirm-message");
 const confirmCancelButton = document.querySelector("#confirm-cancel");
 const confirmAcceptButton = document.querySelector("#confirm-accept");
+const matchDetailModal = document.querySelector("#match-detail-modal");
+const matchDetailTitle = document.querySelector("#match-detail-title");
+const matchDetailLink = document.querySelector("#match-detail-link");
+const matchDetailCloseButton = document.querySelector("#match-detail-close");
+const matchDetailSummary = document.querySelector("#match-detail-summary");
+const matchDetailPayload = document.querySelector("#match-detail-payload");
 const themeMode = document.querySelector("#theme-mode");
 const themeAccent = document.querySelector("#theme-accent");
 const appLogo = document.querySelector("#app-logo");

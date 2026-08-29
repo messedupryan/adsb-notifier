@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="Cache-Control" content="no-store" />
     <title>ADS-B Notifier Config</title>
-    <link id="favicon" rel="icon" type="image/png" href="/images/icon_teal.png?v=0.1.0" />
-    <link id="apple-touch-icon" rel="apple-touch-icon" href="/images/icon_teal.png?v=0.1.0" />
+    <link id="favicon" rel="icon" type="image/png" href="/images/icon_teal.png?v=0.2.0" />
+    <link id="apple-touch-icon" rel="apple-touch-icon" href="/images/icon_teal.png?v=0.2.0" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-    <link rel="stylesheet" href="/styles.css?v=0.1.0" />
+    <link rel="stylesheet" href="/styles.css?v=0.2.0" />
   </head>
   <body>
     <main class="app-shell">
       <section class="toolbar">
         <div class="brand">
-          <h1><img id="app-logo" class="app-logo" src="/images/logo_teal.png?v=0.1.0" alt="ADS-B Notifier" /></h1>
+          <h1><img id="app-logo" class="app-logo" src="/images/logo_teal.png?v=0.2.0" alt="ADS-B Notifier" /></h1>
           <p id="status">Loading configuration...</p>
         </div>
         <div class="actions">
@@ -40,14 +40,15 @@
               <button id="refresh-status" type="button">Refresh</button>
             </header>
             <dl class="status-list">
-              <div><dt>Status</dt><dd id="worker-status-value">Unknown</dd></div>
-              <div><dt>Last poll</dt><dd id="worker-last-poll">Never</dd></div>
-              <div><dt>Aircraft</dt><dd id="worker-aircraft-count">0</dd></div>
-              <div><dt>Notifications</dt><dd id="worker-notification-count">0</dd></div>
-              <div><dt>ADS-B source</dt><dd id="worker-adsb-source">Unknown</dd></div>
-              <div><dt>Source errors</dt><dd id="worker-source-errors">0</dd></div>
-              <div><dt>Retry after</dt><dd id="worker-rate-limit-retry">None</dd></div>
-              <div><dt>Last error</dt><dd id="worker-last-error">None</dd></div>
+              <div class="worker-primary"><dt>Status</dt><dd id="worker-status-value">Unknown</dd></div>
+              <div class="worker-primary"><dt>Last poll</dt><dd id="worker-last-poll">Never</dd></div>
+              <div class="worker-primary"><dt>Aircraft</dt><dd id="worker-aircraft-count">0</dd></div>
+              <div class="worker-primary"><dt>Notifications</dt><dd id="worker-notification-count">0</dd></div>
+              <div class="worker-source source-url"><dt>ADS-B source</dt><dd id="worker-adsb-source">Unknown</dd></div>
+              <div class="worker-source"><dt>Source health</dt><dd id="worker-source-health">Unknown</dd></div>
+              <div class="worker-source"><dt>Source errors</dt><dd id="worker-source-errors">0</dd></div>
+              <div class="worker-source"><dt>Retry after</dt><dd id="worker-rate-limit-retry">None</dd></div>
+              <div class="worker-source"><dt>Last error</dt><dd id="worker-last-error">None</dd></div>
             </dl>
           </article>
           <article class="status-card recent-card">
@@ -62,6 +63,9 @@
                 </select>
                 <select id="dashboard-provider-filter" aria-label="Filter recent matches by notification provider" data-dashboard-control="true">
                   <option value="">All providers</option>
+                </select>
+                <select id="dashboard-status-filter" aria-label="Filter recent matches by notification status" data-dashboard-control="true">
+                  <option value="">All statuses</option>
                 </select>
                 <input id="dashboard-search" type="search" placeholder="Search" aria-label="Search recent matches" data-dashboard-control="true" />
               </div>
@@ -148,6 +152,17 @@
                 <input id="adsb-url" name="adsb_url" type="url" />
               </label>
             </div>
+            <dl class="source-health-detail">
+              <div><dt>Health</dt><dd id="source-health-status">Unknown</dd></div>
+              <div><dt>Provider</dt><dd id="source-health-provider">Unknown</dd></div>
+              <div><dt>Query</dt><dd id="source-health-query">Unknown</dd></div>
+              <div><dt>Last success</dt><dd id="source-health-last-success">Never</dd></div>
+              <div><dt>Last failure</dt><dd id="source-health-last-failure">Never</dd></div>
+              <div><dt>Backoff</dt><dd id="source-health-backoff">None</dd></div>
+              <div><dt>Rate-limit reset</dt><dd id="source-health-retry-at">None</dd></div>
+              <div><dt>Last aircraft count</dt><dd id="source-health-aircraft-count">0</dd></div>
+              <div class="wide"><dt>Last error</dt><dd id="source-health-last-error">None</dd></div>
+            </dl>
           </fieldset>
           <label>
             Home latitude
@@ -169,6 +184,15 @@
             Recent matches hours
             <input id="recent-matches-window-hours" name="recent_matches_window_hours" type="number" min="1" step="1" />
           </label>
+          <fieldset class="settings-group wide">
+            <legend>Global Exclusions</legend>
+            <div class="form-grid compact">
+              <label>Tail numbers <input id="global-exclusion-tail-numbers" type="text" /></label>
+              <label>ICAO hex IDs <input id="global-exclusion-hex-ids" type="text" /></label>
+              <label>Callsigns <input id="global-exclusion-callsigns" type="text" /></label>
+              <label>Aircraft types <input id="global-exclusion-aircraft-types" type="text" /></label>
+            </div>
+          </fieldset>
         </div>
         <div class="json-panel settings-json">
           <label for="config-json">Advanced JSON</label>
@@ -270,6 +294,37 @@
                 <button id="add-rule" type="button">Add</button>
               </div>
             </div>
+            <div class="rule-list-controls">
+              <label class="rule-search-label">
+                Search
+                <input id="rule-search" type="search" placeholder="Name or identifier" data-rule-control="true" />
+              </label>
+              <div class="rule-filter-row">
+                <select id="rule-type-filter" aria-label="Filter rules by type" data-rule-control="true">
+                  <option value="">All types</option>
+                  <option value="tail">Tail</option>
+                  <option value="military">Military</option>
+                  <option value="aircraft_type">Aircraft type</option>
+                  <option value="squawk">Squawk</option>
+                  <option value="circling">Circling</option>
+                </select>
+                <select id="rule-state-filter" aria-label="Filter rules by state" data-rule-control="true">
+                  <option value="">Any state</option>
+                  <option value="enabled">Enabled</option>
+                  <option value="disabled">Disabled</option>
+                </select>
+              </div>
+              <div class="rule-bulk-actions">
+                <div class="rule-selection-row">
+                  <button id="toggle-visible-rules" type="button" disabled>Select visible</button>
+                  <span id="rule-selected-count">0 selected</span>
+                </div>
+                <div class="rule-bulk-action-row">
+                  <button id="bulk-enable-rules" type="button" disabled>Enable</button>
+                  <button id="bulk-disable-rules" type="button" disabled>Disable</button>
+                </div>
+              </div>
+            </div>
             <div id="rule-list" class="rule-list"></div>
           </aside>
 
@@ -296,11 +351,6 @@
                 </select>
               </label>
               <label class="switch wide"><input id="rule-enabled" type="checkbox" /> Enabled</label>
-              <fieldset class="rule-notifications wide">
-                <legend>Notifications</legend>
-                <div id="rule-notification-providers" class="checkbox-grid"></div>
-                <p id="rule-notification-empty" class="empty-state hidden">No notification types are enabled globally.</p>
-              </fieldset>
               <label>Radius miles <input id="rule-radius" type="number" min="0" step="0.1" /></label>
               <label>Cooldown minutes <input id="rule-cooldown" type="number" min="0" step="1" /></label>
               <label>Min altitude ft <input id="rule-min-altitude" type="number" step="100" /></label>
@@ -313,16 +363,39 @@
               <label class="military-field switch wide"><input id="rule-include-tisb" type="checkbox" /> Include TIS-B/other tracks</label>
               <label class="circling-field">Heading change degrees <input id="rule-heading-change" type="number" min="1" step="1" /></label>
               <label class="circling-field">Window minutes <input id="rule-window-minutes" type="number" min="1" step="1" /></label>
+              <fieldset class="rule-notifications wide">
+                <legend>Notifications</legend>
+                <div id="rule-notification-providers" class="checkbox-grid"></div>
+                <p id="rule-notification-empty" class="empty-state hidden">No notification types are enabled globally.</p>
+              </fieldset>
+              <fieldset class="rule-quiet-hours wide">
+                <legend>Quiet Hours</legend>
+                <label class="switch"><input id="rule-quiet-enabled" type="checkbox" /> Suppress phone alerts</label>
+                <div class="inline-fields">
+                  <label>Start <input id="rule-quiet-start" type="time" /></label>
+                  <label>End <input id="rule-quiet-end" type="time" /></label>
+                  <label>Timezone <input id="rule-quiet-time-zone" type="text" /></label>
+                </div>
+              </fieldset>
+              <fieldset class="rule-exclusions wide">
+                <legend>Rule Exclusions</legend>
+                <div class="form-grid compact">
+                  <label>Tail numbers <input id="rule-exclusion-tail-numbers" type="text" /></label>
+                  <label>ICAO hex IDs <input id="rule-exclusion-hex-ids" type="text" /></label>
+                  <label>Callsigns <input id="rule-exclusion-callsigns" type="text" /></label>
+                  <label>Aircraft types <input id="rule-exclusion-aircraft-types" type="text" /></label>
+                </div>
+              </fieldset>
             </div>
           </article>
         </div>
       </section>
       <footer class="app-footer">
         <div class="footer-brand">
-          <span>ADS-B Notifier 0.1.0</span>
-          <span id="ui-version">UI 0.1.0</span>
+          <span>ADS-B Notifier 0.2.0</span>
+          <span id="ui-version">UI 0.2.0</span>
         </div>
-        <img id="footer-icon" class="footer-icon" src="/images/icon_teal.png?v=0.1.0" alt="" aria-hidden="true" />
+        <img id="footer-icon" class="footer-icon" src="/images/icon_teal.png?v=0.2.0" alt="" aria-hidden="true" />
       </footer>
     </main>
     <div id="confirm-modal" class="modal-overlay hidden" role="presentation">
@@ -335,19 +408,35 @@
         </div>
       </section>
     </div>
+    <div id="match-detail-modal" class="modal-overlay hidden" role="presentation">
+      <section class="modal match-detail-modal" role="dialog" aria-modal="true" aria-labelledby="match-detail-title">
+        <header>
+          <div>
+            <h2 id="match-detail-title">Match Details</h2>
+            <a id="match-detail-link" class="match-detail-link" href="#" target="_blank" rel="noopener noreferrer">Airplanes.live</a>
+          </div>
+          <button id="match-detail-close" type="button" aria-label="Close match details">Close</button>
+        </header>
+        <dl id="match-detail-summary" class="match-detail-summary"></dl>
+        <details class="match-payload-details">
+          <summary>Normalized aircraft payload</summary>
+          <pre id="match-detail-payload"></pre>
+        </details>
+      </section>
+    </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-    <script src="/js/constants.js?v=0.1.0"></script>
-    <script src="/js/state.js?v=0.1.0"></script>
-    <script src="/js/theme.js?v=0.1.0"></script>
-    <script src="/js/config-flow.js?v=0.1.0"></script>
-    <script src="/js/dashboard.js?v=0.1.0"></script>
-    <script src="/js/forms.js?v=0.1.0"></script>
-    <script src="/js/rule-actions.js?v=0.1.0"></script>
-    <script src="/js/modal.js?v=0.1.0"></script>
-    <script src="/js/validation.js?v=0.1.0"></script>
-    <script src="/js/rule-model.js?v=0.1.0"></script>
-    <script src="/js/map-utils.js?v=0.1.0"></script>
-    <script src="/js/ui-utils.js?v=0.1.0"></script>
-    <script src="/js/bootstrap.js?v=0.1.0"></script>
+    <script src="/js/constants.js?v=0.2.0"></script>
+    <script src="/js/state.js?v=0.2.0"></script>
+    <script src="/js/theme.js?v=0.2.0"></script>
+    <script src="/js/config-flow.js?v=0.2.0"></script>
+    <script src="/js/dashboard.js?v=0.2.0"></script>
+    <script src="/js/forms.js?v=0.2.0"></script>
+    <script src="/js/rule-actions.js?v=0.2.0"></script>
+    <script src="/js/modal.js?v=0.2.0"></script>
+    <script src="/js/validation.js?v=0.2.0"></script>
+    <script src="/js/rule-model.js?v=0.2.0"></script>
+    <script src="/js/map-utils.js?v=0.2.0"></script>
+    <script src="/js/ui-utils.js?v=0.2.0"></script>
+    <script src="/js/bootstrap.js?v=0.2.0"></script>
   </body>
 </html>

@@ -18,6 +18,10 @@ function renderForms() {
   fields.pollSeconds.value = config.poll_seconds ?? DEFAULT_POLL_SECONDS;
   fields.staleAircraftSeconds.value = config.stale_aircraft_seconds ?? DEFAULT_STALE_AIRCRAFT_SECONDS;
   fields.recentMatchesWindowHours.value = config.recent_matches_window_hours ?? DEFAULT_RECENT_MATCHES_WINDOW_HOURS;
+  fields.globalExclusionTailNumbers.value = listToText(config.exclusions?.tail_numbers);
+  fields.globalExclusionHexIds.value = listToText(config.exclusions?.hex_ids);
+  fields.globalExclusionCallsigns.value = listToText(config.exclusions?.callsigns);
+  fields.globalExclusionAircraftTypes.value = listToText(config.exclusions?.aircraft_types);
 
   fields.emailEnabled.checked = Boolean(email.enabled);
   fields.emailSmtpHost.value = email.smtp_host || "";
@@ -53,6 +57,7 @@ function renderForms() {
   fields.twilioFrom.value = twilio.from || "";
   fields.twilioTo.value = twilio.to || "";
   fields.twilioBodyTemplate.value = twilio.body_template || twilio.message_template || twilio.template || "";
+  renderSourceHealth(latestWorkerStatus || {status: "unknown", recent_matches: []});
   renderRuleEditor();
 }
 
@@ -61,16 +66,38 @@ function renderRuleList() {
   const rules = config?.rules || [];
   if (rules.length === 0) {
     ruleList.append(emptyState("No rules configured"));
+    renderRuleBulkState();
     return;
   }
 
-  rules.forEach((rule) => {
+  const filteredRules = visibleRules();
+  syncRuleSelectionToVisible();
+  if (filteredRules.length === 0) {
+    ruleList.append(emptyState("No rules match these filters"));
+    renderRuleBulkState();
+    return;
+  }
+
+  filteredRules.forEach((rule) => {
+    const item = document.createElement("div");
+    item.className = "rule-item";
+    item.dataset.ruleId = rule.id;
+    item.classList.toggle("selected", rule.id === selectedRuleId);
+    item.classList.toggle("disabled", rule.enabled === false);
+    item.classList.toggle("bulk-selected", selectedRuleIds.has(rule.id));
+
+    const selectorLabel = document.createElement("label");
+    selectorLabel.className = "rule-select";
+    const selector = document.createElement("input");
+    selector.type = "checkbox";
+    selector.checked = selectedRuleIds.has(rule.id);
+    selector.setAttribute("aria-label", `Select ${rule.name || "unnamed rule"} for bulk actions`);
+    selectorLabel.append(selector);
+
     const button = document.createElement("button");
-    button.className = "rule-item";
+    button.className = "rule-open";
     button.type = "button";
     button.dataset.ruleId = rule.id;
-    button.classList.toggle("selected", rule.id === selectedRuleId);
-    button.classList.toggle("disabled", rule.enabled === false);
 
     const title = document.createElement("strong");
     const status = document.createElement("span");
@@ -80,8 +107,21 @@ function renderRuleList() {
     const meta = document.createElement("span");
     meta.textContent = `${eventLabel(rule.event)} · ${ruleSummary(rule)} · ${rule.radius_miles ?? "unset"} mi`;
     button.append(title, meta);
-    ruleList.append(button);
+    item.append(selectorLabel, button);
+    ruleList.append(item);
   });
+  renderRuleBulkState();
+}
+
+function renderRuleBulkState() {
+  const selectedCount = selectedRuleIds.size;
+  const visibleRuleIds = visibleRules().map((rule) => rule.id);
+  const allVisibleSelected = visibleRuleIds.length > 0 && visibleRuleIds.every((ruleId) => selectedRuleIds.has(ruleId));
+  ruleSelectedCount.textContent = `${selectedCount} selected`;
+  toggleVisibleRulesButton.textContent = allVisibleSelected ? "Deselect visible" : "Select visible";
+  toggleVisibleRulesButton.disabled = visibleRuleIds.length === 0;
+  bulkEnableRulesButton.disabled = selectedCount === 0;
+  bulkDisableRulesButton.disabled = selectedCount === 0;
 }
 
 function renderRuleEditor() {
@@ -111,6 +151,14 @@ function renderRuleEditor() {
   fields.ruleIncludeTisb.checked = rule.include_tisb === true;
   fields.ruleHeadingChange.value = rule.circling_min_heading_change_deg ?? DEFAULT_CIRCLING_HEADING_CHANGE_DEG;
   fields.ruleWindowMinutes.value = rule.circling_window_minutes ?? DEFAULT_CIRCLING_WINDOW_MINUTES;
+  fields.ruleQuietEnabled.checked = rule.quiet_hours?.enabled === true;
+  fields.ruleQuietStart.value = rule.quiet_hours?.start || DEFAULT_QUIET_HOURS_START;
+  fields.ruleQuietEnd.value = rule.quiet_hours?.end || DEFAULT_QUIET_HOURS_END;
+  fields.ruleQuietTimeZone.value = rule.quiet_hours?.time_zone || browserTimeZone();
+  fields.ruleExclusionTailNumbers.value = listToText(rule.exclusions?.tail_numbers);
+  fields.ruleExclusionHexIds.value = listToText(rule.exclusions?.hex_ids);
+  fields.ruleExclusionCallsigns.value = listToText(rule.exclusions?.callsigns);
+  fields.ruleExclusionAircraftTypes.value = listToText(rule.exclusions?.aircraft_types);
   renderRuleNotificationProviders(rule);
   updateRuleFieldVisibility(rule.event || "tail");
 }
@@ -149,6 +197,12 @@ function syncFromForms() {
   config.poll_seconds = integerValue(fields.pollSeconds, DEFAULT_POLL_SECONDS);
   config.stale_aircraft_seconds = integerValue(fields.staleAircraftSeconds, DEFAULT_STALE_AIRCRAFT_SECONDS);
   config.recent_matches_window_hours = integerValue(fields.recentMatchesWindowHours, DEFAULT_RECENT_MATCHES_WINDOW_HOURS);
+  config.exclusions = exclusionsFromFields({
+    tailNumbers: fields.globalExclusionTailNumbers,
+    hexIds: fields.globalExclusionHexIds,
+    callsigns: fields.globalExclusionCallsigns,
+    aircraftTypes: fields.globalExclusionAircraftTypes,
+  });
   const notifications = config.notifications || {};
   const existingEmail = notifications.email || {};
   const existingPushover = notifications.pushover || {};
@@ -217,12 +271,35 @@ function syncSelectedRuleFromForms() {
     rule.categories = textToList(fields.ruleCategories.value);
     rule.squawk_codes = textToList(fields.ruleSquawkCodes.value);
     rule.notification_providers = selectedRuleNotificationProviders();
+    rule.quiet_hours = {
+      ...defaultQuietHours(),
+      ...(rule.quiet_hours || {}),
+      enabled: fields.ruleQuietEnabled.checked,
+      start: fields.ruleQuietStart.value || DEFAULT_QUIET_HOURS_START,
+      end: fields.ruleQuietEnd.value || DEFAULT_QUIET_HOURS_END,
+      time_zone: fields.ruleQuietTimeZone.value.trim() || browserTimeZone(),
+    };
+    rule.exclusions = exclusionsFromFields({
+      tailNumbers: fields.ruleExclusionTailNumbers,
+      hexIds: fields.ruleExclusionHexIds,
+      callsigns: fields.ruleExclusionCallsigns,
+      aircraftTypes: fields.ruleExclusionAircraftTypes,
+    });
     rule.military = rule.event === "military";
     rule.include_tisb = fields.ruleIncludeTisb.checked;
     rule.circling_min_heading_change_deg = numberValue(fields.ruleHeadingChange);
     rule.circling_window_minutes = integerValue(fields.ruleWindowMinutes);
     pruneRuleForEvent(rule);
   }
+}
+
+function exclusionsFromFields(exclusionFields) {
+  return {
+    tail_numbers: textToList(exclusionFields.tailNumbers.value),
+    hex_ids: textToList(exclusionFields.hexIds.value),
+    callsigns: textToList(exclusionFields.callsigns.value),
+    aircraft_types: textToList(exclusionFields.aircraftTypes.value),
+  };
 }
 
 function selectedRuleNotificationProviders() {

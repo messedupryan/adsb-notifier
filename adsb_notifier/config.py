@@ -4,12 +4,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from adsb_notifier.constants import (
     DEFAULT_ADSB_REQUEST_TIMEOUT_SECONDS,
     DEFAULT_CIRCLING_HEADING_CHANGE_DEG,
     DEFAULT_CIRCLING_WINDOW_MINUTES,
     DEFAULT_POLL_SECONDS,
+    DEFAULT_QUIET_HOURS_END,
+    DEFAULT_QUIET_HOURS_START,
+    DEFAULT_QUIET_HOURS_TIME_ZONE,
     DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
     DEFAULT_RULE_COOLDOWN_MINUTES,
     DEFAULT_SOURCE_ERROR_ALERT_COOLDOWN_MINUTES,
@@ -20,6 +24,7 @@ from adsb_notifier.constants import (
 from adsb_notifier.squawk import require_squawk_code
 
 NOTIFICATION_PROVIDERS = {"email", "pushover", "twilio"}
+PHONE_NOTIFICATION_PROVIDERS = {"pushover", "twilio"}
 ADSB_SOURCE_PROVIDERS = {"direct", "airplanes_live", "adsb_lol"}
 ADSB_SOURCE_QUERIES = {"point", "mil", "reg", "type", "hex"}
 RULE_EVENTS = {"aircraft_type", "circling", "military", "squawk", "tail"}
@@ -27,6 +32,7 @@ CONFIG_TOP_LEVEL_KEYS = {
     "adsb_source",
     "adsb_url",
     "config_revision",
+    "exclusions",
     "home",
     "notifications",
     "poll_seconds",
@@ -67,6 +73,23 @@ class SourceErrorAlerts:
 
 
 @dataclass(frozen=True)
+class QuietHours:
+    enabled: bool = False
+    start: str = DEFAULT_QUIET_HOURS_START
+    end: str = DEFAULT_QUIET_HOURS_END
+    time_zone: str = DEFAULT_QUIET_HOURS_TIME_ZONE
+    suppress_providers: set[str] = field(default_factory=lambda: set(PHONE_NOTIFICATION_PROVIDERS))
+
+
+@dataclass(frozen=True)
+class Exclusions:
+    tail_numbers: set[str] = field(default_factory=set)
+    hex_ids: set[str] = field(default_factory=set)
+    callsigns: set[str] = field(default_factory=set)
+    aircraft_types: set[str] = field(default_factory=set)
+
+
+@dataclass(frozen=True)
 class Rule:
     name: str
     event: str
@@ -85,6 +108,8 @@ class Rule:
     circling_min_heading_change_deg: float = DEFAULT_CIRCLING_HEADING_CHANGE_DEG
     circling_window_minutes: int = DEFAULT_CIRCLING_WINDOW_MINUTES
     notification_providers: set[str] | None = None
+    quiet_hours: QuietHours = field(default_factory=QuietHours)
+    exclusions: Exclusions = field(default_factory=Exclusions)
 
 
 @dataclass(frozen=True)
@@ -96,6 +121,7 @@ class Settings:
     stale_aircraft_seconds: int
     notifications: Notifications
     rules: list[Rule]
+    exclusions: Exclusions = field(default_factory=Exclusions)
     recent_matches_window_hours: int = DEFAULT_RECENT_MATCHES_WINDOW_HOURS
     source_error_alerts: SourceErrorAlerts = field(default_factory=SourceErrorAlerts)
 
@@ -137,6 +163,7 @@ def parse_settings(data: dict[str, Any]) -> Settings:
             twilio=notification_data.get("twilio"),
             pushover=notification_data.get("pushover"),
         ),
+        exclusions=_parse_exclusions(data.get("exclusions")),
         rules=rules,
     )
 
@@ -152,6 +179,7 @@ def validate_settings_data(data: dict[str, Any]) -> None:
     _validate_required_section(data, "home", dict)
     _validate_required_section(data, "rules", list)
     _validate_optional_section(data, "adsb_source", dict)
+    _validate_optional_section(data, "exclusions", dict)
     _validate_optional_section(data, "notifications", dict)
     _validate_optional_section(data, "source_error_alerts", dict)
     _validate_home_shape(data["home"])
@@ -159,6 +187,7 @@ def validate_settings_data(data: dict[str, Any]) -> None:
     _validate_optional_numeric_field(data, "stale_aircraft_seconds")
     _validate_optional_numeric_field(data, "recent_matches_window_hours")
     _validate_rules_shape(data["rules"])
+    _validate_exclusions_shape(data.get("exclusions"), "config.exclusions")
     _validate_notifications_shape(data.get("notifications", {}))
 
 
@@ -206,6 +235,8 @@ def _validate_rules_shape(rules: list[Any]) -> None:
             raise ValueError(f"{rule_label} requires aircraft_types or categories")
         if "notification_providers" in rule and not isinstance(rule["notification_providers"], list):
             raise ValueError(f"{rule_label} notification_providers must be an array")
+        _validate_quiet_hours_shape(rule, rule_label)
+        _validate_exclusions_shape(rule.get("exclusions"), f"{rule_label} exclusions")
         _validate_numeric_field(rule, "radius_miles", prefix=rule_label)
         _validate_numeric_field(rule, "cooldown_minutes", prefix=rule_label)
 
@@ -229,6 +260,19 @@ def _has_list_values(data: dict[str, Any], key: str) -> bool:
     return isinstance(value, list) and any(str(item).strip() for item in value)
 
 
+def _validate_exclusions_shape(data: Any, label: str) -> None:
+    if data is None:
+        return
+    if not isinstance(data, dict):
+        raise ValueError(f"{label} must be a JSON object")
+    unknown_keys = sorted(set(data) - {"tail_numbers", "hex_ids", "callsigns", "aircraft_types"})
+    if unknown_keys:
+        raise ValueError(f"{label} contains unsupported field: {', '.join(unknown_keys)}")
+    for key in ("tail_numbers", "hex_ids", "callsigns", "aircraft_types"):
+        if key in data and not isinstance(data[key], list):
+            raise ValueError(f"{label}.{key} must be an array")
+
+
 def _validate_numeric_field(data: dict[str, Any], key: str, prefix: str = "config") -> None:
     if key not in data or data[key] in (None, ""):
         raise ValueError(f"{prefix} requires {key}")
@@ -242,6 +286,43 @@ def _validate_optional_numeric_field(data: dict[str, Any], key: str, prefix: str
     if key not in data:
         return
     _validate_numeric_field(data, key, prefix)
+
+
+def _validate_quiet_hours_shape(rule: dict[str, Any], rule_label: str) -> None:
+    if "quiet_hours" not in rule or rule["quiet_hours"] is None:
+        return
+    quiet_hours = rule["quiet_hours"]
+    if not isinstance(quiet_hours, dict):
+        raise ValueError(f"{rule_label} quiet_hours must be a JSON object")
+    for key in ("start", "end"):
+        if key in quiet_hours and not _is_hhmm_time(quiet_hours[key]):
+            raise ValueError(f"{rule_label} quiet_hours.{key} must use HH:MM time")
+    if quiet_hours.get("start") == quiet_hours.get("end") and quiet_hours.get("start") is not None:
+        raise ValueError(f"{rule_label} quiet_hours start and end must differ")
+    if "time_zone" in quiet_hours:
+        _validate_time_zone(quiet_hours["time_zone"], rule_label)
+    if "suppress_providers" in quiet_hours and not isinstance(quiet_hours["suppress_providers"], list):
+        raise ValueError(f"{rule_label} quiet_hours.suppress_providers must be an array")
+
+
+def _is_hhmm_time(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    parts = value.split(":")
+    if len(parts) != 2 or not all(part.isdigit() for part in parts):
+        return False
+    hour = int(parts[0])
+    minute = int(parts[1])
+    return len(parts[0]) == 2 and len(parts[1]) == 2 and 0 <= hour <= 23 and 0 <= minute <= 59
+
+
+def _validate_time_zone(value: Any, rule_label: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{rule_label} quiet_hours.time_zone is required")
+    try:
+        ZoneInfo(value.strip())
+    except ZoneInfoNotFoundError as exc:
+        raise ValueError(f"{rule_label} quiet_hours.time_zone is not recognized") from exc
 
 
 def _rule_label(rule: dict[str, Any], index: int) -> str:
@@ -343,6 +424,8 @@ def _parse_rule(data: dict[str, Any]) -> Rule:
         ),
         circling_window_minutes=int(data.get("circling_window_minutes", DEFAULT_CIRCLING_WINDOW_MINUTES)),
         notification_providers=_parse_notification_providers(data),
+        quiet_hours=_parse_quiet_hours(data.get("quiet_hours")),
+        exclusions=_parse_exclusions(data.get("exclusions")),
     )
 
 
@@ -358,6 +441,45 @@ def _parse_notification_providers(data: dict[str, Any]) -> set[str] | None:
     if unknown:
         raise ValueError(f"unsupported notification provider: {', '.join(sorted(unknown))}")
     return providers
+
+
+def _parse_quiet_hours(data: dict[str, Any] | None) -> QuietHours:
+    if not isinstance(data, dict):
+        return QuietHours()
+    suppress_providers = {
+        str(provider).strip().lower()
+        for provider in data.get("suppress_providers", PHONE_NOTIFICATION_PROVIDERS)
+        if str(provider).strip()
+    }
+    unknown = suppress_providers - PHONE_NOTIFICATION_PROVIDERS
+    if unknown:
+        raise ValueError(f"unsupported quiet-hours notification provider: {', '.join(sorted(unknown))}")
+    return QuietHours(
+        enabled=_bool_value(data.get("enabled", False)),
+        start=str(data.get("start", DEFAULT_QUIET_HOURS_START)),
+        end=str(data.get("end", DEFAULT_QUIET_HOURS_END)),
+        time_zone=str(data.get("time_zone", DEFAULT_QUIET_HOURS_TIME_ZONE)).strip(),
+        suppress_providers=suppress_providers,
+    )
+
+
+def _parse_exclusions(data: dict[str, Any] | None) -> Exclusions:
+    if not isinstance(data, dict):
+        return Exclusions()
+    return Exclusions(
+        tail_numbers=_uppercase_values(data.get("tail_numbers", [])),
+        hex_ids={_normalize_hex_id(value) for value in data.get("hex_ids", []) if str(value).strip()},
+        callsigns=_uppercase_values(data.get("callsigns", [])),
+        aircraft_types=_uppercase_values(data.get("aircraft_types", [])),
+    )
+
+
+def _uppercase_values(values: list[Any]) -> set[str]:
+    return {str(value).strip().upper() for value in values if str(value).strip()}
+
+
+def _normalize_hex_id(value: Any) -> str:
+    return str(value).strip().upper().removeprefix("~")
 
 
 def _validate_unique_rule_names(rules: list[dict[str, Any]]) -> None:

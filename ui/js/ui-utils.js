@@ -116,4 +116,7 @@ function setBusy(isBusy) {
   saveButton.disabled = isBusy;
   testEmailButton.disabled = isBusy;
   testTwilioButton.disabled = isBusy;
+  toggleVisibleRulesButton.disabled = isBusy || visibleRules().length === 0;
+  bulkEnableRulesButton.disabled = isBusy || selectedRuleIds.size === 0;
+  bulkDisableRulesButton.disabled = isBusy || selectedRuleIds.size === 0;
 }
