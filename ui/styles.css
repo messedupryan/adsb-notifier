@@ -28,6 +28,8 @@
   --status-enabled-text: #116149;
   --dashboard-list-column: minmax(0, 2fr);
   --dashboard-map-column: minmax(360px, 3fr);
+  --dashboard-map-height: clamp(460px, calc(100vh - 310px), 760px);
+  --dashboard-map-inset: 8px;
 }
 
 [data-mode="dark"] {
@@ -718,13 +720,17 @@ textarea.invalid {
 
 .map-shell {
   position: relative;
-  min-height: clamp(460px, calc(100vh - 310px), 760px);
+  min-height: calc(var(--dashboard-map-height) + (var(--dashboard-map-inset) * 2));
+  padding: var(--dashboard-map-inset);
+  background: var(--panel);
+  border-radius: 0 0 8px 8px;
 }
 
 .alert-map {
-  min-height: clamp(460px, calc(100vh - 310px), 760px);
-  border-radius: 0 0 8px 8px;
+  min-height: var(--dashboard-map-height);
+  border-radius: 6px;
   background: var(--panel-muted);
+  overflow: hidden;
 }
 
 .map-empty {
@@ -1161,6 +1167,14 @@ textarea {
   .map-shell,
   .alert-map {
     max-height: none;
+  }
+
+  .map-shell {
+    --dashboard-map-height: 380px;
+  }
+
+  .recent-matches,
+  .alert-map {
     min-height: 380px;
   }
 

@@ -402,7 +402,7 @@ function fitDashboardMap({maxZoom = 13} = {}) {
   });
 
   dashboardMap.invalidateSize();
-  dashboardMap.fitBounds(bounds, {padding: [28, 28], maxZoom, animate: false});
+  dashboardMap.fitBounds(bounds, {padding: [DASHBOARD_MAP_FIT_PADDING_PX, DASHBOARD_MAP_FIT_PADDING_PX], maxZoom, animate: false});
 }
 
 function zoomSelectedMatch() {
@@ -418,7 +418,7 @@ function zoomSelectedMatch() {
     [Number(match.lat), Number(match.lon)],
   ]);
   dashboardMap.invalidateSize();
-  dashboardMap.fitBounds(bounds, {padding: [42, 42], maxZoom: 12, animate: false});
+  dashboardMap.fitBounds(bounds, {padding: [SELECTED_MATCH_FIT_PADDING_PX, SELECTED_MATCH_FIT_PADDING_PX], maxZoom: 12, animate: false});
 }
 
 function updateMapActionState() {

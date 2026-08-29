@@ -224,6 +224,19 @@ def test_recent_match_detail_view_is_available():
     assert "aircraft_payload" in UI_JS
 
 
+def test_dashboard_map_has_inset_and_tighter_fit_padding():
+    styles = (ROOT / "ui" / "styles.css").read_text(encoding="utf-8")
+
+    assert "--dashboard-map-inset: 8px;" in styles
+    assert "padding: var(--dashboard-map-inset);" in styles
+    assert "border-radius: 6px;" in styles
+    assert "overflow: hidden;" in styles
+    assert "const DASHBOARD_MAP_FIT_PADDING_PX = 18;" in UI_JS
+    assert "const SELECTED_MATCH_FIT_PADDING_PX = 30;" in UI_JS
+    assert "padding: [DASHBOARD_MAP_FIT_PADDING_PX, DASHBOARD_MAP_FIT_PADDING_PX]" in UI_JS
+    assert "padding: [SELECTED_MATCH_FIT_PADDING_PX, SELECTED_MATCH_FIT_PADDING_PX]" in UI_JS
+
+
 def test_source_health_controls_are_available():
     assert "worker-source-health" in INDEX_HTML
     for field_id in [
