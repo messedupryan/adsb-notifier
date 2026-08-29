@@ -61,6 +61,14 @@ git push origin main v0.3.0
 
 Release-note drafts live under `docs/releases/` and are written for GitHub Releases. Stable minor releases should have a concise public summary before or during promotion; patch checkpoints and release candidates do not need formal release notes unless there is a specific operational reason.
 
+Draft release notes from the roadmap and commit history:
+
+```bash
+make release-notes VERSION=0.3.0 PREVIOUS_VERSION=0.2.0 ROADMAP="ADSB-Notifier Roadmap v0.3.0"
+```
+
+The generated draft is a starting point for the GitHub Release body. Keep the final text focused on functional changes, validation, and notable operational notes; do not add binary or custom artifact expectations.
+
 ## Deployment Tags
 
 By default, the Makefile uses the version from `VERSION` as the image tag:

@@ -234,6 +234,14 @@ Prepare and deploy a release candidate from a clean worktree:
 make release-rc REGISTRY=registry.example.test NAMESPACE=adsb RELEASE=adsb-notifier
 ```
 
+Draft GitHub release notes for a stable minor release:
+
+```bash
+make release-notes VERSION=0.3.0 PREVIOUS_VERSION=0.2.0 ROADMAP="ADSB-Notifier Roadmap v0.3.0"
+```
+
+This writes `docs/releases/v0.3.0.md` with a GitHub Release-oriented outline and commit history since `v0.2.0`. Patch checkpoints and release candidates usually do not need formal release notes.
+
 Individual images:
 
 ```bash

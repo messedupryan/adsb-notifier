@@ -206,7 +206,9 @@ Recent matches can be filtered by event, rule, provider, notification status, an
 
 The project is currently in beta and uses SemVer-style `0.x.y` versions, with explicit release-candidate builds like `0.x.0-rc.n` before stable cuts like `0.x.0`. The worker, API, UI, Helm chart, Python package, and container images share the project version during beta.
 
-Use `make release-rc` from a clean worktree to prepare, build, push, deploy, and roll out the next release candidate. The target derives the next RC from the current project version, either from the latest numeric checkpoint to the next minor `rc.1`, or from one RC to the next. See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, RC workflow, and promotion checklist.
+Use `make release-rc` from a clean worktree to prepare, build, push, deploy, and roll out the next release candidate. The target derives the next RC from the current project version, either from the latest numeric checkpoint to the next minor `rc.1`, or from one RC to the next.
+
+Stable minor releases should also get GitHub-facing release notes. Draft them with `make release-notes VERSION=0.3.0 PREVIOUS_VERSION=0.2.0 ROADMAP="ADSB-Notifier Roadmap v0.3.0"` and polish the resulting file under `docs/releases/` before publishing the GitHub Release. See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, RC workflow, release notes, and promotion checklist.
 
 <a id="security-model"></a>
 
