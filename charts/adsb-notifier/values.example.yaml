@@ -3,7 +3,7 @@ fullnameOverride: ""
 
 image:
   registry: registry.example.test
-  tag: 0.2.10
+  tag: 0.2.11
   pullPolicy: Always
 
 secret:
