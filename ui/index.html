@@ -202,8 +202,10 @@
       </section>
 
       <section id="notifications" class="tab-panel">
-        <div class="provider-grid">
-          <article class="provider">
+        <div id="notification-provider-selector" class="notification-provider-selector" role="tablist" aria-label="Notification providers"></div>
+        <div class="notification-layout">
+          <div class="provider-grid">
+          <article class="provider" data-provider-panel="email">
             <header>
               <h2>Email</h2>
               <div class="provider-actions">
@@ -238,7 +240,7 @@
             </div>
           </article>
 
-          <article class="provider">
+          <article class="provider" data-provider-panel="pushover">
             <header>
               <h2>Pushover</h2>
               <div class="provider-actions">
@@ -259,7 +261,7 @@
             </div>
           </article>
 
-          <article class="provider">
+          <article class="provider" data-provider-panel="twilio">
             <header>
               <h2>Twilio SMS</h2>
               <div class="provider-actions">
@@ -276,6 +278,14 @@
               <label class="wide">Message template <textarea id="twilio-body-template" rows="4"></textarea></label>
             </div>
           </article>
+          </div>
+          <aside class="notification-preview-panel">
+            <header>
+              <h2>Template Preview</h2>
+              <span id="notification-preview-source">Sample aircraft</span>
+            </header>
+            <div id="notification-preview" class="notification-preview"></div>
+          </aside>
         </div>
       </section>
 

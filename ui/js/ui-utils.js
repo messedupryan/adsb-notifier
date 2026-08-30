@@ -19,10 +19,14 @@ function eventLabel(eventType) {
 
 function providerLabel(provider) {
   return {
-    email: "email",
+    email: "Email",
     pushover: "Pushover",
     twilio: "Twilio SMS",
   }[provider] || provider;
+}
+
+function isNotificationField(target) {
+  return ["email-", "pushover-", "twilio-"].some((prefix) => target.id.startsWith(prefix));
 }
 
 function ruleSummary(rule) {

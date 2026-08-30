@@ -107,6 +107,28 @@ def test_email_html_and_brand_fields_are_available():
     assert "email-html-body-template" in parser.textareas
 
 
+def test_notification_provider_selector_and_preview_are_available():
+    assert 'id="notification-provider-selector"' in INDEX_HTML
+    assert 'data-provider-panel="email"' in INDEX_HTML
+    assert 'data-provider-panel="pushover"' in INDEX_HTML
+    assert 'data-provider-panel="twilio"' in INDEX_HTML
+    assert 'id="notification-preview-source"' in INDEX_HTML
+    assert 'id="notification-preview"' in INDEX_HTML
+    assert "selectedNotificationProvider" in UI_JS
+    assert "function sortedNotificationProviders" in UI_JS
+    assert "function selectNotificationProvider" in UI_JS
+    assert "function renderNotificationPreview" in UI_JS
+    assert "function sampleNotificationPreviewMatch" in UI_JS
+    assert "function renderNotificationTemplate" in UI_JS
+    assert "function emailHtmlPreviewField" in UI_JS
+    assert "function emailHtmlPreviewDocument" in UI_JS
+    assert "function emailThemeColor" in UI_JS
+    assert 'frame.setAttribute("sandbox", "")' in UI_JS
+    assert "emailHtmlPreviewMode" in UI_JS
+    assert "dataset.emailHtmlPreviewMode" in UI_JS
+    assert "latestWorkerStatus?.recent_matches" in UI_JS
+
+
 def test_json_editor_lives_under_settings_not_top_level_tabs():
     parser = InputParser()
     parser.feed(INDEX_HTML)

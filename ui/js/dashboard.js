@@ -25,6 +25,7 @@ function renderWorkerStatus(status) {
   workerRateLimitRetry.textContent = retryAt ? `${retryAt} (${backoffSeconds}s)` : "None";
   workerLastError.textContent = status.last_error || "None";
   renderSourceHealth(status);
+  renderNotificationPreview();
 
   recentMatches.replaceChildren();
   const matches = Array.isArray(status.recent_matches) ? status.recent_matches : [];

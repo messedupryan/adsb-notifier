@@ -19,6 +19,11 @@ bulkDisableRulesButton.addEventListener("click", () => bulkSetSelectedRulesEnabl
 testEmailButton.addEventListener("click", () => testNotification("email"));
 testPushoverButton.addEventListener("click", () => testNotification("pushover"));
 testTwilioButton.addEventListener("click", () => testNotification("twilio"));
+notificationProviderSelector.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-notification-provider]");
+  if (!button) return;
+  selectNotificationProvider(button.dataset.notificationProvider);
+});
 refreshStatusButton.addEventListener("click", () => loadWorkerStatus());
 recenterMapButton.addEventListener("click", () => recenterDashboardMap());
 fitMapButton.addEventListener("click", () => fitDashboardMap());
