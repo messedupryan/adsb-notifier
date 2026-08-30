@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from adsb_notifier.config import Home, Notifications, Settings, SourceErrorAlerts
+from adsb_notifier.config import AdsbSource, Home, Notifications, Settings, SourceErrorAlerts
 from adsb_notifier.main import (
     MAX_RATE_LIMIT_BACKOFF_SECONDS,
     SourceFailureState,
@@ -81,11 +81,15 @@ def test_write_poll_status_records_worker_summary(tmp_path):
     assert status["recent_matches"][0]["notification_status"] == "partially_suppressed"
     assert status["recent_matches"][0]["suppressed_notification_providers"] == ["twilio"]
     assert status["recent_matches_window_hours"] == 24
+    assert status["source_health_trend_retention_hours"] == 168
     assert status["source_health"]["status"] == "healthy"
     assert status["source_health"]["provider"] == "direct"
     assert status["source_health"]["query"] == "aircraft_json"
     assert status["source_health"]["last_success_at"] == status["last_poll_at"]
     assert status["source_health"]["last_aircraft_count"] == 12
+    assert status["source_health_trends"][0]["event_type"] == "success"
+    assert status["source_health_trends"][0]["aircraft_count"] == 12
+    assert status["source_health_trends"][0]["provider"] == "direct"
 
 
 def test_write_poll_status_preserves_recent_match_history(tmp_path):
@@ -143,6 +147,8 @@ def test_write_error_status_preserves_previous_poll_summary(tmp_path):
     assert status["aircraft_count"] == 12
     assert status["last_error"] == "provider failed"
     assert status["consecutive_source_errors"] == 1
+    assert status["source_health_trends"][0]["event_type"] == "failure"
+    assert status["source_health_trends"][0]["message"] == "provider failed"
 
 
 def test_rate_limit_backoff_honors_retry_after():
@@ -193,6 +199,8 @@ def test_write_rate_limit_status_records_retry_details(tmp_path):
     assert status["source_health"]["retry_at"] == status["rate_limit_retry_at"]
     assert status["source_health"]["backoff_seconds"] == 120
     assert status["source_health"]["last_error"] == "ADS-B source rate limit reached"
+    event_types = [event["event_type"] for event in status["source_health_trends"]]
+    assert event_types == ["failure", "rate_limit", "retry_backoff"]
 
 
 def test_write_source_status_records_access_denied(tmp_path):
@@ -237,6 +245,99 @@ def test_write_source_unavailable_status_records_network_failure(tmp_path):
     assert status["rate_limit_backoff_seconds"] == 60
     assert status["consecutive_source_errors"] == 1
     assert status["source_health"]["status"] == "source_unavailable"
+
+
+def test_write_source_status_records_retry_backoff_for_unavailable_source(tmp_path):
+    settings = Settings(
+        adsb_url="http://example.test/aircraft.json",
+        adsb_source=None,
+        home=Home(lat=40.7608, lon=-111.8910),
+        poll_seconds=30,
+        stale_aircraft_seconds=90,
+        notifications=Notifications(),
+        rules=[],
+    )
+    status_path = tmp_path / "status.json"
+
+    write_rate_limit_status(status_path, settings, AdsbSourceUnavailableError("https://api.example.test/aircraft"), 60)
+
+    status = read_status(status_path)
+    event_types = [event["event_type"] for event in status["source_health_trends"]]
+    assert event_types == ["failure", "retry_backoff"]
+
+
+def test_source_health_trends_survive_restarts_and_prune_by_retention(tmp_path):
+    settings = Settings(
+        adsb_url="http://example.test/aircraft.json",
+        adsb_source=None,
+        home=Home(lat=40.7608, lon=-111.8910),
+        poll_seconds=30,
+        stale_aircraft_seconds=90,
+        notifications=Notifications(),
+        rules=[],
+        source_health_trend_retention_hours=1,
+    )
+    recent_event = {
+        "event_type": "failure",
+        "observed_at": (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat(),
+        "status": "failing",
+        "provider": "direct",
+        "query": "aircraft_json",
+        "url": "http://example.test/aircraft.json",
+        "message": "recent failure",
+    }
+    old_event = {
+        "event_type": "rate_limit",
+        "observed_at": (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat(),
+        "status": "rate_limited",
+        "provider": "direct",
+        "query": "aircraft_json",
+        "url": "http://example.test/aircraft.json",
+        "message": "old rate limit",
+    }
+    status_path = tmp_path / "status.json"
+    status_path.write_text(json.dumps({"source_health_trends": [recent_event, old_event]}), encoding="utf-8")
+
+    write_poll_status(status_path, settings, aircraft_count=4, sightings=[])
+
+    status = read_status(status_path)
+    messages = [event["message"] for event in status["source_health_trends"]]
+    assert "Poll succeeded with 4 aircraft" in messages
+    assert "recent failure" in messages
+    assert "old rate limit" not in messages
+
+
+def test_write_poll_status_records_provider_switch_trend(tmp_path):
+    settings = Settings(
+        adsb_url="",
+        adsb_source=AdsbSource(provider="adsb_lol", query="point", radius_miles=25),
+        home=Home(lat=40.7608, lon=-111.8910),
+        poll_seconds=30,
+        stale_aircraft_seconds=90,
+        notifications=Notifications(),
+        rules=[],
+    )
+    status_path = tmp_path / "status.json"
+    status_path.write_text(
+        json.dumps(
+            {
+                "source_health": {
+                    "status": "healthy",
+                    "provider": "direct",
+                    "query": "aircraft_json",
+                    "url": "http://example.test/aircraft.json",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    write_poll_status(status_path, settings, aircraft_count=4, sightings=[])
+
+    status = read_status(status_path)
+    event_types = [event["event_type"] for event in status["source_health_trends"]]
+    assert event_types == ["provider_switch", "success"]
+    assert status["source_health_trends"][0]["previous_provider"] == "direct"
 
 
 def test_source_error_alert_waits_for_threshold_and_respects_cooldown():

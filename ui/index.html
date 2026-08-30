@@ -45,7 +45,13 @@
               <div class="worker-primary"><dt>Aircraft</dt><dd id="worker-aircraft-count">0</dd></div>
               <div class="worker-primary"><dt>Notifications</dt><dd id="worker-notification-count">0</dd></div>
               <div class="worker-source source-url"><dt>ADS-B source</dt><dd id="worker-adsb-source">Unknown</dd></div>
-              <div class="worker-source"><dt>Source health</dt><dd id="worker-source-health">Unknown</dd></div>
+              <div class="worker-source">
+                <dt>Source health</dt>
+                <dd class="source-health-summary-row">
+                  <span id="worker-source-health">Unknown</span>
+                  <button id="source-health-trends-open" type="button">Trends</button>
+                </dd>
+              </div>
               <div class="worker-source"><dt>Source errors</dt><dd id="worker-source-errors">0</dd></div>
               <div class="worker-source"><dt>Retry after</dt><dd id="worker-rate-limit-retry">None</dd></div>
               <div class="worker-source"><dt>Last error</dt><dd id="worker-last-error">None</dd></div>
@@ -193,6 +199,10 @@
           <label>
             Recent matches hours
             <input id="recent-matches-window-hours" name="recent_matches_window_hours" type="number" min="1" step="1" />
+          </label>
+          <label>
+            Source health trend hours
+            <input id="source-health-trend-retention-hours" name="source_health_trend_retention_hours" type="number" min="1" step="1" />
           </label>
           <fieldset class="settings-group wide">
             <legend>Global Exclusions</legend>
@@ -470,6 +480,18 @@
           <summary>Normalized aircraft payload</summary>
           <pre id="match-detail-payload"></pre>
         </details>
+      </section>
+    </div>
+    <div id="source-health-trend-modal" class="modal-overlay hidden" role="presentation">
+      <section class="modal source-health-trend-modal" role="dialog" aria-modal="true" aria-labelledby="source-health-trend-title">
+        <header>
+          <div>
+            <h2 id="source-health-trend-title">Source Health Trends</h2>
+            <p id="source-health-trend-summary"></p>
+          </div>
+          <button id="source-health-trend-close" type="button" aria-label="Close source health trends">Close</button>
+        </header>
+        <div id="source-health-trend-list" class="source-health-trend-list"></div>
       </section>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>

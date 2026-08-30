@@ -25,6 +25,7 @@ function renderWorkerStatus(status) {
   workerRateLimitRetry.textContent = retryAt ? `${retryAt} (${backoffSeconds}s)` : "None";
   workerLastError.textContent = status.last_error || "None";
   renderSourceHealth(status);
+  renderSourceHealthTrendSummary(status);
   renderNotificationPreview();
 
   recentMatches.replaceChildren();
@@ -68,6 +69,108 @@ function renderSourceHealth(status) {
   sourceHealthRetryAt.textContent = formatDateTime(health.retry_at) || "None";
   sourceHealthAircraftCount.textContent = health.last_aircraft_count ?? "0";
   sourceHealthLastError.textContent = health.last_error || "None";
+}
+
+function renderSourceHealthTrendSummary(status) {
+  const trends = sourceHealthTrends(status);
+  sourceHealthTrendsOpenButton.textContent = trends.length > 0 ? `Trends (${trends.length})` : "Trends";
+}
+
+function openSourceHealthTrendModal() {
+  renderSourceHealthTrendModal(latestWorkerStatus || {});
+  sourceHealthTrendModal.classList.remove("hidden");
+  sourceHealthTrendCloseButton.focus();
+}
+
+function closeSourceHealthTrendModal() {
+  sourceHealthTrendModal.classList.add("hidden");
+  sourceHealthTrendsOpenButton.focus();
+}
+
+function renderSourceHealthTrendModal(status) {
+  const trends = sourceHealthTrends(status);
+  const retentionHours = status.source_health_trend_retention_hours ?? config?.source_health_trend_retention_hours;
+  sourceHealthTrendSummary.textContent = trends.length
+    ? `${trends.length} events retained${retentionHours ? ` for ${retentionHours} hours` : ""}.`
+    : "No source health trend events have been recorded yet.";
+  sourceHealthTrendList.replaceChildren();
+  if (trends.length === 0) {
+    sourceHealthTrendList.append(emptyState("No trend events"));
+    return;
+  }
+  trends.forEach((event) => sourceHealthTrendList.append(sourceHealthTrendItem(event)));
+}
+
+function sourceHealthTrendItem(event) {
+  const item = document.createElement("article");
+  item.className = `source-health-trend-item ${statusClassName(event.status)}`;
+
+  const header = document.createElement("div");
+  header.className = "source-health-trend-item-header";
+  const label = document.createElement("strong");
+  label.textContent = sourceHealthTrendEventLabel(event.event_type);
+  const time = document.createElement("time");
+  time.textContent = formatDateTime(event.observed_at) || "Unknown time";
+  if (event.observed_at) time.dateTime = event.observed_at;
+  header.append(label, time);
+
+  const meta = document.createElement("p");
+  meta.textContent = [
+    sourceHealthLabel(event.status),
+    sourceProviderLabel(event.provider),
+    event.query,
+  ].filter(Boolean).join(" · ");
+
+  item.append(header, meta);
+  if (event.message) {
+    const message = document.createElement("p");
+    message.textContent = event.message;
+    item.append(message);
+  }
+
+  const details = sourceHealthTrendDetails(event);
+  if (details.length > 0) {
+    const list = document.createElement("dl");
+    list.className = "source-health-trend-details";
+    details.forEach(([term, description]) => {
+      const wrapper = document.createElement("div");
+      const dt = document.createElement("dt");
+      dt.textContent = term;
+      const dd = document.createElement("dd");
+      dd.textContent = description;
+      wrapper.append(dt, dd);
+      list.append(wrapper);
+    });
+    item.append(list);
+  }
+  return item;
+}
+
+function sourceHealthTrendDetails(event) {
+  const details = [];
+  if (event.backoff_seconds) details.push(["Backoff", `${event.backoff_seconds}s`]);
+  if (event.retry_at) details.push(["Retry at", formatDateTime(event.retry_at) || event.retry_at]);
+  if (event.consecutive_source_errors) details.push(["Consecutive errors", String(event.consecutive_source_errors)]);
+  if (event.aircraft_count !== undefined) details.push(["Aircraft", String(event.aircraft_count)]);
+  if (event.previous_provider) {
+    details.push(["Previous source", [sourceProviderLabel(event.previous_provider), event.previous_query].filter(Boolean).join(" · ")]);
+  }
+  if (event.url) details.push(["URL", event.url]);
+  return details;
+}
+
+function sourceHealthTrends(status) {
+  return Array.isArray(status.source_health_trends) ? status.source_health_trends : [];
+}
+
+function sourceHealthTrendEventLabel(eventType) {
+  return {
+    success: "Success",
+    failure: "Failure",
+    rate_limit: "Rate limit",
+    retry_backoff: "Retry/backoff",
+    provider_switch: "Provider switch",
+  }[eventType] || eventType || "Trend event";
 }
 
 function normalizedSourceHealth(status) {

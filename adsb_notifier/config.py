@@ -16,10 +16,12 @@ from adsb_notifier.constants import (
     DEFAULT_QUIET_HOURS_TIME_ZONE,
     DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
     DEFAULT_RULE_COOLDOWN_MINUTES,
+    DEFAULT_SOURCE_HEALTH_TREND_RETENTION_HOURS,
     DEFAULT_SOURCE_ERROR_ALERT_COOLDOWN_MINUTES,
     DEFAULT_SOURCE_ERROR_ALERT_FAILURE_THRESHOLD,
     DEFAULT_STALE_AIRCRAFT_SECONDS,
     MAX_RECENT_MATCHES_WINDOW_HOURS,
+    MAX_SOURCE_HEALTH_TREND_RETENTION_HOURS,
 )
 from adsb_notifier.squawk import require_squawk_code
 
@@ -39,6 +41,7 @@ CONFIG_TOP_LEVEL_KEYS = {
     "recent_matches_window_hours",
     "rules",
     "source_error_alerts",
+    "source_health_trend_retention_hours",
     "stale_aircraft_seconds",
 }
 
@@ -124,6 +127,7 @@ class Settings:
     rules: list[Rule]
     exclusions: Exclusions = field(default_factory=Exclusions)
     recent_matches_window_hours: int = DEFAULT_RECENT_MATCHES_WINDOW_HOURS
+    source_health_trend_retention_hours: int = DEFAULT_SOURCE_HEALTH_TREND_RETENTION_HOURS
     source_error_alerts: SourceErrorAlerts = field(default_factory=SourceErrorAlerts)
 
 
@@ -158,6 +162,7 @@ def parse_settings(data: dict[str, Any]) -> Settings:
         poll_seconds=int(data.get("poll_seconds", DEFAULT_POLL_SECONDS)),
         stale_aircraft_seconds=int(data.get("stale_aircraft_seconds", DEFAULT_STALE_AIRCRAFT_SECONDS)),
         recent_matches_window_hours=_recent_matches_window_hours(data),
+        source_health_trend_retention_hours=_source_health_trend_retention_hours(data),
         source_error_alerts=_parse_source_error_alerts(data.get("source_error_alerts")),
         notifications=Notifications(
             email=notification_data.get("email"),
@@ -187,6 +192,7 @@ def validate_settings_data(data: dict[str, Any]) -> None:
     _validate_optional_numeric_field(data, "poll_seconds")
     _validate_optional_numeric_field(data, "stale_aircraft_seconds")
     _validate_optional_numeric_field(data, "recent_matches_window_hours")
+    _validate_optional_numeric_field(data, "source_health_trend_retention_hours")
     _validate_rules_shape(data["rules"])
     _validate_exclusions_shape(data.get("exclusions"), "config.exclusions")
     _validate_notifications_shape(data.get("notifications", {}))
@@ -341,6 +347,19 @@ def _recent_matches_window_hours(data: dict[str, Any]) -> int:
         raise ValueError("recent_matches_window_hours must be at least 1")
     if hours > MAX_RECENT_MATCHES_WINDOW_HOURS:
         raise ValueError(f"recent_matches_window_hours cannot exceed {MAX_RECENT_MATCHES_WINDOW_HOURS}")
+    return hours
+
+
+def _source_health_trend_retention_hours(data: dict[str, Any]) -> int:
+    value = data.get("source_health_trend_retention_hours", DEFAULT_SOURCE_HEALTH_TREND_RETENTION_HOURS)
+    try:
+        hours = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("source_health_trend_retention_hours must be numeric") from exc
+    if hours < 1:
+        raise ValueError("source_health_trend_retention_hours must be at least 1")
+    if hours > MAX_SOURCE_HEALTH_TREND_RETENTION_HOURS:
+        raise ValueError(f"source_health_trend_retention_hours cannot exceed {MAX_SOURCE_HEALTH_TREND_RETENTION_HOURS}")
     return hours
 
 

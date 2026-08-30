@@ -35,6 +35,19 @@ function validateConfig(payload) {
       validationError(`Recent matches hours must be between 1 and ${MAX_RECENT_MATCHES_WINDOW_HOURS}.`, fields.recentMatchesWindowHours)
     );
   }
+  if (!isRequiredNumber(payload.source_health_trend_retention_hours)) {
+    errors.push(validationError("Source health trend hours is required.", fields.sourceHealthTrendRetentionHours));
+  } else if (
+    Number(payload.source_health_trend_retention_hours) < 1 ||
+    Number(payload.source_health_trend_retention_hours) > MAX_SOURCE_HEALTH_TREND_RETENTION_HOURS
+  ) {
+    errors.push(
+      validationError(
+        `Source health trend hours must be between 1 and ${MAX_SOURCE_HEALTH_TREND_RETENTION_HOURS}.`,
+        fields.sourceHealthTrendRetentionHours
+      )
+    );
+  }
   if (!Array.isArray(payload.rules) || payload.rules.length === 0) {
     errors.push("At least one rule is required.");
   }

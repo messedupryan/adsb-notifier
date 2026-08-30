@@ -33,6 +33,7 @@ def valid_config() -> dict:
         "poll_seconds": 30,
         "stale_aircraft_seconds": 90,
         "recent_matches_window_hours": 24,
+        "source_health_trend_retention_hours": 168,
         "notifications": {},
         "rules": [
             {
@@ -494,6 +495,23 @@ def test_recent_matches_window_rejects_values_above_max():
     payload["recent_matches_window_hours"] = 169
 
     with pytest.raises(ValueError, match="recent_matches_window_hours cannot exceed 168"):
+        parse_settings(payload)
+
+
+def test_source_health_trend_retention_defaults_to_168_hours():
+    payload = valid_config()
+    del payload["source_health_trend_retention_hours"]
+
+    settings = parse_settings(payload)
+
+    assert settings.source_health_trend_retention_hours == 168
+
+
+def test_source_health_trend_retention_rejects_values_above_max():
+    payload = valid_config()
+    payload["source_health_trend_retention_hours"] = 721
+
+    with pytest.raises(ValueError, match="source_health_trend_retention_hours cannot exceed 720"):
         parse_settings(payload)
 
 

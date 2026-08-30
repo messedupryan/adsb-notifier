@@ -46,6 +46,7 @@ const fields = {
   pollSeconds: document.querySelector("#poll-seconds"),
   staleAircraftSeconds: document.querySelector("#stale-aircraft-seconds"),
   recentMatchesWindowHours: document.querySelector("#recent-matches-window-hours"),
+  sourceHealthTrendRetentionHours: document.querySelector("#source-health-trend-retention-hours"),
   globalExclusionTailNumbers: document.querySelector("#global-exclusion-tail-numbers"),
   globalExclusionHexIds: document.querySelector("#global-exclusion-hex-ids"),
   globalExclusionCallsigns: document.querySelector("#global-exclusion-callsigns"),
@@ -156,6 +157,11 @@ const sourceHealthBackoff = document.querySelector("#source-health-backoff");
 const sourceHealthRetryAt = document.querySelector("#source-health-retry-at");
 const sourceHealthAircraftCount = document.querySelector("#source-health-aircraft-count");
 const sourceHealthLastError = document.querySelector("#source-health-last-error");
+const sourceHealthTrendsOpenButton = document.querySelector("#source-health-trends-open");
+const sourceHealthTrendModal = document.querySelector("#source-health-trend-modal");
+const sourceHealthTrendCloseButton = document.querySelector("#source-health-trend-close");
+const sourceHealthTrendSummary = document.querySelector("#source-health-trend-summary");
+const sourceHealthTrendList = document.querySelector("#source-health-trend-list");
 const recentMatches = document.querySelector("#recent-matches");
 const toggleRecentExportButton = document.querySelector("#toggle-recent-export");
 const recentExportActions = document.querySelector("#recent-export-actions");

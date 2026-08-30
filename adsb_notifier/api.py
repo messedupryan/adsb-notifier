@@ -25,6 +25,7 @@ from adsb_notifier.constants import (
     DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
     DEFAULT_RULE_COOLDOWN_MINUTES,
     DEFAULT_RULE_RADIUS_MILES,
+    DEFAULT_SOURCE_HEALTH_TREND_RETENTION_HOURS,
     DEFAULT_STALE_AIRCRAFT_SECONDS,
 )
 from adsb_notifier.links import airplanes_live_aircraft_url
@@ -840,6 +841,7 @@ def _default_config() -> dict[str, Any]:
         "poll_seconds": DEFAULT_POLL_SECONDS,
         "stale_aircraft_seconds": DEFAULT_STALE_AIRCRAFT_SECONDS,
         "recent_matches_window_hours": DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
+        "source_health_trend_retention_hours": DEFAULT_SOURCE_HEALTH_TREND_RETENTION_HOURS,
         "exclusions": _normalize_exclusions(None),
         "notifications": {},
         "rules": [

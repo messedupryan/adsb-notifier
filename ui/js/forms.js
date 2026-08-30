@@ -18,6 +18,8 @@ function renderForms() {
   fields.pollSeconds.value = config.poll_seconds ?? DEFAULT_POLL_SECONDS;
   fields.staleAircraftSeconds.value = config.stale_aircraft_seconds ?? DEFAULT_STALE_AIRCRAFT_SECONDS;
   fields.recentMatchesWindowHours.value = config.recent_matches_window_hours ?? DEFAULT_RECENT_MATCHES_WINDOW_HOURS;
+  fields.sourceHealthTrendRetentionHours.value =
+    config.source_health_trend_retention_hours ?? DEFAULT_SOURCE_HEALTH_TREND_RETENTION_HOURS;
   fields.globalExclusionTailNumbers.value = listToText(config.exclusions?.tail_numbers);
   fields.globalExclusionHexIds.value = listToText(config.exclusions?.hex_ids);
   fields.globalExclusionCallsigns.value = listToText(config.exclusions?.callsigns);
@@ -546,6 +548,10 @@ function syncFromForms() {
   config.poll_seconds = integerValue(fields.pollSeconds, DEFAULT_POLL_SECONDS);
   config.stale_aircraft_seconds = integerValue(fields.staleAircraftSeconds, DEFAULT_STALE_AIRCRAFT_SECONDS);
   config.recent_matches_window_hours = integerValue(fields.recentMatchesWindowHours, DEFAULT_RECENT_MATCHES_WINDOW_HOURS);
+  config.source_health_trend_retention_hours = integerValue(
+    fields.sourceHealthTrendRetentionHours,
+    DEFAULT_SOURCE_HEALTH_TREND_RETENTION_HOURS
+  );
   config.exclusions = exclusionsFromFields({
     tailNumbers: fields.globalExclusionTailNumbers,
     hexIds: fields.globalExclusionHexIds,

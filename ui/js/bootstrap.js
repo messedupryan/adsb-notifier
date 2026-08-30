@@ -1,6 +1,7 @@
 versionLabel.textContent = `UI ${uiVersion}`;
 fields.adsbSourceRadius.max = String(MAX_ADSB_POINT_RADIUS_MILES);
 fields.recentMatchesWindowHours.max = String(MAX_RECENT_MATCHES_WINDOW_HOURS);
+fields.sourceHealthTrendRetentionHours.max = String(MAX_SOURCE_HEALTH_TREND_RETENTION_HOURS);
 initThemeControls();
 
 document.querySelectorAll(".tab").forEach((tab) => {
@@ -25,6 +26,7 @@ notificationProviderSelector.addEventListener("click", (event) => {
   selectNotificationProvider(button.dataset.notificationProvider);
 });
 refreshStatusButton.addEventListener("click", () => loadWorkerStatus());
+sourceHealthTrendsOpenButton.addEventListener("click", openSourceHealthTrendModal);
 toggleRecentExportButton.addEventListener("click", toggleRecentMatchExportMode);
 selectVisibleMatchesButton.addEventListener("click", selectVisibleRecentMatchesForExport);
 clearSelectedMatchesButton.addEventListener("click", clearRecentMatchExportSelection);
@@ -101,16 +103,21 @@ window.addEventListener("beforeunload", (event) => {
 confirmCancelButton.addEventListener("click", () => closeConfirm(false));
 confirmAcceptButton.addEventListener("click", () => closeConfirm(true));
 matchDetailCloseButton.addEventListener("click", closeMatchDetail);
+sourceHealthTrendCloseButton.addEventListener("click", closeSourceHealthTrendModal);
 confirmModal.addEventListener("click", (event) => {
   if (event.target === confirmModal) closeConfirm(false);
 });
 matchDetailModal.addEventListener("click", (event) => {
   if (event.target === matchDetailModal) closeMatchDetail();
 });
+sourceHealthTrendModal.addEventListener("click", (event) => {
+  if (event.target === sourceHealthTrendModal) closeSourceHealthTrendModal();
+});
 window.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (!confirmModal.classList.contains("hidden")) closeConfirm(false);
   if (!matchDetailModal.classList.contains("hidden")) closeMatchDetail();
+  if (!sourceHealthTrendModal.classList.contains("hidden")) closeSourceHealthTrendModal();
 });
 window.addEventListener("error", (event) => {
   showErrors([`UI error: ${event.message}`]);

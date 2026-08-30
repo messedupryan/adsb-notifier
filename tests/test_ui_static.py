@@ -288,6 +288,10 @@ def test_dashboard_map_has_inset_and_tighter_fit_padding():
 
 def test_source_health_controls_are_available():
     assert "worker-source-health" in INDEX_HTML
+    assert "source-health-trends-open" in INDEX_HTML
+    assert "source-health-trend-retention-hours" in INDEX_HTML
+    assert "source-health-trend-modal" in INDEX_HTML
+    assert "source-health-trend-list" in INDEX_HTML
     for field_id in [
         "source-health-status",
         "source-health-provider",
@@ -302,6 +306,10 @@ def test_source_health_controls_are_available():
         assert field_id in INDEX_HTML
     assert "function renderSourceHealth" in UI_JS
     assert "function normalizedSourceHealth" in UI_JS
+    assert "function openSourceHealthTrendModal" in UI_JS
+    assert "function sourceHealthTrendItem" in UI_JS
+    assert "source_health_trends" in UI_JS
+    assert "source_health_trend_retention_hours" in UI_JS
     assert "source_health" in UI_JS
 
 

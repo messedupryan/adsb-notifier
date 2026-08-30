@@ -78,6 +78,8 @@ function normalizeConfig(payload) {
     poll_seconds: payload.poll_seconds ?? DEFAULT_POLL_SECONDS,
     stale_aircraft_seconds: payload.stale_aircraft_seconds ?? DEFAULT_STALE_AIRCRAFT_SECONDS,
     recent_matches_window_hours: payload.recent_matches_window_hours ?? DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
+    source_health_trend_retention_hours:
+      payload.source_health_trend_retention_hours ?? DEFAULT_SOURCE_HEALTH_TREND_RETENTION_HOURS,
     notifications: payload.notifications || {},
     exclusions: normalizeExclusions(payload.exclusions),
     rules: normalizeRules(payload.rules),

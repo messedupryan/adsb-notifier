@@ -11,6 +11,7 @@
   "poll_seconds": 30,
   "stale_aircraft_seconds": 90,
   "recent_matches_window_hours": 24,
+  "source_health_trend_retention_hours": 168,
   "source_error_alerts": {
     "enabled": true,
     "failure_threshold": 3,
