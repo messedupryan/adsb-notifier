@@ -90,22 +90,21 @@ function closeSourceHealthTrendModal() {
 
 function renderSourceHealthTrendModal(status) {
   const trends = sourceHealthTrends(status);
-  const chartData = sourceHealthTrendChartData(trends);
+  const chartData = sourceHealthTrendChartData(trends, sourceHealthTrendWindowHours);
   const retentionHours = status.source_health_trend_retention_hours ?? config?.source_health_trend_retention_hours;
-  sourceHealthTrendSummary.textContent = trends.length
-    ? `${trends.length} events retained${retentionHours ? ` for ${retentionHours} hours` : ""}.`
-    : "No source health trend events have been recorded yet.";
+  sourceHealthTrendSummary.textContent = sourceHealthTrendSummaryText(chartData.events.length, trends.length, retentionHours);
+  sourceHealthTrendWindow.value = String(sourceHealthTrendWindowHours);
   sourceHealthTrendChart.replaceChildren();
   sourceHealthTrendChart.append(sourceHealthTrendChartElement(chartData));
   sourceHealthTrendEventsToggle.textContent = isSourceHealthTrendEventListVisible ? "Hide events" : "Show events";
   sourceHealthTrendEventsToggle.disabled = trends.length === 0;
   sourceHealthTrendList.replaceChildren();
   sourceHealthTrendList.classList.toggle("hidden", !isSourceHealthTrendEventListVisible);
-  if (trends.length === 0) {
+  if (chartData.events.length === 0) {
     sourceHealthTrendList.append(emptyState("No trend events"));
     return;
   }
-  trends.forEach((event) => sourceHealthTrendList.append(sourceHealthTrendItem(event)));
+  chartData.events.slice().reverse().forEach((event) => sourceHealthTrendList.append(sourceHealthTrendItem(event)));
 }
 
 function toggleSourceHealthTrendEvents() {
@@ -113,16 +112,30 @@ function toggleSourceHealthTrendEvents() {
   renderSourceHealthTrendModal(latestWorkerStatus || {});
 }
 
-function sourceHealthTrendChartData(trends) {
-  const events = trends
+function updateSourceHealthTrendWindow() {
+  sourceHealthTrendWindowHours = sourceHealthTrendWindow.value === "all" ? "all" : Number(sourceHealthTrendWindow.value);
+  renderSourceHealthTrendModal(latestWorkerStatus || {});
+}
+
+function sourceHealthTrendChartData(trends, windowHours) {
+  const allEvents = trends
     .map((event) => ({...event, timestamp: sourceHealthTrendTimestamp(event)}))
     .filter((event) => event.timestamp !== null)
     .sort((left, right) => left.timestamp - right.timestamp);
+  const events = filterSourceHealthTrendWindow(allEvents, windowHours);
   const points = events
     .filter((event) => event.event_type === "success" && Number.isFinite(Number(event.aircraft_count)))
     .map((event) => ({...event, aircraftCount: Number(event.aircraft_count)}));
   const failures = events.filter((event) => event.event_type === "failure");
   return {events, points, failures};
+}
+
+function sourceHealthTrendSummaryText(shownCount, totalCount, retentionHours) {
+  if (totalCount === 0) return "No source health trend events have been recorded yet.";
+  if (shownCount === 0) return `No events shown for ${sourceHealthTrendWindowLabel(sourceHealthTrendWindowHours)}.`;
+  return `${shownCount} of ${totalCount} events shown for ${sourceHealthTrendWindowLabel(sourceHealthTrendWindowHours)}${
+    retentionHours ? `; retained for ${retentionHours} hours` : ""
+  }.`;
 }
 
 function sourceHealthTrendChartElement({events, points, failures}) {
@@ -173,18 +186,6 @@ function sourceHealthTrendChartElement({events, points, failures}) {
 
   const path = points.map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.timestamp).toFixed(1)} ${y(point.aircraftCount).toFixed(1)}`).join(" ");
   svg.append(sourceHealthSvg("path", {class: "source-health-chart-line", d: path}));
-  points.forEach((point) => {
-    const dot = sourceHealthSvg("circle", {
-      class: "source-health-chart-point",
-      cx: x(point.timestamp),
-      cy: y(point.aircraftCount),
-      r: 4,
-    });
-    const title = sourceHealthSvg("title");
-    title.textContent = `${point.aircraftCount} aircraft at ${formatDateTime(point.observed_at) || point.observed_at}`;
-    dot.append(title);
-    svg.append(dot);
-  });
 
   const startLabel = sourceHealthSvg("text", {class: "source-health-chart-label", x: padding.left, y: height - 12, "text-anchor": "start"});
   startLabel.textContent = formatDateTime(new Date(minTime).toISOString()) || "";
@@ -215,6 +216,22 @@ function sourceHealthTrendTimestamp(event) {
   const date = new Date(event.observed_at);
   const timestamp = date.getTime();
   return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function filterSourceHealthTrendWindow(events, windowHours) {
+  if (windowHours === "all" || events.length === 0) return events;
+  const hours = Number(windowHours);
+  if (!Number.isFinite(hours) || hours <= 0) return events;
+  const latestTimestamp = events[events.length - 1].timestamp;
+  const cutoff = latestTimestamp - hours * 60 * 60 * 1000;
+  return events.filter((event) => event.timestamp >= cutoff);
+}
+
+function sourceHealthTrendWindowLabel(windowHours) {
+  if (windowHours === "all") return "all retained data";
+  if (Number(windowHours) === 1) return "the last hour";
+  if (Number(windowHours) === 168) return "the last 7 days";
+  return `the last ${windowHours} hours`;
 }
 
 function sourceHealthSvg(tagName, attributes = {}) {

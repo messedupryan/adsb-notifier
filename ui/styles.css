@@ -1271,6 +1271,22 @@ textarea.invalid {
   overflow: auto;
 }
 
+.source-health-trend-window {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.source-health-trend-window select {
+  min-height: 34px;
+  min-width: 150px;
+}
+
 .source-health-trend-chart {
   margin-bottom: 16px;
 }
@@ -1311,12 +1327,6 @@ textarea.invalid {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 3;
-}
-
-.source-health-chart-point {
-  fill: var(--panel);
-  stroke: var(--accent);
-  stroke-width: 2;
 }
 
 .source-health-chart-failure {

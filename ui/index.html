@@ -491,6 +491,16 @@
           </div>
           <button id="source-health-trend-close" type="button" aria-label="Close source health trends">Close</button>
         </header>
+        <label class="source-health-trend-window">
+          Time window
+          <select id="source-health-trend-window">
+            <option value="1">Last hour</option>
+            <option value="6">Last 6 hours</option>
+            <option value="24" selected>Last 24 hours</option>
+            <option value="168">Last 7 days</option>
+            <option value="all">All retained</option>
+          </select>
+        </label>
         <div id="source-health-trend-chart" class="source-health-trend-chart"></div>
         <button id="source-health-trend-events-toggle" class="source-health-trend-events-toggle" type="button">Show events</button>
         <div id="source-health-trend-list" class="source-health-trend-list"></div>
