@@ -1,5 +1,6 @@
 versionLabel.textContent = `UI ${uiVersion}`;
 fields.adsbSourceRadius.max = String(MAX_ADSB_POINT_RADIUS_MILES);
+fields.backupSourceRadius.max = String(MAX_ADSB_POINT_RADIUS_MILES);
 fields.recentMatchesWindowHours.max = String(MAX_RECENT_MATCHES_WINDOW_HOURS);
 fields.sourceHealthTrendRetentionHours.max = String(MAX_SOURCE_HEALTH_TREND_RETENTION_HOURS);
 initThemeControls();
@@ -38,6 +39,12 @@ selectedMapButton.addEventListener("click", () => zoomSelectedMatch());
 [dashboardEventFilter, dashboardRuleFilter, dashboardProviderFilter, dashboardStatusFilter, dashboardSearch].forEach((control) => {
   control.addEventListener("input", applyDashboardFilters);
   control.addEventListener("change", applyDashboardFilters);
+});
+[fields.adsbSourceProvider, fields.adsbSourceQuery].forEach((control) => {
+  control.addEventListener("change", updateAdsbSourceFieldVisibility);
+});
+[fields.backupSourceEnabled, fields.backupSourceProvider, fields.backupSourceQuery].forEach((control) => {
+  control.addEventListener("change", updateBackupSourceFieldVisibility);
 });
 fields.ruleNotificationProviders.addEventListener("change", handleInput);
 [

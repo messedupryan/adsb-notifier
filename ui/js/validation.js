@@ -2,25 +2,29 @@ function validateConfig(payload) {
   const errors = [];
   const source = payload.adsb_source || {};
   const sourceProvider = source.provider || "direct";
-  if (!adsbSourceProviders.includes(sourceProvider)) {
-    errors.push(validationError("ADS-B source provider is not supported.", fields.adsbSourceProvider));
-  }
+  errors.push(...validateSourceConfig(source, sourceProvider, {
+    provider: fields.adsbSourceProvider,
+    query: fields.adsbSourceQuery,
+    radius: fields.adsbSourceRadius,
+    value: fields.adsbSourceValue,
+    baseUrl: fields.adsbSourceBaseUrl,
+  }));
   if (sourceProvider === "direct" && !payload.adsb_url) {
     errors.push(validationError("ADS-B endpoint is required.", fields.adsbUrl));
   }
-  if (sourceProvider !== "direct") {
-    if (!adsbSourceQueries.includes(source.query)) {
-      errors.push(validationError("ADS-B source query is not supported.", fields.adsbSourceQuery));
-    }
-    if (source.query === "point" && source.radius_miles !== undefined && !isRequiredNumber(source.radius_miles)) {
-      errors.push(validationError("ADS-B source radius must be numeric when set.", fields.adsbSourceRadius));
-    }
-    if (source.query === "point" && Number(source.radius_miles) > MAX_ADSB_POINT_RADIUS_MILES) {
-      errors.push(validationError(`ADS-B source radius cannot exceed ${MAX_ADSB_POINT_RADIUS_MILES} miles.`, fields.adsbSourceRadius));
-    }
-    if (["reg", "type", "hex"].includes(source.query) && !source.value) {
-      errors.push(validationError("ADS-B source lookup value is required for this query.", fields.adsbSourceValue));
-    }
+  if (payload.backup_adsb_source) {
+    errors.push(...validateSourceConfig(payload.backup_adsb_source, payload.backup_adsb_source.provider, {
+      provider: fields.backupSourceProvider,
+      query: fields.backupSourceQuery,
+      radius: fields.backupSourceRadius,
+      value: fields.backupSourceValue,
+      baseUrl: fields.backupSourceBaseUrl,
+      allowedProviders: backupAdsbSourceProviders,
+      label: "Backup ADS-B source",
+    }));
+  }
+  if (!isRequiredNumber(payload.primary_retry_minutes) || Number(payload.primary_retry_minutes) < 1) {
+    errors.push(validationError("Primary retry minutes must be at least 1.", fields.primaryRetryMinutes));
   }
   if (!isRequiredNumber(payload.home?.lat) || !isRequiredNumber(payload.home?.lon)) {
     errors.push(validationError("Home latitude and longitude are required.", [fields.homeLat, fields.homeLon]));
@@ -120,6 +124,36 @@ function validateConfig(payload) {
     }
   });
 
+  return errors;
+}
+
+function validateSourceConfig(source, sourceProvider, targets) {
+  const errors = [];
+  const allowedProviders = targets.allowedProviders || adsbSourceProviders;
+  const label = targets.label || "ADS-B source";
+  if (!allowedProviders.includes(sourceProvider)) {
+    errors.push(validationError(`${label} provider is not supported.`, targets.provider));
+    return errors;
+  }
+  if (sourceProvider === "direct") return errors;
+  if (!adsbSourceQueries.includes(source.query)) {
+    errors.push(validationError(`${label} query is not supported.`, targets.query));
+  }
+  if (sourceProvider === "local_receiver" && !["url", "file"].includes(source.query)) {
+    errors.push(validationError(`${label} local receiver query must be URL or file.`, targets.query));
+  }
+  if (sourceProvider !== "local_receiver" && ["url", "file"].includes(source.query)) {
+    errors.push(validationError(`${label} URL/file queries require local receiver.`, targets.query));
+  }
+  if (source.query === "point" && source.radius_miles !== undefined && !isRequiredNumber(source.radius_miles)) {
+    errors.push(validationError(`${label} radius must be numeric when set.`, targets.radius));
+  }
+  if (source.query === "point" && Number(source.radius_miles) > MAX_ADSB_POINT_RADIUS_MILES) {
+    errors.push(validationError(`${label} radius cannot exceed ${MAX_ADSB_POINT_RADIUS_MILES} miles.`, targets.radius));
+  }
+  if (["reg", "type", "hex", "url", "file"].includes(source.query) && !source.value) {
+    errors.push(validationError(`${label} value is required for this query.`, targets.value));
+  }
   return errors;
 }
 

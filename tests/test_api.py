@@ -31,6 +31,7 @@ def valid_config() -> dict:
         "adsb_url": "http://example.test/aircraft.json",
         "home": {"lat": 40.7608, "lon": -111.8910},
         "poll_seconds": 30,
+        "primary_retry_minutes": 5,
         "stale_aircraft_seconds": 90,
         "recent_matches_window_hours": 24,
         "source_health_trend_retention_hours": 168,
@@ -544,6 +545,47 @@ def test_adsb_lol_source_config_is_supported():
     assert settings.adsb_source.provider == "adsb_lol"
     assert settings.adsb_source.query == "point"
     assert settings.adsb_source.radius_miles == 40
+
+
+def test_local_receiver_source_config_supports_url_and_file_queries():
+    payload = valid_config()
+    payload["adsb_source"] = {"provider": "local_receiver", "query": "url", "value": "http://readsb.local/aircraft.json"}
+    settings = parse_settings(payload)
+    assert settings.adsb_source is not None
+    assert settings.adsb_source.provider == "local_receiver"
+    assert settings.adsb_source.query == "url"
+    assert settings.adsb_source.value == "http://readsb.local/aircraft.json"
+
+    payload["adsb_source"] = {"provider": "local_receiver", "query": "file", "value": "/fixtures/aircraft.json"}
+    settings = parse_settings(payload)
+    assert settings.adsb_source is not None
+    assert settings.adsb_source.query == "file"
+    assert settings.adsb_source.value == "/fixtures/aircraft.json"
+
+
+def test_backup_source_config_and_primary_retry_default_are_supported():
+    payload = valid_config()
+    payload["backup_adsb_source"] = {
+        "provider": "local_receiver",
+        "query": "file",
+        "value": "/fixtures/aircraft.json",
+    }
+    del payload["primary_retry_minutes"]
+
+    settings = parse_settings(payload)
+
+    assert settings.primary_retry_minutes == 5
+    assert settings.backup_adsb_source is not None
+    assert settings.backup_adsb_source.provider == "local_receiver"
+    assert settings.backup_adsb_source.query == "file"
+
+
+def test_backup_source_rejects_direct_provider():
+    payload = valid_config()
+    payload["backup_adsb_source"] = {"provider": "direct"}
+
+    with pytest.raises(ValueError, match="backup_adsb_source provider must not be direct"):
+        parse_settings(payload)
 
 
 def test_adsb_source_rejects_unknown_provider():

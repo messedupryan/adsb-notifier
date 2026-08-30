@@ -10,6 +10,8 @@ from adsb_notifier.adsb import (
     USER_AGENT,
     build_adsb_url,
     fetch_aircraft,
+    fetch_aircraft_file,
+    fetch_aircraft_for_settings,
     parse_aircraft_payload,
 )
 from adsb_notifier.version import __version__
@@ -185,6 +187,45 @@ def test_build_source_specific_lookup_url():
     )
 
     assert build_adsb_url(settings) == "https://api.airplanes.live/v2/reg/N12345"
+
+
+def test_build_local_receiver_url_source():
+    settings = settings_with_source(
+        AdsbSource(provider="local_receiver", query="url", value="http://readsb.local/data/aircraft.json"),
+        [Rule(name="target", event="tail", radius_miles=10, cooldown_minutes=30)],
+    )
+
+    assert build_adsb_url(settings) == "http://readsb.local/data/aircraft.json"
+
+
+def test_fetch_local_receiver_file_source(tmp_path):
+    path = tmp_path / "aircraft.json"
+    path.write_text(
+        '{"aircraft": [{"hex": "abc123", "lat": 40.8, "lon": -111.9, "seen": 1.2}]}',
+        encoding="utf-8",
+    )
+
+    aircraft = fetch_aircraft_file(path)
+
+    assert len(aircraft) == 1
+    assert aircraft[0].hex == "ABC123"
+
+
+def test_fetch_aircraft_for_settings_uses_local_receiver_file(tmp_path):
+    path = tmp_path / "aircraft.json"
+    path.write_text(
+        '{"aircraft": [{"hex": "def456", "lat": 40.8, "lon": -111.9}]}',
+        encoding="utf-8",
+    )
+    settings = settings_with_source(
+        AdsbSource(provider="local_receiver", query="file", value=str(path)),
+        [Rule(name="target", event="tail", radius_miles=10, cooldown_minutes=30)],
+    )
+
+    aircraft = fetch_aircraft_for_settings(settings)
+
+    assert len(aircraft) == 1
+    assert aircraft[0].hex == "DEF456"
 
 
 def test_fetch_aircraft_raises_rate_limit_error_with_retry_after(monkeypatch):

@@ -138,6 +138,7 @@
                 <select id="adsb-source-provider">
                   <option value="adsb_lol">ADSB.lol</option>
                   <option value="airplanes_live">Airplanes.live</option>
+                  <option value="local_receiver">Local receiver</option>
                   <option value="direct">Direct aircraft.json</option>
                 </select>
               </label>
@@ -149,6 +150,8 @@
                   <option value="reg">Registration</option>
                   <option value="type">Aircraft type</option>
                   <option value="hex">ICAO hex</option>
+                  <option value="url">Receiver URL</option>
+                  <option value="file">Receiver file</option>
                 </select>
               </label>
               <label>
@@ -156,7 +159,7 @@
                 <input id="adsb-source-radius" name="adsb_source.radius_miles" type="number" min="1" step="0.1" />
               </label>
               <label>
-                Lookup value
+                Lookup value, URL, or file path
                 <input id="adsb-source-value" name="adsb_source.value" type="text" />
               </label>
               <label class="wide">
@@ -167,7 +170,49 @@
                 Direct ADS-B endpoint
                 <input id="adsb-url" name="adsb_url" type="url" />
               </label>
+              <label>
+                Primary retry minutes
+                <input id="primary-retry-minutes" name="primary_retry_minutes" type="number" min="1" step="1" />
+              </label>
             </div>
+            <fieldset class="source-backup-config">
+              <legend>Backup Source</legend>
+              <div class="form-grid compact">
+                <label class="switch wide"><input id="backup-source-enabled" type="checkbox" /> Enable backup source</label>
+                <label>
+                  Provider
+                  <select id="backup-source-provider">
+                    <option value="local_receiver">Local receiver</option>
+                    <option value="adsb_lol">ADSB.lol</option>
+                    <option value="airplanes_live">Airplanes.live</option>
+                  </select>
+                </label>
+                <label>
+                  Query
+                  <select id="backup-source-query">
+                    <option value="url">Receiver URL</option>
+                    <option value="file">Receiver file</option>
+                    <option value="point">Point/radius</option>
+                    <option value="mil">Military</option>
+                    <option value="reg">Registration</option>
+                    <option value="type">Aircraft type</option>
+                    <option value="hex">ICAO hex</option>
+                  </select>
+                </label>
+                <label>
+                  Radius miles
+                  <input id="backup-source-radius" name="backup_adsb_source.radius_miles" type="number" min="1" step="0.1" />
+                </label>
+                <label>
+                  Lookup value, URL, or file path
+                  <input id="backup-source-value" name="backup_adsb_source.value" type="text" />
+                </label>
+                <label class="wide">
+                  Custom source base URL
+                  <input id="backup-source-base-url" name="backup_adsb_source.base_url" type="url" placeholder="Optional" />
+                </label>
+              </div>
+            </fieldset>
             <dl class="source-health-detail">
               <div><dt>Health</dt><dd id="source-health-status">Unknown</dd></div>
               <div><dt>Provider</dt><dd id="source-health-provider">Unknown</dd></div>

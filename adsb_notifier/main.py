@@ -7,7 +7,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from adsb_notifier.adsb import AdsbSourceUnavailableError, fetch_aircraft_for_settings
+from adsb_notifier.adsb import AdsbSourceUnavailableError, AdsbStaleDataError, build_adsb_url, fetch_aircraft_for_settings
 from adsb_notifier.config import Settings, load_settings
 from adsb_notifier.constants import (
     DEFAULT_RATE_LIMIT_BACKOFF_SECONDS,
@@ -25,6 +25,19 @@ SHOULD_STOP = False
 class SourceFailureState:
     consecutive_failures: int = 0
     last_alert_at: datetime | None = None
+
+
+@dataclass
+class SourceFailoverState:
+    retry_primary_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class SourceFetchResult:
+    aircraft: list
+    settings: Settings
+    primary_error: AdsbSourceUnavailableError | None = None
+    primary_backoff_seconds: int = 0
 
 
 def main() -> None:
@@ -51,6 +64,7 @@ def main() -> None:
     notifications = NotificationFanout(settings.notifications)
     rate_limit_attempts = 0
     source_failure_state = SourceFailureState()
+    source_failover_state = SourceFailoverState()
 
     while not SHOULD_STOP:
         sleep_seconds = settings.poll_seconds
@@ -72,15 +86,30 @@ def main() -> None:
                     notifications = NotificationFanout(settings.notifications)
                     LOGGER.info("config reloaded from %s", config_path)
 
-            aircraft = fetch_aircraft_for_settings(settings)
+            fetch_result = fetch_aircraft_with_failover(settings, source_failover_state, rate_limit_attempts)
+            aircraft = fetch_result.aircraft
             source_fetch_complete = True
             sightings = engine.evaluate(aircraft)
             for sighting in sightings:
                 notifications.send(sighting)
-            write_poll_status(args.status_file, settings, len(aircraft), sightings)
-            LOGGER.info("poll complete aircraft=%s notifications=%s", len(aircraft), len(sightings))
+            if fetch_result.primary_error is not None:
+                write_rate_limit_status(
+                    args.status_file,
+                    settings,
+                    fetch_result.primary_error,
+                    fetch_result.primary_backoff_seconds,
+                )
+                _maybe_send_source_error_alert(source_failure_state, settings, notifications, fetch_result.primary_error)
+            write_poll_status(args.status_file, fetch_result.settings, len(aircraft), sightings)
+            LOGGER.info(
+                "poll complete aircraft=%s notifications=%s source=%s",
+                len(aircraft),
+                len(sightings),
+                _safe_adsb_source_url(fetch_result.settings),
+            )
             rate_limit_attempts = 0
-            source_failure_state.consecutive_failures = 0
+            if fetch_result.primary_error is None:
+                source_failure_state.consecutive_failures = 0
         except AdsbSourceUnavailableError as exc:
             sleep_seconds = _rate_limit_backoff_seconds(
                 retry_after_seconds=exc.retry_after_seconds,
@@ -136,6 +165,56 @@ def _apply_overrides(settings: Settings, adsb_url: str | None = None) -> Setting
     if not adsb_url:
         return settings
     return replace(settings, adsb_url=adsb_url, adsb_source=None)
+
+
+def fetch_aircraft_with_failover(
+    settings: Settings,
+    state: SourceFailoverState,
+    attempts: int,
+    now: datetime | None = None,
+) -> SourceFetchResult:
+    now = now or datetime.now(timezone.utc)
+    backup_settings = _backup_source_settings(settings)
+    if backup_settings and state.retry_primary_at and now < state.retry_primary_at:
+        return SourceFetchResult(aircraft=fetch_aircraft_for_settings(backup_settings), settings=backup_settings)
+
+    try:
+        aircraft = fetch_aircraft_for_settings(settings)
+        _raise_if_source_data_stale(settings, aircraft)
+        state.retry_primary_at = None
+        return SourceFetchResult(aircraft=aircraft, settings=settings)
+    except AdsbSourceUnavailableError as exc:
+        if not backup_settings:
+            raise
+        backoff_seconds = _rate_limit_backoff_seconds(
+            retry_after_seconds=exc.retry_after_seconds,
+            poll_seconds=settings.poll_seconds,
+            attempts=attempts,
+        )
+        state.retry_primary_at = now + timedelta(minutes=settings.primary_retry_minutes)
+        LOGGER.warning(
+            "primary ADS-B source failed (%s); using backup until %s",
+            exc,
+            state.retry_primary_at.isoformat(),
+        )
+        return SourceFetchResult(
+            aircraft=fetch_aircraft_for_settings(backup_settings),
+            settings=backup_settings,
+            primary_error=exc,
+            primary_backoff_seconds=backoff_seconds,
+        )
+
+
+def _backup_source_settings(settings: Settings) -> Settings | None:
+    if settings.backup_adsb_source is None:
+        return None
+    return replace(settings, adsb_source=settings.backup_adsb_source, adsb_url="")
+
+
+def _raise_if_source_data_stale(settings: Settings, aircraft: list) -> None:
+    stale_samples = [plane.seen_seconds for plane in aircraft if plane.seen_seconds is not None]
+    if stale_samples and all(seconds > settings.stale_aircraft_seconds for seconds in stale_samples):
+        raise AdsbStaleDataError(build_adsb_url(settings))
 
 
 def _rate_limit_backoff_seconds(

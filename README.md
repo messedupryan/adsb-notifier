@@ -132,10 +132,12 @@ Configuration is JSON. The checked-in [config.example.json](config.example.json)
 
 - `home`: latitude and longitude used for distance calculations and map centering
 - `poll_seconds`: worker polling interval
+- `primary_retry_minutes`: how long to stay on the backup ADS-B source before retrying the primary
 - `stale_aircraft_seconds`: ignore aircraft that have not been seen recently
 - `recent_matches_window_hours`: how long recent matches remain in status history
 - `source_health_trend_retention_hours`: how long source health trend events remain in PVC-backed status history
-- `adsb_url` or `adsb_source`: ADS-B source configuration. The current example defaults to ADSB.lol; Airplanes.live and direct `aircraft.json` endpoints are also supported.
+- `adsb_url` or `adsb_source`: primary ADS-B source configuration. The current example defaults to ADSB.lol; Airplanes.live, local receiver URL/file sources, and direct `aircraft.json` endpoints are also supported.
+- `backup_adsb_source`: optional backup source used when the primary is unavailable, rate limited, or returns stale data
 - `notifications`: provider configuration and templates
 - `rules`: alert rules
 

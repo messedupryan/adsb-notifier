@@ -4,11 +4,13 @@ from datetime import datetime, timedelta, timezone
 from adsb_notifier.config import AdsbSource, Home, Notifications, Settings, SourceErrorAlerts
 from adsb_notifier.main import (
     MAX_RATE_LIMIT_BACKOFF_SECONDS,
+    SourceFailoverState,
     SourceFailureState,
     _apply_overrides,
     _maybe_send_source_error_alert,
     _rate_limit_backoff_seconds,
     _source_error_log_label,
+    fetch_aircraft_with_failover,
 )
 from adsb_notifier.adsb import AdsbAccessDeniedError, AdsbRateLimitError, AdsbSourceUnavailableError
 from adsb_notifier.models import Aircraft, Sighting
@@ -172,6 +174,153 @@ def test_source_error_log_label_exposes_failure_type():
     assert _source_error_log_label(AdsbAccessDeniedError("https://api.example.test/aircraft")) == "access denied"
     assert _source_error_log_label(AdsbRateLimitError("https://api.example.test/aircraft")) == "rate limited"
     assert _source_error_log_label(AdsbSourceUnavailableError("https://api.example.test/aircraft")) == "unavailable"
+
+
+def test_fetch_aircraft_with_failover_uses_backup_when_primary_is_unavailable(monkeypatch):
+    settings = Settings(
+        adsb_url="http://primary.test/aircraft.json",
+        adsb_source=None,
+        backup_adsb_source=AdsbSource(provider="local_receiver", query="url", value="http://backup.test/aircraft.json"),
+        home=Home(lat=40.7608, lon=-111.8910),
+        poll_seconds=30,
+        stale_aircraft_seconds=90,
+        notifications=Notifications(),
+        rules=[],
+    )
+    calls = []
+
+    def fake_fetch(source_settings):
+        calls.append(source_settings.adsb_url or source_settings.adsb_source.value)
+        if len(calls) == 1:
+            raise AdsbSourceUnavailableError("http://primary.test/aircraft.json")
+        return [Aircraft(hex="BACKUP", lat=40.8, lon=-111.9, seen_seconds=1)]
+
+    monkeypatch.setattr("adsb_notifier.main.fetch_aircraft_for_settings", fake_fetch)
+
+    result = fetch_aircraft_with_failover(settings, SourceFailoverState(), attempts=0)
+
+    assert [aircraft.hex for aircraft in result.aircraft] == ["BACKUP"]
+    assert result.settings.adsb_source == settings.backup_adsb_source
+    assert result.primary_error is not None
+    assert calls == ["http://primary.test/aircraft.json", "http://backup.test/aircraft.json"]
+
+
+def test_fetch_aircraft_with_failover_uses_backup_when_primary_is_rate_limited(monkeypatch):
+    settings = Settings(
+        adsb_url="http://primary.test/aircraft.json",
+        adsb_source=None,
+        backup_adsb_source=AdsbSource(provider="local_receiver", query="url", value="http://backup.test/aircraft.json"),
+        home=Home(lat=40.7608, lon=-111.8910),
+        poll_seconds=30,
+        stale_aircraft_seconds=90,
+        notifications=Notifications(),
+        rules=[],
+    )
+
+    def fake_fetch(source_settings):
+        if source_settings.adsb_source == settings.backup_adsb_source:
+            return [Aircraft(hex="BACKUP", lat=40.8, lon=-111.9, seen_seconds=1)]
+        raise AdsbRateLimitError("http://primary.test/aircraft.json", retry_after_seconds=120)
+
+    monkeypatch.setattr("adsb_notifier.main.fetch_aircraft_for_settings", fake_fetch)
+
+    result = fetch_aircraft_with_failover(settings, SourceFailoverState(), attempts=0)
+
+    assert [aircraft.hex for aircraft in result.aircraft] == ["BACKUP"]
+    assert result.primary_backoff_seconds == 120
+    assert result.primary_error is not None
+    assert result.primary_error.status_code == 429
+
+
+def test_fetch_aircraft_with_failover_uses_backup_when_primary_is_stale(monkeypatch):
+    settings = Settings(
+        adsb_url="http://primary.test/aircraft.json",
+        adsb_source=None,
+        backup_adsb_source=AdsbSource(provider="local_receiver", query="url", value="http://backup.test/aircraft.json"),
+        home=Home(lat=40.7608, lon=-111.8910),
+        poll_seconds=30,
+        stale_aircraft_seconds=90,
+        notifications=Notifications(),
+        rules=[],
+    )
+
+    def fake_fetch(source_settings):
+        if source_settings.adsb_source == settings.backup_adsb_source:
+            return [Aircraft(hex="BACKUP", lat=40.8, lon=-111.9, seen_seconds=1)]
+        return [Aircraft(hex="STALE", lat=40.8, lon=-111.9, seen_seconds=120)]
+
+    monkeypatch.setattr("adsb_notifier.main.fetch_aircraft_for_settings", fake_fetch)
+
+    result = fetch_aircraft_with_failover(settings, SourceFailoverState(), attempts=0)
+
+    assert [aircraft.hex for aircraft in result.aircraft] == ["BACKUP"]
+    assert str(result.primary_error) == "ADS-B source data is stale; backing off"
+
+
+def test_fetch_aircraft_with_failover_skips_primary_until_retry_interval(monkeypatch):
+    settings = Settings(
+        adsb_url="http://primary.test/aircraft.json",
+        adsb_source=None,
+        backup_adsb_source=AdsbSource(provider="local_receiver", query="url", value="http://backup.test/aircraft.json"),
+        primary_retry_minutes=2,
+        home=Home(lat=40.7608, lon=-111.8910),
+        poll_seconds=30,
+        stale_aircraft_seconds=90,
+        notifications=Notifications(),
+        rules=[],
+    )
+    state = SourceFailoverState(retry_primary_at=datetime(2026, 8, 30, 12, 2, tzinfo=timezone.utc))
+    calls = []
+
+    def fake_fetch(source_settings):
+        calls.append(source_settings.adsb_url or source_settings.adsb_source.value)
+        return [Aircraft(hex="BACKUP", lat=40.8, lon=-111.9, seen_seconds=1)]
+
+    monkeypatch.setattr("adsb_notifier.main.fetch_aircraft_for_settings", fake_fetch)
+
+    result = fetch_aircraft_with_failover(
+        settings,
+        state,
+        attempts=0,
+        now=datetime(2026, 8, 30, 12, 1, tzinfo=timezone.utc),
+    )
+
+    assert [aircraft.hex for aircraft in result.aircraft] == ["BACKUP"]
+    assert calls == ["http://backup.test/aircraft.json"]
+
+
+def test_fetch_aircraft_with_failover_retries_primary_after_interval(monkeypatch):
+    settings = Settings(
+        adsb_url="http://primary.test/aircraft.json",
+        adsb_source=None,
+        backup_adsb_source=AdsbSource(provider="local_receiver", query="url", value="http://backup.test/aircraft.json"),
+        primary_retry_minutes=2,
+        home=Home(lat=40.7608, lon=-111.8910),
+        poll_seconds=30,
+        stale_aircraft_seconds=90,
+        notifications=Notifications(),
+        rules=[],
+    )
+    state = SourceFailoverState(retry_primary_at=datetime(2026, 8, 30, 12, 2, tzinfo=timezone.utc))
+    calls = []
+
+    def fake_fetch(source_settings):
+        calls.append(source_settings.adsb_url or source_settings.adsb_source.value)
+        return [Aircraft(hex="PRIMARY", lat=40.8, lon=-111.9, seen_seconds=1)]
+
+    monkeypatch.setattr("adsb_notifier.main.fetch_aircraft_for_settings", fake_fetch)
+
+    result = fetch_aircraft_with_failover(
+        settings,
+        state,
+        attempts=0,
+        now=datetime(2026, 8, 30, 12, 3, tzinfo=timezone.utc),
+    )
+
+    assert [aircraft.hex for aircraft in result.aircraft] == ["PRIMARY"]
+    assert result.settings == settings
+    assert state.retry_primary_at is None
+    assert calls == ["http://primary.test/aircraft.json"]
 
 
 def test_write_rate_limit_status_records_retry_details(tmp_path):

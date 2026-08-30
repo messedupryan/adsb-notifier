@@ -365,6 +365,7 @@ function sourceProviderLabel(provider) {
   return {
     adsb_lol: "ADSB.lol",
     airplanes_live: "Airplanes.live",
+    local_receiver: "Local receiver",
     direct: "Direct aircraft.json",
   }[provider] || provider || "Unknown";
 }

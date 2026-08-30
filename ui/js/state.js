@@ -10,8 +10,9 @@ let emailHtmlPreviewMode = "rendered";
 const uiVersion = "0.2.10";
 const redactedSecret = "********";
 const notificationProviderOrder = ["pushover", "email", "twilio"];
-const adsbSourceProviders = ["adsb_lol", "airplanes_live", "direct"];
-const adsbSourceQueries = ["point", "mil", "reg", "type", "hex"];
+const adsbSourceProviders = ["adsb_lol", "airplanes_live", "local_receiver", "direct"];
+const backupAdsbSourceProviders = ["local_receiver", "adsb_lol", "airplanes_live"];
+const adsbSourceQueries = ["point", "mil", "reg", "type", "hex", "url", "file"];
 const apiBase = new URLSearchParams(window.location.search).get("api") || "/api";
 const assetVersion = `v=${uiVersion}`;
 const themeStorageKey = "adsb-notifier-theme";
@@ -43,9 +44,16 @@ const fields = {
   adsbSourceRadius: document.querySelector("#adsb-source-radius"),
   adsbSourceValue: document.querySelector("#adsb-source-value"),
   adsbSourceBaseUrl: document.querySelector("#adsb-source-base-url"),
+  backupSourceEnabled: document.querySelector("#backup-source-enabled"),
+  backupSourceProvider: document.querySelector("#backup-source-provider"),
+  backupSourceQuery: document.querySelector("#backup-source-query"),
+  backupSourceRadius: document.querySelector("#backup-source-radius"),
+  backupSourceValue: document.querySelector("#backup-source-value"),
+  backupSourceBaseUrl: document.querySelector("#backup-source-base-url"),
   homeLat: document.querySelector("#home-lat"),
   homeLon: document.querySelector("#home-lon"),
   pollSeconds: document.querySelector("#poll-seconds"),
+  primaryRetryMinutes: document.querySelector("#primary-retry-minutes"),
   staleAircraftSeconds: document.querySelector("#stale-aircraft-seconds"),
   recentMatchesWindowHours: document.querySelector("#recent-matches-window-hours"),
   sourceHealthTrendRetentionHours: document.querySelector("#source-health-trend-retention-hours"),

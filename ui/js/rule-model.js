@@ -71,11 +71,13 @@ function normalizeConfig(payload) {
     config_revision: Number(payload.config_revision) || 1,
     adsb_url: payload.adsb_url || "",
     adsb_source: payload.adsb_source || null,
+    backup_adsb_source: payload.backup_adsb_source || null,
     home: {
       lat: payload.home?.lat ?? "",
       lon: payload.home?.lon ?? "",
     },
     poll_seconds: payload.poll_seconds ?? DEFAULT_POLL_SECONDS,
+    primary_retry_minutes: payload.primary_retry_minutes ?? DEFAULT_PRIMARY_RETRY_MINUTES,
     stale_aircraft_seconds: payload.stale_aircraft_seconds ?? DEFAULT_STALE_AIRCRAFT_SECONDS,
     recent_matches_window_hours: payload.recent_matches_window_hours ?? DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
     source_health_trend_retention_hours:

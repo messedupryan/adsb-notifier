@@ -147,9 +147,19 @@ def test_adsb_source_controls_are_available_in_settings():
     assert "adsb-source-radius" in parser.inputs
     assert "adsb-source-value" in parser.inputs
     assert "adsb-source-base-url" in parser.inputs
+    assert "primary-retry-minutes" in parser.inputs
+    assert "backup-source-enabled" in parser.inputs
+    assert "backup-source-provider" in parser.selects
+    assert "backup-source-query" in parser.selects
+    assert "backup-source-value" in parser.inputs
+    assert "backup-source-radius" in parser.inputs
+    assert "backup-source-base-url" in parser.inputs
     assert "adsb_lol" in INDEX_HTML
     assert "airplanes_live" in INDEX_HTML
+    assert "local_receiver" in INDEX_HTML
     assert "Direct aircraft.json" in INDEX_HTML
+    assert "backup_adsb_source" in UI_JS
+    assert "primary_retry_minutes" in UI_JS
 
 
 def test_squawk_rule_controls_are_available():
