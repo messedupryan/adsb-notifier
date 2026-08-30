@@ -33,6 +33,7 @@ let selectedRecentMatchExportKeys = new Set();
 let isRecentMatchExportMode = false;
 let expandedMatchGroupKeys = new Set();
 let filteredRecentMatches = [];
+let isSourceHealthTrendEventListVisible = false;
 
 const fields = {
   adsbUrl: document.querySelector("#adsb-url"),
@@ -161,6 +162,8 @@ const sourceHealthTrendsOpenButton = document.querySelector("#source-health-tren
 const sourceHealthTrendModal = document.querySelector("#source-health-trend-modal");
 const sourceHealthTrendCloseButton = document.querySelector("#source-health-trend-close");
 const sourceHealthTrendSummary = document.querySelector("#source-health-trend-summary");
+const sourceHealthTrendChart = document.querySelector("#source-health-trend-chart");
+const sourceHealthTrendEventsToggle = document.querySelector("#source-health-trend-events-toggle");
 const sourceHealthTrendList = document.querySelector("#source-health-trend-list");
 const recentMatches = document.querySelector("#recent-matches");
 const toggleRecentExportButton = document.querySelector("#toggle-recent-export");

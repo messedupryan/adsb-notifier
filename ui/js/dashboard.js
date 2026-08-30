@@ -77,6 +77,7 @@ function renderSourceHealthTrendSummary(status) {
 }
 
 function openSourceHealthTrendModal() {
+  isSourceHealthTrendEventListVisible = false;
   renderSourceHealthTrendModal(latestWorkerStatus || {});
   sourceHealthTrendModal.classList.remove("hidden");
   sourceHealthTrendCloseButton.focus();
@@ -89,16 +90,137 @@ function closeSourceHealthTrendModal() {
 
 function renderSourceHealthTrendModal(status) {
   const trends = sourceHealthTrends(status);
+  const chartData = sourceHealthTrendChartData(trends);
   const retentionHours = status.source_health_trend_retention_hours ?? config?.source_health_trend_retention_hours;
   sourceHealthTrendSummary.textContent = trends.length
     ? `${trends.length} events retained${retentionHours ? ` for ${retentionHours} hours` : ""}.`
     : "No source health trend events have been recorded yet.";
+  sourceHealthTrendChart.replaceChildren();
+  sourceHealthTrendChart.append(sourceHealthTrendChartElement(chartData));
+  sourceHealthTrendEventsToggle.textContent = isSourceHealthTrendEventListVisible ? "Hide events" : "Show events";
+  sourceHealthTrendEventsToggle.disabled = trends.length === 0;
   sourceHealthTrendList.replaceChildren();
+  sourceHealthTrendList.classList.toggle("hidden", !isSourceHealthTrendEventListVisible);
   if (trends.length === 0) {
     sourceHealthTrendList.append(emptyState("No trend events"));
     return;
   }
   trends.forEach((event) => sourceHealthTrendList.append(sourceHealthTrendItem(event)));
+}
+
+function toggleSourceHealthTrendEvents() {
+  isSourceHealthTrendEventListVisible = !isSourceHealthTrendEventListVisible;
+  renderSourceHealthTrendModal(latestWorkerStatus || {});
+}
+
+function sourceHealthTrendChartData(trends) {
+  const events = trends
+    .map((event) => ({...event, timestamp: sourceHealthTrendTimestamp(event)}))
+    .filter((event) => event.timestamp !== null)
+    .sort((left, right) => left.timestamp - right.timestamp);
+  const points = events
+    .filter((event) => event.event_type === "success" && Number.isFinite(Number(event.aircraft_count)))
+    .map((event) => ({...event, aircraftCount: Number(event.aircraft_count)}));
+  const failures = events.filter((event) => event.event_type === "failure");
+  return {events, points, failures};
+}
+
+function sourceHealthTrendChartElement({events, points, failures}) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "source-health-chart-shell";
+  if (events.length === 0 || points.length === 0) {
+    wrapper.append(emptyState(events.length === 0 ? "No trend events to chart" : "No aircraft-count samples yet"));
+    return wrapper;
+  }
+
+  const width = 760;
+  const height = 280;
+  const padding = {top: 18, right: 20, bottom: 42, left: 54};
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  let minTime = events[0].timestamp;
+  let maxTime = events[events.length - 1].timestamp;
+  if (minTime === maxTime) {
+    minTime -= 60_000;
+    maxTime += 60_000;
+  }
+  const maxAircraftCount = Math.max(1, ...points.map((point) => point.aircraftCount));
+  const x = (timestamp) => padding.left + ((timestamp - minTime) / (maxTime - minTime)) * plotWidth;
+  const y = (count) => padding.top + plotHeight - (count / maxAircraftCount) * plotHeight;
+  const svg = sourceHealthSvg("svg", {viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Aircraft found over time"});
+
+  [0, Math.round(maxAircraftCount / 2), maxAircraftCount].forEach((tick) => {
+    const tickY = y(tick);
+    svg.append(sourceHealthSvg("line", {class: "source-health-chart-grid", x1: padding.left, y1: tickY, x2: width - padding.right, y2: tickY}));
+    const label = sourceHealthSvg("text", {class: "source-health-chart-label", x: padding.left - 10, y: tickY + 4, "text-anchor": "end"});
+    label.textContent = String(tick);
+    svg.append(label);
+  });
+
+  failures.forEach((event) => {
+    const marker = sourceHealthSvg("line", {
+      class: `source-health-chart-failure ${statusClassName(event.status)}`,
+      x1: x(event.timestamp),
+      y1: padding.top,
+      x2: x(event.timestamp),
+      y2: padding.top + plotHeight,
+    });
+    const title = sourceHealthSvg("title");
+    title.textContent = `${sourceHealthLabel(event.status)} at ${formatDateTime(event.observed_at) || event.observed_at}`;
+    marker.append(title);
+    svg.append(marker);
+  });
+
+  const path = points.map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.timestamp).toFixed(1)} ${y(point.aircraftCount).toFixed(1)}`).join(" ");
+  svg.append(sourceHealthSvg("path", {class: "source-health-chart-line", d: path}));
+  points.forEach((point) => {
+    const dot = sourceHealthSvg("circle", {
+      class: "source-health-chart-point",
+      cx: x(point.timestamp),
+      cy: y(point.aircraftCount),
+      r: 4,
+    });
+    const title = sourceHealthSvg("title");
+    title.textContent = `${point.aircraftCount} aircraft at ${formatDateTime(point.observed_at) || point.observed_at}`;
+    dot.append(title);
+    svg.append(dot);
+  });
+
+  const startLabel = sourceHealthSvg("text", {class: "source-health-chart-label", x: padding.left, y: height - 12, "text-anchor": "start"});
+  startLabel.textContent = formatDateTime(new Date(minTime).toISOString()) || "";
+  const endLabel = sourceHealthSvg("text", {class: "source-health-chart-label", x: width - padding.right, y: height - 12, "text-anchor": "end"});
+  endLabel.textContent = formatDateTime(new Date(maxTime).toISOString()) || "";
+  svg.append(startLabel, endLabel);
+  wrapper.append(svg, sourceHealthTrendLegend(failures.length));
+  return wrapper;
+}
+
+function sourceHealthTrendLegend(failureCount) {
+  const legend = document.createElement("div");
+  legend.className = "source-health-chart-legend";
+  const sample = document.createElement("span");
+  sample.className = "source-health-chart-legend-line";
+  const lineText = document.createElement("span");
+  lineText.textContent = "Aircraft found";
+  const failure = document.createElement("span");
+  failure.className = "source-health-chart-legend-failure";
+  const failureText = document.createElement("span");
+  failureText.textContent = `${failureCount} failure marker${failureCount === 1 ? "" : "s"}`;
+  legend.append(sample, lineText, failure, failureText);
+  return legend;
+}
+
+function sourceHealthTrendTimestamp(event) {
+  if (!event.observed_at) return null;
+  const date = new Date(event.observed_at);
+  const timestamp = date.getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function sourceHealthSvg(tagName, attributes = {}) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tagName);
+  Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, String(value)));
+  return node;
 }
 
 function sourceHealthTrendItem(event) {

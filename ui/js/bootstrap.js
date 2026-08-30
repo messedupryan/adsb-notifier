@@ -27,6 +27,7 @@ notificationProviderSelector.addEventListener("click", (event) => {
 });
 refreshStatusButton.addEventListener("click", () => loadWorkerStatus());
 sourceHealthTrendsOpenButton.addEventListener("click", openSourceHealthTrendModal);
+sourceHealthTrendEventsToggle.addEventListener("click", toggleSourceHealthTrendEvents);
 toggleRecentExportButton.addEventListener("click", toggleRecentMatchExportMode);
 selectVisibleMatchesButton.addEventListener("click", selectVisibleRecentMatchesForExport);
 clearSelectedMatchesButton.addEventListener("click", clearRecentMatchExportSelection);

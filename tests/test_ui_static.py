@@ -291,6 +291,8 @@ def test_source_health_controls_are_available():
     assert "source-health-trends-open" in INDEX_HTML
     assert "source-health-trend-retention-hours" in INDEX_HTML
     assert "source-health-trend-modal" in INDEX_HTML
+    assert "source-health-trend-chart" in INDEX_HTML
+    assert "source-health-trend-events-toggle" in INDEX_HTML
     assert "source-health-trend-list" in INDEX_HTML
     for field_id in [
         "source-health-status",
@@ -307,6 +309,8 @@ def test_source_health_controls_are_available():
     assert "function renderSourceHealth" in UI_JS
     assert "function normalizedSourceHealth" in UI_JS
     assert "function openSourceHealthTrendModal" in UI_JS
+    assert "function sourceHealthTrendChartElement" in UI_JS
+    assert "function toggleSourceHealthTrendEvents" in UI_JS
     assert "function sourceHealthTrendItem" in UI_JS
     assert "source_health_trends" in UI_JS
     assert "source_health_trend_retention_hours" in UI_JS
