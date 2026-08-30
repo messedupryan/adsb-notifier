@@ -199,7 +199,7 @@ The map is centered around the configured home location and can show:
 
 Repeated dashboard alerts are grouped by aircraft and rule so noisy repeat matches are easier to scan while the underlying recent match history still preserves each individual event.
 
-Recent matches can be filtered by event, rule, provider, notification status, and aircraft text. Each row has a detail view for troubleshooting the normalized aircraft payload behind the alert.
+Recent matches can be filtered by event, rule, provider, notification status, and aircraft text. Each row has a detail view for troubleshooting the normalized aircraft payload behind the alert. The detail view can export the selected recent match as API-backed JSON or CSV.
 
 <a id="versioning"></a>
 

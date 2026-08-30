@@ -244,11 +244,33 @@ def test_worker_status_summary_has_source_row_and_status_classes():
 def test_recent_match_detail_view_is_available():
     assert "match-detail-modal" in INDEX_HTML
     assert "match-detail-link" in INDEX_HTML
+    assert "match-detail-export-json" in INDEX_HTML
+    assert "match-detail-export-csv" in INDEX_HTML
     assert "match-detail-summary" in INDEX_HTML
     assert "match-detail-payload" in INDEX_HTML
     assert "function openMatchDetail" in UI_JS
+    assert "function recentMatchExportUrl" in UI_JS
+    assert "recent-matches/export.${format}" in UI_JS
+    assert "match_key=${encodeURIComponent(key)}" in UI_JS
     assert "function renderMatchDetailSummary" in UI_JS
     assert "aircraft_payload" in UI_JS
+
+
+def test_recent_match_multi_export_controls_are_available():
+    assert "toggle-recent-export" in INDEX_HTML
+    assert 'id="recent-export-actions" class="recent-export-actions hidden"' in INDEX_HTML
+    assert "recent-export-selected-count" in INDEX_HTML
+    assert "select-visible-matches" in INDEX_HTML
+    assert "clear-selected-matches" in INDEX_HTML
+    assert "export-selected-json" in INDEX_HTML
+    assert "export-selected-csv" in INDEX_HTML
+    assert "selectedRecentMatchExportKeys" in UI_JS
+    assert "isRecentMatchExportMode" in UI_JS
+    assert "function toggleRecentMatchExportMode" in UI_JS
+    assert "function matchExportCheckbox" in UI_JS
+    assert "function selectVisibleRecentMatchesForExport" in UI_JS
+    assert "function clearRecentMatchExportSelection" in UI_JS
+    assert "dataset.exportMatchKeys" in UI_JS
 
 
 def test_dashboard_map_has_inset_and_tighter_fit_padding():

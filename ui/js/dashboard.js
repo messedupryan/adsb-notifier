@@ -30,10 +30,13 @@ function renderWorkerStatus(status) {
   recentMatches.replaceChildren();
   const matches = Array.isArray(status.recent_matches) ? status.recent_matches : [];
   renderDashboardFilters(matches);
+  syncRecentMatchExportSelection(matches);
   filteredRecentMatches = filterRecentMatches(matches);
   if (matches.length === 0) {
     selectedRecentMatchKey = null;
+    selectedRecentMatchExportKeys.clear();
     recentMatches.append(emptyState("No recent matches"));
+    renderRecentMatchExportActions();
     renderDashboardMap(status);
     return;
   }
@@ -42,10 +45,12 @@ function renderWorkerStatus(status) {
   }
   if (filteredRecentMatches.length === 0) {
     recentMatches.append(emptyState("No matches for current filters"));
+    renderRecentMatchExportActions();
     renderDashboardMap(status);
     return;
   }
   renderRecentMatchGroups(filteredRecentMatches);
+  renderRecentMatchExportActions();
   renderDashboardMap(status);
 }
 
@@ -154,6 +159,10 @@ function renderRecentMatchGroup(group) {
 
   const header = document.createElement("div");
   header.className = "match-group-header";
+  if (isRecentMatchExportMode) {
+    item.classList.add("export-mode");
+    header.append(matchExportCheckbox(group.matches, `${group.ruleName}: ${group.aircraftLabel}`));
+  }
   const title = document.createElement("strong");
   title.textContent = `${group.ruleName}: ${group.aircraftLabel}`;
   const count = document.createElement("span");
@@ -189,6 +198,10 @@ function renderRecentMatchItem(match, options = {}) {
   item.role = "button";
   item.tabIndex = 0;
   item.dataset.matchKey = key;
+  if (isRecentMatchExportMode) {
+    item.classList.add("export-mode");
+    item.append(matchExportCheckbox([match], match.aircraft_label || match.hex || "aircraft"));
+  }
   const title = document.createElement("strong");
   title.textContent = `${match.rule_name || "Rule"}: ${match.aircraft_label || match.hex || "Aircraft"}`;
   const meta = document.createElement("span");
@@ -204,6 +217,68 @@ function renderRecentMatchItem(match, options = {}) {
     item.append(matchActions(matchExternalLink(match), matchDetailButton(match)));
   }
   return item;
+}
+
+function matchExportCheckbox(matches, label) {
+  const keys = matches.map(matchKey);
+  const wrapper = document.createElement("label");
+  wrapper.className = "match-export-select";
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.dataset.exportMatchKeys = keys.join("\n");
+  input.checked = keys.every((key) => selectedRecentMatchExportKeys.has(key));
+  input.indeterminate = !input.checked && keys.some((key) => selectedRecentMatchExportKeys.has(key));
+  input.setAttribute("aria-label", `Select ${label} for export`);
+  wrapper.append(input);
+  return wrapper;
+}
+
+function syncRecentMatchExportSelection(matches) {
+  const availableKeys = new Set(matches.map(matchKey));
+  selectedRecentMatchExportKeys = new Set(Array.from(selectedRecentMatchExportKeys).filter((key) => availableKeys.has(key)));
+}
+
+function renderRecentMatchExportActions() {
+  const keys = Array.from(selectedRecentMatchExportKeys);
+  const count = keys.length;
+  toggleRecentExportButton.textContent = isRecentMatchExportMode ? "Done" : "Export";
+  recentExportActions.classList.toggle("hidden", !isRecentMatchExportMode);
+  recentExportSelectedCount.textContent = `${count} selected`;
+  clearSelectedMatchesButton.disabled = count === 0;
+  const hasVisibleMatches = filteredRecentMatches.length > 0;
+  selectVisibleMatchesButton.disabled = !hasVisibleMatches;
+  updateRecentMatchExportLink(exportSelectedJson, "json", keys);
+  updateRecentMatchExportLink(exportSelectedCsv, "csv", keys);
+}
+
+function toggleRecentMatchExportMode() {
+  isRecentMatchExportMode = !isRecentMatchExportMode;
+  if (!isRecentMatchExportMode) {
+    selectedRecentMatchExportKeys.clear();
+  }
+  if (latestWorkerStatus) {
+    renderWorkerStatus(latestWorkerStatus);
+  }
+}
+
+function updateRecentMatchExportLink(link, format, keys) {
+  const disabled = keys.length === 0;
+  link.href = disabled ? "#" : recentMatchExportUrl(format, keys);
+  link.setAttribute("aria-disabled", String(disabled));
+  link.tabIndex = disabled ? -1 : 0;
+  link.classList.toggle("disabled", disabled);
+}
+
+function selectVisibleRecentMatchesForExport() {
+  if (!latestWorkerStatus) return;
+  filteredRecentMatches.forEach((match) => selectedRecentMatchExportKeys.add(matchKey(match)));
+  renderWorkerStatus(latestWorkerStatus);
+}
+
+function clearRecentMatchExportSelection() {
+  if (!latestWorkerStatus) return;
+  selectedRecentMatchExportKeys.clear();
+  renderWorkerStatus(latestWorkerStatus);
 }
 
 function matchActions(...actions) {
@@ -428,6 +503,11 @@ function updateMapActionState() {
 
 recentMatches.addEventListener("click", (event) => {
   if (event.target.closest("a")) return;
+  const exportSelection = event.target.closest(".match-export-select input");
+  if (exportSelection) {
+    toggleRecentMatchExportSelection(exportSelection);
+    return;
+  }
   const detailButton = event.target.closest(".match-detail-button");
   if (detailButton?.dataset.matchKey) {
     openMatchDetail(detailButton.dataset.matchKey);
@@ -444,6 +524,7 @@ recentMatches.addEventListener("click", (event) => {
 });
 recentMatches.addEventListener("keydown", (event) => {
   if (!["Enter", " "].includes(event.key)) return;
+  if (event.target.closest(".match-export-select input")) return;
   if (event.target.closest(".match-detail-button")) return;
   if (event.target.closest(".match-group-toggle")) return;
   const item = event.target.closest(".match-item");
@@ -451,6 +532,23 @@ recentMatches.addEventListener("keydown", (event) => {
   event.preventDefault();
   selectRecentMatch(item.dataset.matchKey);
 });
+
+[exportSelectedJson, exportSelectedCsv].forEach((link) => {
+  link.addEventListener("click", (event) => {
+    if (link.getAttribute("aria-disabled") !== "true") return;
+    event.preventDefault();
+  });
+});
+
+function toggleRecentMatchExportSelection(input) {
+  const keys = (input.dataset.exportMatchKeys || "").split("\n").filter(Boolean);
+  if (input.checked) {
+    keys.forEach((key) => selectedRecentMatchExportKeys.add(key));
+  } else {
+    keys.forEach((key) => selectedRecentMatchExportKeys.delete(key));
+  }
+  renderWorkerStatus(latestWorkerStatus);
+}
 
 function toggleMatchGroup(key) {
   if (expandedMatchGroupKeys.has(key)) {
@@ -555,10 +653,18 @@ function openMatchDetail(key) {
   const airplanesLiveUrl = match.airplanes_live_url || match.adsb_exchange_url || "";
   matchDetailLink.href = airplanesLiveUrl || "#";
   matchDetailLink.classList.toggle("hidden", !airplanesLiveUrl);
+  matchDetailExportJson.href = recentMatchExportUrl("json", key);
+  matchDetailExportCsv.href = recentMatchExportUrl("csv", key);
   renderMatchDetailSummary(match);
   matchDetailPayload.textContent = JSON.stringify(match.aircraft_payload || match, null, 2);
   matchDetailModal.classList.remove("hidden");
   matchDetailCloseButton.focus();
+}
+
+function recentMatchExportUrl(format, keys = []) {
+  const selectedKeys = Array.isArray(keys) ? keys : [keys].filter(Boolean);
+  const suffix = selectedKeys.length > 0 ? `?${selectedKeys.map((key) => `match_key=${encodeURIComponent(key)}`).join("&")}` : "";
+  return `${apiBase}/recent-matches/export.${format}${suffix}`;
 }
 
 function renderMatchDetailSummary(match) {

@@ -580,6 +580,58 @@ textarea.invalid {
   gap: 8px;
 }
 
+.recent-export-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-top: 6px;
+  width: 100%;
+}
+
+.recent-export-row > button {
+  min-width: 78px;
+}
+
+.recent-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.recent-export-actions span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.recent-export-actions button,
+.recent-export-actions a {
+  min-width: 62px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+
+.recent-export-actions a:not(.disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.recent-export-actions .disabled {
+  color: var(--muted);
+  cursor: default;
+  opacity: 0.65;
+}
+
 .map-actions {
   display: flex;
   flex-wrap: wrap;
@@ -736,6 +788,7 @@ textarea.invalid {
 }
 
 .match-item {
+  position: relative;
   width: 100%;
   border: 1px solid var(--soft-border);
   border-radius: 6px;
@@ -763,6 +816,11 @@ textarea.invalid {
 .match-item.match-group {
   border-color: var(--border);
   background: var(--panel-muted);
+  padding-left: 12px;
+}
+
+.match-item.export-mode:not(.match-group) {
+  padding-left: 42px;
 }
 
 .match-item.nested {
@@ -776,6 +834,10 @@ textarea.invalid {
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
+}
+
+.match-item.export-mode .match-group-header {
+  grid-template-columns: 22px minmax(0, 1fr) auto auto;
 }
 
 .match-item strong,
@@ -819,6 +881,25 @@ textarea.invalid {
 .match-notification-status.partially_suppressed {
   color: var(--danger);
   font-weight: 700;
+}
+
+.match-export-select {
+  align-self: start;
+  width: 22px;
+  min-height: 22px;
+  margin: 0;
+}
+
+.match-export-select input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.match-item > .match-export-select {
+  position: absolute;
+  top: 12px;
+  left: 14px;
 }
 
 .external-match-link {
@@ -1169,9 +1250,15 @@ textarea.invalid {
   margin-bottom: 14px;
 }
 
+.match-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+
 .match-detail-link {
   display: inline-block;
-  margin-top: 6px;
   color: var(--accent);
   font-size: 13px;
   font-weight: 700;

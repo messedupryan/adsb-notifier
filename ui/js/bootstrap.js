@@ -25,6 +25,9 @@ notificationProviderSelector.addEventListener("click", (event) => {
   selectNotificationProvider(button.dataset.notificationProvider);
 });
 refreshStatusButton.addEventListener("click", () => loadWorkerStatus());
+toggleRecentExportButton.addEventListener("click", toggleRecentMatchExportMode);
+selectVisibleMatchesButton.addEventListener("click", selectVisibleRecentMatchesForExport);
+clearSelectedMatchesButton.addEventListener("click", clearRecentMatchExportSelection);
 recenterMapButton.addEventListener("click", () => recenterDashboardMap());
 fitMapButton.addEventListener("click", () => fitDashboardMap());
 selectedMapButton.addEventListener("click", () => zoomSelectedMatch());

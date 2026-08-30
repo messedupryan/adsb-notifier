@@ -1,6 +1,9 @@
+import csv
+import io
 import json
 import threading
 from http.server import ThreadingHTTPServer
+from urllib.parse import quote, urlencode
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -843,6 +846,149 @@ def test_status_endpoint_returns_unknown_when_missing(tmp_path):
     assert response["recent_matches"] == []
 
 
+def test_recent_matches_export_json_returns_status_matches(tmp_path):
+    path = tmp_path / "config.json"
+    status_path = tmp_path / "status.json"
+    _write_config(path, valid_config())
+    status_path.write_text(
+        json.dumps(
+            {
+                "status": "ok",
+                "recent_matches": [
+                    {
+                        "observed_at": "2026-08-30T12:00:00+00:00",
+                        "rule_name": "target",
+                        "event_type": "tail",
+                        "aircraft_label": "N12345",
+                        "hex": "ABC123",
+                        "distance_miles": 4.2,
+                        "notification_providers": ["email", "pushover"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with api_server(path, status_path=status_path) as base_url:
+        body, headers = request_raw(f"{base_url}/recent-matches/export.json")
+
+    payload = json.loads(body.decode("utf-8"))
+    assert payload["count"] == 1
+    assert payload["recent_matches"][0]["aircraft_label"] == "N12345"
+    assert headers["Content-Type"] == "application/json"
+    assert headers["Content-Disposition"].startswith('attachment; filename="adsb-notifier-recent-match-n12345-')
+
+
+def test_recent_matches_export_csv_returns_flat_rows(tmp_path):
+    path = tmp_path / "config.json"
+    status_path = tmp_path / "status.json"
+    _write_config(path, valid_config())
+    status_path.write_text(
+        json.dumps(
+            {
+                "recent_matches": [
+                    {
+                        "observed_at": "2026-08-30T12:00:00+00:00",
+                        "rule_name": "target",
+                        "event_type": "tail",
+                        "aircraft_label": "N12345",
+                        "hex": "ABC123",
+                        "distance_miles": 4.2,
+                        "notification_providers": ["email", "pushover"],
+                        "aircraft_payload": {"raw": {"gs": 122}},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with api_server(path, status_path=status_path) as base_url:
+        body, headers = request_raw(f"{base_url}/recent-matches/export.csv")
+
+    rows = list(csv.DictReader(io.StringIO(body.decode("utf-8"))))
+    assert rows[0]["aircraft_label"] == "N12345"
+    assert rows[0]["notification_providers"] == "email, pushover"
+    assert json.loads(rows[0]["aircraft_payload"]) == {"raw": {"gs": 122}}
+    assert headers["Content-Type"].startswith("text/csv")
+    assert headers["Content-Disposition"].startswith('attachment; filename="adsb-notifier-recent-match-n12345-')
+
+
+def test_recent_matches_export_filters_by_match_key(tmp_path):
+    path = tmp_path / "config.json"
+    status_path = tmp_path / "status.json"
+    _write_config(path, valid_config())
+    selected = {
+        "observed_at": "2026-08-30T12:00:00+00:00",
+        "rule_name": "target",
+        "aircraft_label": "N12345",
+        "hex": "ABC123",
+    }
+    status_path.write_text(
+        json.dumps(
+            {
+                "recent_matches": [
+                    selected,
+                    {
+                        "observed_at": "2026-08-30T12:05:00+00:00",
+                        "rule_name": "target",
+                        "aircraft_label": "N54321",
+                        "hex": "DEF456",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    match_key = "2026-08-30T12:00:00+00:00|target|ABC123|N12345"
+
+    with api_server(path, status_path=status_path) as base_url:
+        body, _headers = request_raw(f"{base_url}/recent-matches/export.json?match_key={quote(match_key)}")
+
+    payload = json.loads(body.decode("utf-8"))
+    assert payload["count"] == 1
+    assert payload["recent_matches"] == [selected]
+
+
+def test_recent_matches_export_filters_by_multiple_match_keys(tmp_path):
+    path = tmp_path / "config.json"
+    status_path = tmp_path / "status.json"
+    _write_config(path, valid_config())
+    first = {
+        "observed_at": "2026-08-30T12:00:00+00:00",
+        "rule_name": "target",
+        "aircraft_label": "N12345",
+        "hex": "ABC123",
+    }
+    second = {
+        "observed_at": "2026-08-30T12:05:00+00:00",
+        "rule_name": "target",
+        "aircraft_label": "N54321",
+        "hex": "DEF456",
+    }
+    third = {
+        "observed_at": "2026-08-30T12:10:00+00:00",
+        "rule_name": "target",
+        "aircraft_label": "N99999",
+        "hex": "999999",
+    }
+    status_path.write_text(json.dumps({"recent_matches": [first, second, third]}), encoding="utf-8")
+    query = urlencode(
+        [
+            ("match_key", "2026-08-30T12:00:00+00:00|target|ABC123|N12345"),
+            ("match_key", "2026-08-30T12:05:00+00:00|target|DEF456|N54321"),
+        ]
+    )
+
+    with api_server(path, status_path=status_path) as base_url:
+        body, _headers = request_raw(f"{base_url}/recent-matches/export.json?{query}")
+
+    payload = json.loads(body.decode("utf-8"))
+    assert payload["count"] == 2
+    assert payload["recent_matches"] == [first, second]
+
+
 def test_notification_test_endpoint_rejects_disabled_provider(tmp_path):
     path = tmp_path / "config.json"
     payload = config_with_email()
@@ -1021,3 +1167,9 @@ def request_json(url: str, method: str = "GET", payload: dict | None = None, hea
     request = Request(url, data=data, method=method, headers=request_headers)
     with urlopen(request, timeout=5) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def request_raw(url: str, method: str = "GET") -> tuple[bytes, dict[str, str]]:
+    request = Request(url, method=method)
+    with urlopen(request, timeout=5) as response:
+        return response.read(), dict(response.headers)
