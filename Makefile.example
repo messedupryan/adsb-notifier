@@ -33,7 +33,7 @@ UI_IMAGE := $(REGISTRY)/adsb-notifier-ui:$(IMAGE_TAG)
 
 VERSION_FILES := VERSION pyproject.toml charts/adsb-notifier/Chart.yaml charts/adsb-notifier/values.example.yaml ui/index.html ui/js/bootstrap.js ui/js/config-flow.js ui/js/dashboard.js ui/js/forms.js ui/js/map-utils.js ui/js/modal.js ui/js/rule-actions.js ui/js/rule-model.js ui/js/state.js ui/js/theme.js ui/js/ui-utils.js ui/js/validation.js adsb_notifier/version.py docs/DEVELOPMENT.md docs/VERSIONING.md README.md Dockerfile Dockerfile.api Dockerfile.ui Makefile.example tests/test_versioning.py
 
-.PHONY: help version check-clean bump-version release-notes test local local-api local-ui worker-once build build-worker build-api build-ui push build-push release release-rc k8s-secret deploy-k8s deploy-helm restart rollout status config-export config-backups config-export-backups config-restore
+.PHONY: help version check-clean bump-version release-notes test local local-api local-ui kill-local worker-once build build-worker build-api build-ui push build-push release release-rc k8s-secret deploy-k8s deploy-helm restart rollout status config-export config-backups config-export-backups config-restore
 
 help:
 	@printf '%s\n' \
@@ -42,6 +42,7 @@ help:
 		'  make local         Run API and UI locally until Ctrl+C' \
 		'  make local-api     Run only the local config API' \
 		'  make local-ui      Run only the local UI server' \
+		'  make kill-local	  Kill orphaned local UI/API processes' \
 		'  make worker-once   Run one worker poll locally' \
 		'  make build         Build worker, API, and UI container images' \
 		'  make push          Push worker, API, and UI container images' \
@@ -124,6 +125,19 @@ local-api:
 
 local-ui:
 	cd ui && UI_HOST=127.0.0.1 UI_PORT="$(UI_PORT)" pipenv run python dev_server.py
+
+kill-local:
+	@pids="$$( \
+		lsof -ti tcp:$(API_PORT) -sTCP:LISTEN 2>/dev/null; \
+		lsof -ti tcp:$(UI_PORT) -sTCP:LISTEN 2>/dev/null; \
+	)"; \
+	if [ -z "$$pids" ]; then \
+		echo "No local API/UI listeners found on ports $(API_PORT) or $(UI_PORT)."; \
+		exit 0; \
+	fi; \
+	echo "Killing local API/UI processes on ports $(API_PORT), $(UI_PORT):"; \
+	echo "$$pids" | sort -u; \
+	echo "$$pids" | sort -u | xargs kill
 
 worker-once:
 	@if [ ! -f "$(LOCAL_CONFIG)" ]; then echo "Missing $(LOCAL_CONFIG). Set LOCAL_CONFIG=..."; exit 1; fi
