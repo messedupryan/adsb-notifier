@@ -160,6 +160,8 @@ def test_adsb_source_controls_are_available_in_settings():
     assert "Direct aircraft.json" in INDEX_HTML
     assert "backup_adsb_source" in UI_JS
     assert "primary_retry_minutes" in UI_JS
+    assert "function updateSourceQueryOptions" in UI_JS
+    assert 'new Set(["url", "file"])' in UI_JS
 
 
 def test_squawk_rule_controls_are_available():

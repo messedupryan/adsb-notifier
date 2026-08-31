@@ -747,6 +747,7 @@ function adsbSourceFromFormFields(sourceFields) {
 function updateAdsbSourceFieldVisibility() {
   const provider = fields.adsbSourceProvider.value;
   syncSourceQueryForProvider(fields.adsbSourceProvider, fields.adsbSourceQuery);
+  updateSourceQueryOptions(fields.adsbSourceProvider, fields.adsbSourceQuery);
   const query = fields.adsbSourceQuery.value;
   fields.adsbUrl.closest("label").classList.toggle("hidden", provider !== "direct");
   fields.adsbSourceQuery.disabled = provider === "direct";
@@ -759,6 +760,7 @@ function updateBackupSourceFieldVisibility() {
   const enabled = fields.backupSourceEnabled.checked;
   const provider = fields.backupSourceProvider.value;
   syncSourceQueryForProvider(fields.backupSourceProvider, fields.backupSourceQuery);
+  updateSourceQueryOptions(fields.backupSourceProvider, fields.backupSourceQuery);
   const query = fields.backupSourceQuery.value;
   fields.backupSourceProvider.disabled = !enabled;
   fields.backupSourceQuery.disabled = !enabled;
@@ -774,6 +776,17 @@ function syncSourceQueryForProvider(providerField, queryField) {
   if (providerField.value !== "local_receiver" && ["url", "file"].includes(queryField.value)) {
     queryField.value = "point";
   }
+}
+
+function updateSourceQueryOptions(providerField, queryField) {
+  const validQueries = providerField.value === "local_receiver"
+    ? new Set(["url", "file"])
+    : new Set(["point", "mil", "reg", "type", "hex"]);
+  Array.from(queryField.options).forEach((option) => {
+    const isValid = validQueries.has(option.value);
+    option.disabled = !isValid;
+    option.hidden = !isValid;
+  });
 }
 
 function optionalNumberValue(field) {
