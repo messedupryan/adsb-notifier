@@ -7,7 +7,10 @@ from typing import Any
 
 from adsb_notifier.adsb import build_adsb_url
 from adsb_notifier.config import Settings
-from adsb_notifier.constants import MAX_RECENT_MATCHES
+from adsb_notifier.constants import (
+    DEFAULT_SOURCE_HEALTH_TREND_RETENTION_HOURS,
+    MAX_RECENT_MATCHES,
+)
 from adsb_notifier.links import airplanes_live_aircraft_url
 from adsb_notifier.models import Sighting
 
@@ -17,6 +20,25 @@ def write_poll_status(path: str | Path, settings: Settings, aircraft_count: int,
     now = _now_iso()
     existing = read_status(path)
     adsb_url = build_adsb_url(settings)
+    source_health = _source_health(
+        status="healthy",
+        settings=settings,
+        adsb_url=adsb_url,
+        last_success_at=now,
+        last_failure_at=existing.get("source_health", {}).get("last_failure_at") or existing.get("last_error_at"),
+        last_aircraft_count=aircraft_count,
+    )
+    retention_hours = settings.source_health_trend_retention_hours
+    trend_events = [
+        *_provider_switch_events(existing, source_health, now),
+        _source_health_event(
+            "success",
+            source_health,
+            now,
+            message=f"Poll succeeded with {aircraft_count} aircraft",
+            aircraft_count=aircraft_count,
+        ),
+    ]
     payload = {
         "status": "ok",
         "last_poll_at": now,
@@ -24,19 +46,14 @@ def write_poll_status(path: str | Path, settings: Settings, aircraft_count: int,
         "aircraft_count": aircraft_count,
         "notification_count": len(sightings),
         "recent_matches_window_hours": settings.recent_matches_window_hours,
+        "source_health_trend_retention_hours": retention_hours,
+        "source_health_trends": _source_health_trends(existing, retention_hours, trend_events),
         "recent_matches": recent_matches,
         "last_error": None,
         "consecutive_source_errors": 0,
         "rate_limit_retry_at": None,
         "rate_limit_backoff_seconds": 0,
-        "source_health": _source_health(
-            status="healthy",
-            settings=settings,
-            adsb_url=adsb_url,
-            last_success_at=now,
-            last_failure_at=existing.get("source_health", {}).get("last_failure_at") or existing.get("last_error_at"),
-            last_aircraft_count=aircraft_count,
-        ),
+        "source_health": source_health,
     }
     write_status(path, payload)
 
@@ -45,19 +62,35 @@ def write_error_status(path: str | Path, error: BaseException) -> None:
     existing = read_status(path)
     now = _now_iso()
     consecutive_source_errors = _next_source_error_count(existing)
+    source_health = _source_health(
+        status="failing",
+        existing=existing,
+        last_failure_at=now,
+        last_error=str(error),
+        consecutive_source_errors=consecutive_source_errors,
+    )
+    retention_hours = _status_trend_retention_hours(existing)
     existing.update(
         {
             "status": "error",
             "last_error": str(error),
             "last_error_at": now,
             "consecutive_source_errors": consecutive_source_errors,
-            "source_health": _source_health(
-                status="failing",
-                existing=existing,
-                last_failure_at=now,
-                last_error=str(error),
-                consecutive_source_errors=consecutive_source_errors,
+            "source_health_trend_retention_hours": retention_hours,
+            "source_health_trends": _source_health_trends(
+                existing,
+                retention_hours,
+                [
+                    _source_health_event(
+                        "failure",
+                        source_health,
+                        now,
+                        message=str(error),
+                        consecutive_source_errors=consecutive_source_errors,
+                    )
+                ],
             ),
+            "source_health": source_health,
         }
     )
     write_status(path, existing)
@@ -73,28 +106,67 @@ def write_rate_limit_status(
     now = datetime.now(timezone.utc)
     status = _source_error_status(error)
     retry_at = (now + timedelta(seconds=backoff_seconds)).isoformat()
+    observed_at = now.isoformat()
     adsb_url = build_adsb_url(settings)
     consecutive_source_errors = _next_source_error_count(existing)
+    source_health = _source_health(
+        status=status,
+        settings=settings,
+        adsb_url=adsb_url,
+        existing=existing,
+        last_failure_at=observed_at,
+        retry_at=retry_at,
+        backoff_seconds=backoff_seconds,
+        last_error=str(error),
+        consecutive_source_errors=consecutive_source_errors,
+    )
+    trend_events = [
+        *_provider_switch_events(existing, source_health, observed_at),
+        _source_health_event(
+            "failure",
+            source_health,
+            observed_at,
+            message=str(error),
+            consecutive_source_errors=consecutive_source_errors,
+        ),
+    ]
+    if status == "rate_limited":
+        trend_events.append(
+            _source_health_event(
+                "rate_limit",
+                source_health,
+                observed_at,
+                message=str(error),
+                retry_at=retry_at,
+                backoff_seconds=backoff_seconds,
+            )
+        )
+    trend_events.append(
+        _source_health_event(
+            "retry_backoff",
+            source_health,
+            observed_at,
+            message=f"Retry scheduled in {backoff_seconds}s",
+            retry_at=retry_at,
+            backoff_seconds=backoff_seconds,
+        ),
+    )
     existing.update(
         {
             "status": status,
             "adsb_url": adsb_url,
             "last_error": str(error),
-            "last_error_at": now.isoformat(),
+            "last_error_at": observed_at,
             "consecutive_source_errors": consecutive_source_errors,
             "rate_limit_backoff_seconds": backoff_seconds,
             "rate_limit_retry_at": retry_at,
-            "source_health": _source_health(
-                status=status,
-                settings=settings,
-                adsb_url=adsb_url,
-                existing=existing,
-                last_failure_at=now.isoformat(),
-                retry_at=retry_at,
-                backoff_seconds=backoff_seconds,
-                last_error=str(error),
-                consecutive_source_errors=consecutive_source_errors,
+            "source_health_trend_retention_hours": settings.source_health_trend_retention_hours,
+            "source_health_trends": _source_health_trends(
+                existing,
+                settings.source_health_trend_retention_hours,
+                trend_events,
             ),
+            "source_health": source_health,
         }
     )
     write_status(path, existing)
@@ -124,7 +196,9 @@ def _source_health(
         "last_failure_at": last_failure_at or previous.get("last_failure_at") or (existing or {}).get("last_error_at"),
         "retry_at": retry_at,
         "backoff_seconds": backoff_seconds,
-        "last_aircraft_count": last_aircraft_count if last_aircraft_count is not None else previous.get("last_aircraft_count") or (existing or {}).get("aircraft_count"),
+        "last_aircraft_count": last_aircraft_count
+        if last_aircraft_count is not None
+        else previous.get("last_aircraft_count") or (existing or {}).get("aircraft_count"),
         "last_error": last_error,
         "consecutive_source_errors": consecutive_source_errors,
     }
@@ -155,7 +229,7 @@ def _source_error_status(error: BaseException) -> str:
 def read_status(path: str | Path) -> dict[str, Any]:
     status_path = Path(path)
     if not status_path.exists():
-        return {"status": "unknown", "last_error": None, "recent_matches": []}
+        return {"status": "unknown", "last_error": None, "recent_matches": [], "source_health_trends": []}
     return json.loads(status_path.read_text(encoding="utf-8"))
 
 
@@ -174,6 +248,91 @@ def _next_source_error_count(status: dict[str, Any]) -> int:
         return int(status.get("consecutive_source_errors") or 0) + 1
     except (TypeError, ValueError):
         return 1
+
+
+def _source_health_event(
+    event_type: str,
+    health: dict[str, Any],
+    observed_at: str,
+    *,
+    message: str = "",
+    **details: Any,
+) -> dict[str, Any]:
+    event = {
+        "event_type": event_type,
+        "observed_at": observed_at,
+        "status": health.get("status") or "unknown",
+        "provider": health.get("provider") or "unknown",
+        "query": health.get("query") or "",
+        "url": health.get("url") or "",
+        "message": message,
+    }
+    event.update({key: value for key, value in details.items() if value is not None})
+    return event
+
+
+def _provider_switch_events(
+    existing: dict[str, Any],
+    health: dict[str, Any],
+    observed_at: str,
+) -> list[dict[str, Any]]:
+    previous = existing.get("source_health") if isinstance(existing.get("source_health"), dict) else {}
+    previous_identity = _source_identity(previous)
+    current_identity = _source_identity(health)
+    if previous_identity[0] in ("", "unknown") or previous_identity == current_identity:
+        return []
+    return [
+        _source_health_event(
+            "provider_switch",
+            health,
+            observed_at,
+            message=f"Source changed from {previous_identity[0]} to {current_identity[0]}",
+            previous_provider=previous_identity[0],
+            previous_query=previous_identity[1],
+            previous_url=previous_identity[2],
+        )
+    ]
+
+
+def _source_identity(health: dict[str, Any]) -> tuple[str, str, str]:
+    return (
+        str(health.get("provider") or "unknown"),
+        str(health.get("query") or ""),
+        str(health.get("url") or ""),
+    )
+
+
+def _source_health_trends(
+    existing: dict[str, Any],
+    retention_hours: int,
+    new_events: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=retention_hours)
+    existing_events = existing.get("source_health_trends", [])
+    if not isinstance(existing_events, list):
+        existing_events = []
+
+    trends: list[dict[str, Any]] = []
+    for event in [*new_events, *existing_events]:
+        if not isinstance(event, dict) or not _event_is_recent(event, cutoff):
+            continue
+        trends.append(event)
+
+    trends.sort(key=lambda event: _observed_at(event) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    return trends
+
+
+def _event_is_recent(event: dict[str, Any], cutoff: datetime) -> bool:
+    observed_at = _observed_at(event)
+    return observed_at is not None and observed_at >= cutoff
+
+
+def _status_trend_retention_hours(status: dict[str, Any]) -> int:
+    try:
+        return int(status.get("source_health_trend_retention_hours") or DEFAULT_SOURCE_HEALTH_TREND_RETENTION_HOURS)
+    except (TypeError, ValueError):
+        return DEFAULT_SOURCE_HEALTH_TREND_RETENTION_HOURS
 
 
 def _sighting_summary(sighting: Sighting) -> dict[str, Any]:

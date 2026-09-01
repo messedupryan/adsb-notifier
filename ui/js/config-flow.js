@@ -120,6 +120,14 @@ function handleInput(event) {
     syncSelectedRuleFromForms();
     renderRuleList();
     renderJson();
+  } else if (isNotificationField(event.target)) {
+    syncFromForms();
+    if (event.target.id.endsWith("-enabled")) {
+      renderNotificationProviderSelector();
+      renderNotificationProviderPanels();
+    }
+    renderNotificationPreview();
+    renderJson();
   }
   setDirty(true);
   clearMessage();

@@ -11,6 +11,10 @@ HELM_ADOPT ?= false
 HELM_ARGS ?=
 NEXT_RC_VERSION := $(shell python3 -m adsb_notifier.release next-rc "$(PROJECT_VERSION)")
 RC_VERSION ?= $(NEXT_RC_VERSION)
+VERSION ?= $(PROJECT_VERSION)
+PREVIOUS_VERSION ?= $(shell git tag --sort=-version:refname | grep -E '^v0\.[0-9]+\.[0-9]+$$' | grep -v "^v$(VERSION)$$" | head -1 | sed 's/^v//')
+ROADMAP ?=
+RELEASE_NOTES_DIR ?= docs/releases
 
 LOCAL_CONFIG ?= config.dev.json
 API_HOST ?= 127.0.0.1
@@ -29,7 +33,7 @@ UI_IMAGE := $(REGISTRY)/adsb-notifier-ui:$(IMAGE_TAG)
 
 VERSION_FILES := VERSION pyproject.toml charts/adsb-notifier/Chart.yaml charts/adsb-notifier/values.example.yaml ui/index.html ui/js/bootstrap.js ui/js/config-flow.js ui/js/dashboard.js ui/js/forms.js ui/js/map-utils.js ui/js/modal.js ui/js/rule-actions.js ui/js/rule-model.js ui/js/state.js ui/js/theme.js ui/js/ui-utils.js ui/js/validation.js adsb_notifier/version.py docs/DEVELOPMENT.md docs/VERSIONING.md README.md Dockerfile Dockerfile.api Dockerfile.ui Makefile.example tests/test_versioning.py
 
-.PHONY: help version check-clean bump-version test local local-api local-ui worker-once build build-worker build-api build-ui push build-push release release-rc k8s-secret deploy-k8s deploy-helm restart rollout status config-export config-backups config-export-backups config-restore
+.PHONY: help version check-clean bump-version release-notes test local local-api local-ui kill-local worker-once build build-worker build-api build-ui push build-push release release-rc k8s-secret deploy-k8s deploy-helm restart rollout status config-export config-backups config-export-backups config-restore
 
 help:
 	@printf '%s\n' \
@@ -38,6 +42,7 @@ help:
 		'  make local         Run API and UI locally until Ctrl+C' \
 		'  make local-api     Run only the local config API' \
 		'  make local-ui      Run only the local UI server' \
+		'  make kill-local	  Kill orphaned local UI/API processes' \
 		'  make worker-once   Run one worker poll locally' \
 		'  make build         Build worker, API, and UI container images' \
 		'  make push          Push worker, API, and UI container images' \
@@ -55,12 +60,14 @@ help:
 		'  make config-export-backups Export PVC config backups to CONFIG_EXPORT_DIR/backups' \
 		'  make config-restore RESTORE_FILE=path.json  Restore a local config into Kubernetes' \
 		'  make version       Show project/component version and image tags' \
-		'  make bump-version NEW_VERSION=0.2.0  Bump project/component version files' \
+		'  make bump-version NEW_VERSION=0.3.0  Bump project/component version files' \
+		'  make release-notes VERSION=0.3.0  Draft GitHub release notes' \
 		'' \
 		'Common overrides:' \
 		'  REGISTRY=registry.example.test IMAGE_TAG=$(PROJECT_VERSION) NAMESPACE=adsb' \
 		'  LOCAL_CONFIG=config.dev.json API_PORT=8765 UI_PORT=8766' \
 		'  RC_VERSION=$(NEXT_RC_VERSION)' \
+		'  PREVIOUS_VERSION=$(PREVIOUS_VERSION) ROADMAP="$(ROADMAP)" RELEASE_NOTES_DIR=$(RELEASE_NOTES_DIR)' \
 		'  HELM_CHART=charts/adsb-notifier HELM_VALUES=charts/adsb-notifier/values.example.yaml' \
 		'  HELM_ADOPT=true HELM_ARGS="--set image.tag=$(PROJECT_VERSION)"'
 
@@ -81,7 +88,7 @@ check-clean:
 	}
 
 bump-version:
-	@test -n "$(NEW_VERSION)" || { echo "Usage: make bump-version NEW_VERSION=0.2.0"; exit 1; }
+	@test -n "$(NEW_VERSION)" || { echo "Usage: make bump-version NEW_VERSION=0.3.0"; exit 1; }
 	@echo "$(NEW_VERSION)" | grep -Eq '^0\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$$' || { echo "NEW_VERSION must match beta semver pattern 0.x.y or 0.x.y-rc.n"; exit 1; }
 	@old_version="$(PROJECT_VERSION)"; \
 	if [ "$$old_version" = "$(NEW_VERSION)" ]; then \
@@ -91,6 +98,13 @@ bump-version:
 	OLD_VERSION="$$old_version" NEW_VERSION="$(NEW_VERSION)" \
 		perl -0pi -e 's/(?<![\d.])\Q$$ENV{OLD_VERSION}\E(?![\d.])/$$ENV{NEW_VERSION}/g' $(VERSION_FILES); \
 	echo "Bumped version $$old_version -> $(NEW_VERSION)"
+
+release-notes:
+	@echo "$(VERSION)" | grep -Eq '^0\.[0-9]+\.0$$' || { echo "VERSION must be a stable minor version like 0.x.0"; exit 1; }
+	@test -n "$(PREVIOUS_VERSION)" || { echo "PREVIOUS_VERSION is required when no previous stable tag can be inferred."; exit 1; }
+	@mkdir -p "$(RELEASE_NOTES_DIR)"
+	@python3 -m adsb_notifier.release notes "$(VERSION)" "$(PREVIOUS_VERSION)" $(if $(ROADMAP),--roadmap "$(ROADMAP)") > "$(RELEASE_NOTES_DIR)/v$(VERSION).md"; \
+	echo "Drafted $(RELEASE_NOTES_DIR)/v$(VERSION).md from v$(PREVIOUS_VERSION)..HEAD"
 
 test:
 	pipenv run pytest -q
@@ -111,6 +125,19 @@ local-api:
 
 local-ui:
 	cd ui && UI_HOST=127.0.0.1 UI_PORT="$(UI_PORT)" pipenv run python dev_server.py
+
+kill-local:
+	@pids="$$( \
+		lsof -ti tcp:$(API_PORT) -sTCP:LISTEN 2>/dev/null; \
+		lsof -ti tcp:$(UI_PORT) -sTCP:LISTEN 2>/dev/null; \
+	)"; \
+	if [ -z "$$pids" ]; then \
+		echo "No local API/UI listeners found on ports $(API_PORT) or $(UI_PORT)."; \
+		exit 0; \
+	fi; \
+	echo "Killing local API/UI processes on ports $(API_PORT), $(UI_PORT):"; \
+	echo "$$pids" | sort -u; \
+	echo "$$pids" | sort -u | xargs kill
 
 worker-once:
 	@if [ ! -f "$(LOCAL_CONFIG)" ]; then echo "Missing $(LOCAL_CONFIG). Set LOCAL_CONFIG=..."; exit 1; fi

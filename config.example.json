@@ -4,13 +4,20 @@
     "query": "point",
     "radius_miles": 40
   },
+  "backup_adsb_source": {
+    "provider": "local_receiver",
+    "query": "url",
+    "value": "http://readsb.default.svc.cluster.local/tar1090/data/aircraft.json"
+  },
   "home": {
     "lat": 40.7608,
     "lon": -111.8910
   },
   "poll_seconds": 30,
+  "primary_retry_minutes": 5,
   "stale_aircraft_seconds": 90,
   "recent_matches_window_hours": 24,
+  "source_health_trend_retention_hours": 168,
   "source_error_alerts": {
     "enabled": true,
     "failure_threshold": 3,
@@ -60,7 +67,8 @@
     "tail_numbers": [],
     "hex_ids": [],
     "callsigns": [],
-    "aircraft_types": []
+    "aircraft_types": [],
+    "categories": []
   },
   "rules": [
     {
@@ -81,7 +89,8 @@
         "tail_numbers": [],
         "hex_ids": [],
         "callsigns": [],
-        "aircraft_types": []
+        "aircraft_types": [],
+        "categories": []
       }
     },
     {

@@ -11,34 +11,40 @@ from adsb_notifier.constants import (
     DEFAULT_CIRCLING_HEADING_CHANGE_DEG,
     DEFAULT_CIRCLING_WINDOW_MINUTES,
     DEFAULT_POLL_SECONDS,
+    DEFAULT_PRIMARY_RETRY_MINUTES,
     DEFAULT_QUIET_HOURS_END,
     DEFAULT_QUIET_HOURS_START,
     DEFAULT_QUIET_HOURS_TIME_ZONE,
     DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
     DEFAULT_RULE_COOLDOWN_MINUTES,
+    DEFAULT_SOURCE_HEALTH_TREND_RETENTION_HOURS,
     DEFAULT_SOURCE_ERROR_ALERT_COOLDOWN_MINUTES,
     DEFAULT_SOURCE_ERROR_ALERT_FAILURE_THRESHOLD,
     DEFAULT_STALE_AIRCRAFT_SECONDS,
     MAX_RECENT_MATCHES_WINDOW_HOURS,
+    MAX_SOURCE_HEALTH_TREND_RETENTION_HOURS,
 )
 from adsb_notifier.squawk import require_squawk_code
 
 NOTIFICATION_PROVIDERS = {"email", "pushover", "twilio"}
 PHONE_NOTIFICATION_PROVIDERS = {"pushover", "twilio"}
-ADSB_SOURCE_PROVIDERS = {"direct", "airplanes_live", "adsb_lol"}
-ADSB_SOURCE_QUERIES = {"point", "mil", "reg", "type", "hex"}
+ADSB_SOURCE_PROVIDERS = {"direct", "airplanes_live", "adsb_lol", "local_receiver"}
+ADSB_SOURCE_QUERIES = {"point", "mil", "reg", "type", "hex", "url", "file"}
 RULE_EVENTS = {"aircraft_type", "circling", "military", "squawk", "tail"}
 CONFIG_TOP_LEVEL_KEYS = {
     "adsb_source",
     "adsb_url",
+    "backup_adsb_source",
     "config_revision",
     "exclusions",
     "home",
     "notifications",
     "poll_seconds",
+    "primary_retry_minutes",
     "recent_matches_window_hours",
     "rules",
     "source_error_alerts",
+    "source_health_trend_retention_hours",
     "stale_aircraft_seconds",
 }
 
@@ -87,6 +93,7 @@ class Exclusions:
     hex_ids: set[str] = field(default_factory=set)
     callsigns: set[str] = field(default_factory=set)
     aircraft_types: set[str] = field(default_factory=set)
+    categories: set[str] = field(default_factory=set)
 
 
 @dataclass(frozen=True)
@@ -123,6 +130,9 @@ class Settings:
     rules: list[Rule]
     exclusions: Exclusions = field(default_factory=Exclusions)
     recent_matches_window_hours: int = DEFAULT_RECENT_MATCHES_WINDOW_HOURS
+    source_health_trend_retention_hours: int = DEFAULT_SOURCE_HEALTH_TREND_RETENTION_HOURS
+    backup_adsb_source: AdsbSource | None = None
+    primary_retry_minutes: int = DEFAULT_PRIMARY_RETRY_MINUTES
     source_error_alerts: SourceErrorAlerts = field(default_factory=SourceErrorAlerts)
 
 
@@ -152,11 +162,14 @@ def parse_settings(data: dict[str, Any]) -> Settings:
 
     return Settings(
         adsb_url=_env_or_value(data.get("adsb_url", "")),
-        adsb_source=_parse_adsb_source(data.get("adsb_source")),
+        adsb_source=_parse_adsb_source(data.get("adsb_source"), field_name="adsb_source"),
         home=Home(lat=float(home_data["lat"]), lon=float(home_data["lon"])),
         poll_seconds=int(data.get("poll_seconds", DEFAULT_POLL_SECONDS)),
         stale_aircraft_seconds=int(data.get("stale_aircraft_seconds", DEFAULT_STALE_AIRCRAFT_SECONDS)),
         recent_matches_window_hours=_recent_matches_window_hours(data),
+        source_health_trend_retention_hours=_source_health_trend_retention_hours(data),
+        backup_adsb_source=_parse_adsb_source(data.get("backup_adsb_source"), field_name="backup_adsb_source"),
+        primary_retry_minutes=_primary_retry_minutes(data),
         source_error_alerts=_parse_source_error_alerts(data.get("source_error_alerts")),
         notifications=Notifications(
             email=notification_data.get("email"),
@@ -179,13 +192,16 @@ def validate_settings_data(data: dict[str, Any]) -> None:
     _validate_required_section(data, "home", dict)
     _validate_required_section(data, "rules", list)
     _validate_optional_section(data, "adsb_source", dict)
+    _validate_optional_section(data, "backup_adsb_source", dict)
     _validate_optional_section(data, "exclusions", dict)
     _validate_optional_section(data, "notifications", dict)
     _validate_optional_section(data, "source_error_alerts", dict)
     _validate_home_shape(data["home"])
     _validate_optional_numeric_field(data, "poll_seconds")
+    _validate_optional_numeric_field(data, "primary_retry_minutes")
     _validate_optional_numeric_field(data, "stale_aircraft_seconds")
     _validate_optional_numeric_field(data, "recent_matches_window_hours")
+    _validate_optional_numeric_field(data, "source_health_trend_retention_hours")
     _validate_rules_shape(data["rules"])
     _validate_exclusions_shape(data.get("exclusions"), "config.exclusions")
     _validate_notifications_shape(data.get("notifications", {}))
@@ -265,10 +281,10 @@ def _validate_exclusions_shape(data: Any, label: str) -> None:
         return
     if not isinstance(data, dict):
         raise ValueError(f"{label} must be a JSON object")
-    unknown_keys = sorted(set(data) - {"tail_numbers", "hex_ids", "callsigns", "aircraft_types"})
+    unknown_keys = sorted(set(data) - {"tail_numbers", "hex_ids", "callsigns", "aircraft_types", "categories"})
     if unknown_keys:
         raise ValueError(f"{label} contains unsupported field: {', '.join(unknown_keys)}")
-    for key in ("tail_numbers", "hex_ids", "callsigns", "aircraft_types"):
+    for key in ("tail_numbers", "hex_ids", "callsigns", "aircraft_types", "categories"):
         if key in data and not isinstance(data[key], list):
             raise ValueError(f"{label}.{key} must be an array")
 
@@ -343,6 +359,30 @@ def _recent_matches_window_hours(data: dict[str, Any]) -> int:
     return hours
 
 
+def _source_health_trend_retention_hours(data: dict[str, Any]) -> int:
+    value = data.get("source_health_trend_retention_hours", DEFAULT_SOURCE_HEALTH_TREND_RETENTION_HOURS)
+    try:
+        hours = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("source_health_trend_retention_hours must be numeric") from exc
+    if hours < 1:
+        raise ValueError("source_health_trend_retention_hours must be at least 1")
+    if hours > MAX_SOURCE_HEALTH_TREND_RETENTION_HOURS:
+        raise ValueError(f"source_health_trend_retention_hours cannot exceed {MAX_SOURCE_HEALTH_TREND_RETENTION_HOURS}")
+    return hours
+
+
+def _primary_retry_minutes(data: dict[str, Any]) -> int:
+    value = data.get("primary_retry_minutes", DEFAULT_PRIMARY_RETRY_MINUTES)
+    try:
+        minutes = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("primary_retry_minutes must be numeric") from exc
+    if minutes < 1:
+        raise ValueError("primary_retry_minutes must be at least 1")
+    return minutes
+
+
 def _parse_source_error_alerts(data: dict[str, Any] | None) -> SourceErrorAlerts:
     if not isinstance(data, dict):
         return SourceErrorAlerts()
@@ -374,19 +414,27 @@ def _require_provider_fields(config: dict[str, Any], provider: str, required_fie
         raise ValueError(f"{provider} notifications require {', '.join(missing)} when enabled")
 
 
-def _parse_adsb_source(data: dict[str, Any] | None) -> AdsbSource | None:
+def _parse_adsb_source(data: dict[str, Any] | None, *, field_name: str) -> AdsbSource | None:
     if not data:
         return None
     provider = str(data.get("provider", "")).strip().lower()
     if not provider:
-        raise ValueError("adsb_source requires provider")
+        raise ValueError(f"{field_name} requires provider")
     if provider not in ADSB_SOURCE_PROVIDERS:
-        raise ValueError(f"unsupported adsb_source provider: {provider}")
+        raise ValueError(f"unsupported {field_name} provider: {provider}")
+    if field_name == "backup_adsb_source" and provider == "direct":
+        raise ValueError("backup_adsb_source provider must not be direct")
     query = str(data.get("query", "point")).strip().lower()
+    if provider == "local_receiver" and query == "point":
+        query = "url"
     if query not in ADSB_SOURCE_QUERIES:
-        raise ValueError(f"unsupported adsb_source query: {query}")
-    if query in {"reg", "type", "hex"} and not str(data.get("value", "")).strip():
-        raise ValueError(f"adsb_source query {query} requires value")
+        raise ValueError(f"unsupported {field_name} query: {query}")
+    if provider == "local_receiver" and query not in {"url", "file"}:
+        raise ValueError(f"{field_name} local_receiver query must be url or file")
+    if provider != "local_receiver" and query in {"url", "file"}:
+        raise ValueError(f"{field_name} query {query} requires local_receiver provider")
+    if query in {"reg", "type", "hex", "url", "file"} and not str(data.get("value", "")).strip():
+        raise ValueError(f"{field_name} query {query} requires value")
     return AdsbSource(
         provider=provider,
         query=query,
@@ -471,6 +519,7 @@ def _parse_exclusions(data: dict[str, Any] | None) -> Exclusions:
         hex_ids={_normalize_hex_id(value) for value in data.get("hex_ids", []) if str(value).strip()},
         callsigns=_uppercase_values(data.get("callsigns", [])),
         aircraft_types=_uppercase_values(data.get("aircraft_types", [])),
+        categories=_uppercase_values(data.get("categories", [])),
     )
 
 

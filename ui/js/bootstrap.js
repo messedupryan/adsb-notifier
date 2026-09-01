@@ -1,6 +1,8 @@
 versionLabel.textContent = `UI ${uiVersion}`;
 fields.adsbSourceRadius.max = String(MAX_ADSB_POINT_RADIUS_MILES);
+fields.backupSourceRadius.max = String(MAX_ADSB_POINT_RADIUS_MILES);
 fields.recentMatchesWindowHours.max = String(MAX_RECENT_MATCHES_WINDOW_HOURS);
+fields.sourceHealthTrendRetentionHours.max = String(MAX_SOURCE_HEALTH_TREND_RETENTION_HOURS);
 initThemeControls();
 
 document.querySelectorAll(".tab").forEach((tab) => {
@@ -19,13 +21,30 @@ bulkDisableRulesButton.addEventListener("click", () => bulkSetSelectedRulesEnabl
 testEmailButton.addEventListener("click", () => testNotification("email"));
 testPushoverButton.addEventListener("click", () => testNotification("pushover"));
 testTwilioButton.addEventListener("click", () => testNotification("twilio"));
+notificationProviderSelector.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-notification-provider]");
+  if (!button) return;
+  selectNotificationProvider(button.dataset.notificationProvider);
+});
 refreshStatusButton.addEventListener("click", () => loadWorkerStatus());
+sourceHealthTrendsOpenButton.addEventListener("click", openSourceHealthTrendModal);
+sourceHealthTrendWindow.addEventListener("change", updateSourceHealthTrendWindow);
+sourceHealthTrendEventsToggle.addEventListener("click", toggleSourceHealthTrendEvents);
+toggleRecentExportButton.addEventListener("click", toggleRecentMatchExportMode);
+selectVisibleMatchesButton.addEventListener("click", selectVisibleRecentMatchesForExport);
+clearSelectedMatchesButton.addEventListener("click", clearRecentMatchExportSelection);
 recenterMapButton.addEventListener("click", () => recenterDashboardMap());
 fitMapButton.addEventListener("click", () => fitDashboardMap());
 selectedMapButton.addEventListener("click", () => zoomSelectedMatch());
 [dashboardEventFilter, dashboardRuleFilter, dashboardProviderFilter, dashboardStatusFilter, dashboardSearch].forEach((control) => {
   control.addEventListener("input", applyDashboardFilters);
   control.addEventListener("change", applyDashboardFilters);
+});
+[fields.adsbSourceProvider, fields.adsbSourceQuery].forEach((control) => {
+  control.addEventListener("change", updateAdsbSourceFieldVisibility);
+});
+[fields.backupSourceEnabled, fields.backupSourceProvider, fields.backupSourceQuery].forEach((control) => {
+  control.addEventListener("change", updateBackupSourceFieldVisibility);
 });
 fields.ruleNotificationProviders.addEventListener("change", handleInput);
 [
@@ -93,16 +112,21 @@ window.addEventListener("beforeunload", (event) => {
 confirmCancelButton.addEventListener("click", () => closeConfirm(false));
 confirmAcceptButton.addEventListener("click", () => closeConfirm(true));
 matchDetailCloseButton.addEventListener("click", closeMatchDetail);
+sourceHealthTrendCloseButton.addEventListener("click", closeSourceHealthTrendModal);
 confirmModal.addEventListener("click", (event) => {
   if (event.target === confirmModal) closeConfirm(false);
 });
 matchDetailModal.addEventListener("click", (event) => {
   if (event.target === matchDetailModal) closeMatchDetail();
 });
+sourceHealthTrendModal.addEventListener("click", (event) => {
+  if (event.target === sourceHealthTrendModal) closeSourceHealthTrendModal();
+});
 window.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (!confirmModal.classList.contains("hidden")) closeConfirm(false);
   if (!matchDetailModal.classList.contains("hidden")) closeMatchDetail();
+  if (!sourceHealthTrendModal.classList.contains("hidden")) closeSourceHealthTrendModal();
 });
 window.addEventListener("error", (event) => {
   showErrors([`UI error: ${event.message}`]);

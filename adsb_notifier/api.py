@@ -1,4 +1,6 @@
 import argparse
+import csv
+import io
 import json
 import logging
 import os
@@ -9,7 +11,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from adsb_notifier.adsb import fetch_aircraft_for_settings
 from adsb_notifier.config import NOTIFICATION_PROVIDERS, parse_settings
@@ -17,12 +19,14 @@ from adsb_notifier.constants import (
     DEFAULT_API_PORT,
     DEFAULT_CONFIG_BACKUP_RETENTION,
     DEFAULT_POLL_SECONDS,
+    DEFAULT_PRIMARY_RETRY_MINUTES,
     DEFAULT_QUIET_HOURS_END,
     DEFAULT_QUIET_HOURS_START,
     DEFAULT_QUIET_HOURS_TIME_ZONE,
     DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
     DEFAULT_RULE_COOLDOWN_MINUTES,
     DEFAULT_RULE_RADIUS_MILES,
+    DEFAULT_SOURCE_HEALTH_TREND_RETENTION_HOURS,
     DEFAULT_STALE_AIRCRAFT_SECONDS,
 )
 from adsb_notifier.links import airplanes_live_aircraft_url
@@ -56,6 +60,31 @@ DEFAULT_NOTIFICATION_CONFIG_FIELDS = {
         "url_title_template": "Airplanes.live",
     },
 }
+RECENT_MATCH_EXPORT_COLUMNS = [
+    "observed_at",
+    "rule_name",
+    "event_type",
+    "aircraft_label",
+    "registration",
+    "flight",
+    "hex",
+    "aircraft_type",
+    "category",
+    "distance_miles",
+    "lat",
+    "lon",
+    "altitude_ft",
+    "ground_speed_kt",
+    "track_deg",
+    "vertical_rate_fpm",
+    "squawk",
+    "notification_status",
+    "notification_providers",
+    "suppressed_notification_providers",
+    "source_type",
+    "airplanes_live_url",
+    "aircraft_payload",
+]
 
 
 class ConfigApiHandler(BaseHTTPRequestHandler):
@@ -73,6 +102,12 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
             return
         if route == ["status"]:
             self._send_json(read_status(self.status_path))
+            return
+        if route == ["recent-matches", "export.json"]:
+            self._export_recent_matches("json")
+            return
+        if route == ["recent-matches", "export.csv"]:
+            self._export_recent_matches("csv")
             return
         if route == ["rules"]:
             config = _read_config(self.config_path)
@@ -284,6 +319,26 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
 
         self._send_json({"rule": rule, "config_revision": config["config_revision"]})
 
+    def _export_recent_matches(self, export_format: str) -> None:
+        status = read_status(self.status_path)
+        match_keys = _query_match_keys(self.path)
+        matches = _recent_matches_for_export(status, match_keys=match_keys)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        filename = _recent_matches_export_filename(matches, timestamp, export_format)
+        if export_format == "json":
+            payload = {
+                "exported_at": datetime.now(timezone.utc).isoformat(),
+                "count": len(matches),
+                "recent_matches": matches,
+            }
+            self._send_download(
+                json.dumps(payload, indent=2, sort_keys=True).encode("utf-8"),
+                "application/json",
+                filename,
+            )
+            return
+        self._send_download(_recent_matches_csv(matches), "text/csv; charset=utf-8", filename)
+
     def do_OPTIONS(self) -> None:
         self.send_response(HTTPStatus.NO_CONTENT)
         self._send_common_headers()
@@ -305,6 +360,15 @@ class ConfigApiHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self._send_common_headers()
         self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_download(self, body: bytes, content_type: str, filename: str, status: HTTPStatus = HTTPStatus.OK) -> None:
+        self.send_response(status)
+        self._send_common_headers()
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -416,6 +480,71 @@ def _prune_config_backups(path: Path, backup_retention: int) -> None:
 
 def _route(path: str) -> list[str]:
     return [part for part in urlparse(path).path.split("/") if part]
+
+
+def _query_match_keys(path: str) -> list[str]:
+    query = parse_qs(urlparse(path).query)
+    keys = query.get("match_key", [])
+    for value in query.get("match_keys", []):
+        keys.extend(part for part in value.split(",") if part)
+    return keys
+
+
+def _recent_matches_for_export(status: dict[str, Any], match_keys: list[str] | None = None) -> list[dict[str, Any]]:
+    matches = status.get("recent_matches", [])
+    if not isinstance(matches, list):
+        return []
+    normalized = [match for match in matches if isinstance(match, dict)]
+    if not match_keys:
+        return normalized
+    selected_keys = set(match_keys)
+    return [match for match in normalized if _recent_match_key(match) in selected_keys]
+
+
+def _recent_match_key(match: dict[str, Any]) -> str:
+    return "|".join(
+        str(value or "")
+        for value in [
+            match.get("observed_at"),
+            match.get("rule_name"),
+            match.get("hex"),
+            match.get("aircraft_label"),
+        ]
+    )
+
+
+def _recent_matches_export_filename(matches: list[dict[str, Any]], timestamp: str, export_format: str) -> str:
+    prefix = "adsb-notifier-recent-matches"
+    if len(matches) == 1:
+        match = matches[0]
+        aircraft = _filename_token(match.get("aircraft_label") or match.get("registration") or match.get("hex") or "aircraft")
+        prefix = f"adsb-notifier-recent-match-{aircraft}"
+    return f"{prefix}-{timestamp}.{export_format}"
+
+
+def _filename_token(value: Any) -> str:
+    token = "".join(character.lower() if character.isalnum() else "-" for character in str(value).strip())
+    token = "-".join(part for part in token.split("-") if part)
+    return token or "aircraft"
+
+
+def _recent_matches_csv(matches: list[dict[str, Any]]) -> bytes:
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=RECENT_MATCH_EXPORT_COLUMNS, extrasaction="ignore")
+    writer.writeheader()
+    for match in matches:
+        writer.writerow({column: _csv_value(match.get(column)) for column in RECENT_MATCH_EXPORT_COLUMNS})
+    return output.getvalue().encode("utf-8")
+
+
+def _csv_value(value: Any) -> Any:
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value)
+    if isinstance(value, dict):
+        return json.dumps(value, sort_keys=True)
+    if value is None:
+        return ""
+    return value
 
 
 def _ensure_rule_ids(config: dict[str, Any]) -> dict[str, Any]:
@@ -538,6 +667,7 @@ def _normalize_exclusions(exclusions: Any) -> dict[str, list[str]]:
         "hex_ids": _normalized_hex_list(exclusions.get("hex_ids")),
         "callsigns": _normalized_string_list(exclusions.get("callsigns")),
         "aircraft_types": _normalized_string_list(exclusions.get("aircraft_types")),
+        "categories": _normalized_string_list(exclusions.get("categories")),
     }
 
 
@@ -710,8 +840,10 @@ def _default_config() -> dict[str, Any]:
         "adsb_url": "http://readsb.default.svc.cluster.local/tar1090/data/aircraft.json",
         "home": {"lat": 40.7608, "lon": -111.8910},
         "poll_seconds": DEFAULT_POLL_SECONDS,
+        "primary_retry_minutes": DEFAULT_PRIMARY_RETRY_MINUTES,
         "stale_aircraft_seconds": DEFAULT_STALE_AIRCRAFT_SECONDS,
         "recent_matches_window_hours": DEFAULT_RECENT_MATCHES_WINDOW_HOURS,
+        "source_health_trend_retention_hours": DEFAULT_SOURCE_HEALTH_TREND_RETENTION_HOURS,
         "exclusions": _normalize_exclusions(None),
         "notifications": {},
         "rules": [

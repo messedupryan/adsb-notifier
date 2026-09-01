@@ -132,9 +132,12 @@ Configuration is JSON. The checked-in [config.example.json](config.example.json)
 
 - `home`: latitude and longitude used for distance calculations and map centering
 - `poll_seconds`: worker polling interval
+- `primary_retry_minutes`: how long to stay on the backup ADS-B source before retrying the primary
 - `stale_aircraft_seconds`: ignore aircraft that have not been seen recently
 - `recent_matches_window_hours`: how long recent matches remain in status history
-- `adsb_url` or `adsb_source`: ADS-B source configuration. The current example defaults to ADSB.lol; Airplanes.live and direct `aircraft.json` endpoints are also supported.
+- `source_health_trend_retention_hours`: how long source health trend events remain in PVC-backed status history
+- `adsb_url` or `adsb_source`: primary ADS-B source configuration. The current example defaults to ADSB.lol; Airplanes.live, local receiver URL/file sources, and direct `aircraft.json` endpoints are also supported.
+- `backup_adsb_source`: optional backup source used when the primary is unavailable, rate limited, or returns stale data
 - `notifications`: provider configuration and templates
 - `rules`: alert rules
 
@@ -166,7 +169,8 @@ Example rule:
     "tail_numbers": ["N99999"],
     "hex_ids": [],
     "callsigns": [],
-    "aircraft_types": []
+    "aircraft_types": [],
+    "categories": ["A7", "UNKNOWN"]
   },
   "quiet_hours": {
     "enabled": true,
@@ -180,7 +184,7 @@ Example rule:
 
 Quiet hours are configured per rule. When enabled, matching aircraft still appear in recent matches, but phone-style notifications such as Pushover and Twilio can be suppressed during the configured time window while email remains available through normal rule notification settings. Quiet-hour windows use the configured IANA timezone, such as `America/Denver`, so Kubernetes containers can run in UTC without changing the alert behavior.
 
-Exclusions can be configured globally or per rule. They support tail numbers, ICAO hex IDs, callsigns, and aircraft types. Excluded aircraft do not create recent matches or notifications.
+Exclusions can be configured globally or per rule. They support tail numbers, ICAO hex IDs, callsigns, aircraft types, and ADS-B category values. Use `UNKNOWN` to exclude aircraft with missing category data. Excluded aircraft do not create recent matches or notifications.
 
 <a id="dashboard"></a>
 
@@ -198,7 +202,7 @@ The map is centered around the configured home location and can show:
 
 Repeated dashboard alerts are grouped by aircraft and rule so noisy repeat matches are easier to scan while the underlying recent match history still preserves each individual event.
 
-Recent matches can be filtered by event, rule, provider, notification status, and aircraft text. Each row has a detail view for troubleshooting the normalized aircraft payload behind the alert.
+Recent matches can be filtered by event, rule, provider, notification status, and aircraft text. Each row has a detail view for troubleshooting the normalized aircraft payload behind the alert. The detail view can export the selected recent match as API-backed JSON or CSV.
 
 <a id="versioning"></a>
 
@@ -206,7 +210,9 @@ Recent matches can be filtered by event, rule, provider, notification status, an
 
 The project is currently in beta and uses SemVer-style `0.x.y` versions, with explicit release-candidate builds like `0.x.0-rc.n` before stable cuts like `0.x.0`. The worker, API, UI, Helm chart, Python package, and container images share the project version during beta.
 
-Use `make release-rc` from a clean worktree to prepare, build, push, deploy, and roll out the next release candidate. The target derives the next RC from the current project version, either from the latest numeric checkpoint to the next minor `rc.1`, or from one RC to the next. See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, RC workflow, and promotion checklist.
+Use `make release-rc` from a clean worktree to prepare, build, push, deploy, and roll out the next release candidate. The target derives the next RC from the current project version, either from the latest numeric checkpoint to the next minor `rc.1`, or from one RC to the next.
+
+Stable minor releases should also get GitHub-facing release notes. Draft them with `make release-notes VERSION=0.3.0 PREVIOUS_VERSION=0.2.0 ROADMAP="ADSB-Notifier Roadmap v0.3.0"` and polish the resulting file under `docs/releases/` before publishing the GitHub Release. See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, RC workflow, release notes, and promotion checklist.
 
 <a id="security-model"></a>
 

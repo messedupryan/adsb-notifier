@@ -91,6 +91,15 @@ def test_makefile_release_candidate_target_is_guarded_and_versioned():
     assert 'release PROJECT_VERSION="$(RC_VERSION)" IMAGE_TAG="$(RC_VERSION)"' in makefile
 
 
+def test_makefile_release_notes_target_drafts_github_release_notes():
+    makefile = (ROOT / "Makefile.example").read_text(encoding="utf-8")
+
+    assert "release-notes:" in makefile
+    assert "VERSION must be a stable minor version like 0.x.0" in makefile
+    assert 'python3 -m adsb_notifier.release notes "$(VERSION)" "$(PREVIOUS_VERSION)"' in makefile
+    assert '$(RELEASE_NOTES_DIR)/v$(VERSION).md' in makefile
+
+
 def test_local_deploy_files_are_ignored():
     gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
 

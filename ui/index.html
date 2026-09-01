@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="Cache-Control" content="no-store" />
     <title>ADS-B Notifier Config</title>
-    <link id="favicon" rel="icon" type="image/png" href="/images/icon_teal.png?v=0.2.0" />
-    <link id="apple-touch-icon" rel="apple-touch-icon" href="/images/icon_teal.png?v=0.2.0" />
+    <link id="favicon" rel="icon" type="image/png" href="/images/icon_teal.png?v=0.3.0" />
+    <link id="apple-touch-icon" rel="apple-touch-icon" href="/images/icon_teal.png?v=0.3.0" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-    <link rel="stylesheet" href="/styles.css?v=0.2.0" />
+    <link rel="stylesheet" href="/styles.css?v=0.3.0" />
   </head>
   <body>
     <main class="app-shell">
       <section class="toolbar">
         <div class="brand">
-          <h1><img id="app-logo" class="app-logo" src="/images/logo_teal.png?v=0.2.0" alt="ADS-B Notifier" /></h1>
+          <h1><img id="app-logo" class="app-logo" src="/images/logo_teal.png?v=0.3.0" alt="ADS-B Notifier" /></h1>
           <p id="status">Loading configuration...</p>
         </div>
         <div class="actions">
@@ -45,7 +45,13 @@
               <div class="worker-primary"><dt>Aircraft</dt><dd id="worker-aircraft-count">0</dd></div>
               <div class="worker-primary"><dt>Notifications</dt><dd id="worker-notification-count">0</dd></div>
               <div class="worker-source source-url"><dt>ADS-B source</dt><dd id="worker-adsb-source">Unknown</dd></div>
-              <div class="worker-source"><dt>Source health</dt><dd id="worker-source-health">Unknown</dd></div>
+              <div class="worker-source">
+                <dt>Source health</dt>
+                <dd class="source-health-summary-row">
+                  <span id="worker-source-health">Unknown</span>
+                  <button id="source-health-trends-open" type="button">Trends</button>
+                </dd>
+              </div>
               <div class="worker-source"><dt>Source errors</dt><dd id="worker-source-errors">0</dd></div>
               <div class="worker-source"><dt>Retry after</dt><dd id="worker-rate-limit-retry">None</dd></div>
               <div class="worker-source"><dt>Last error</dt><dd id="worker-last-error">None</dd></div>
@@ -68,6 +74,16 @@
                   <option value="">All statuses</option>
                 </select>
                 <input id="dashboard-search" type="search" placeholder="Search" aria-label="Search recent matches" data-dashboard-control="true" />
+              </div>
+              <div class="recent-export-row">
+                <button id="toggle-recent-export" type="button">Export</button>
+                <div id="recent-export-actions" class="recent-export-actions hidden" aria-label="Recent match export actions">
+                  <span id="recent-export-selected-count">0 selected</span>
+                  <button id="select-visible-matches" type="button">Select visible</button>
+                  <button id="clear-selected-matches" type="button">Clear</button>
+                  <a id="export-selected-json" href="#" download aria-disabled="true">JSON</a>
+                  <a id="export-selected-csv" href="#" download aria-disabled="true">CSV</a>
+                </div>
               </div>
             </header>
             <div id="recent-matches" class="recent-matches"></div>
@@ -122,6 +138,7 @@
                 <select id="adsb-source-provider">
                   <option value="adsb_lol">ADSB.lol</option>
                   <option value="airplanes_live">Airplanes.live</option>
+                  <option value="local_receiver">Local receiver</option>
                   <option value="direct">Direct aircraft.json</option>
                 </select>
               </label>
@@ -133,6 +150,8 @@
                   <option value="reg">Registration</option>
                   <option value="type">Aircraft type</option>
                   <option value="hex">ICAO hex</option>
+                  <option value="url">Receiver URL</option>
+                  <option value="file">Receiver file</option>
                 </select>
               </label>
               <label>
@@ -140,7 +159,7 @@
                 <input id="adsb-source-radius" name="adsb_source.radius_miles" type="number" min="1" step="0.1" />
               </label>
               <label>
-                Lookup value
+                Lookup value, URL, or file path
                 <input id="adsb-source-value" name="adsb_source.value" type="text" />
               </label>
               <label class="wide">
@@ -151,7 +170,49 @@
                 Direct ADS-B endpoint
                 <input id="adsb-url" name="adsb_url" type="url" />
               </label>
+              <label>
+                Primary retry minutes
+                <input id="primary-retry-minutes" name="primary_retry_minutes" type="number" min="1" step="1" />
+              </label>
             </div>
+            <fieldset class="source-backup-config">
+              <legend>Backup Source</legend>
+              <div class="form-grid compact">
+                <label class="switch wide"><input id="backup-source-enabled" type="checkbox" /> Enable backup source</label>
+                <label>
+                  Provider
+                  <select id="backup-source-provider">
+                    <option value="local_receiver">Local receiver</option>
+                    <option value="adsb_lol">ADSB.lol</option>
+                    <option value="airplanes_live">Airplanes.live</option>
+                  </select>
+                </label>
+                <label>
+                  Query
+                  <select id="backup-source-query">
+                    <option value="url">Receiver URL</option>
+                    <option value="file">Receiver file</option>
+                    <option value="point">Point/radius</option>
+                    <option value="mil">Military</option>
+                    <option value="reg">Registration</option>
+                    <option value="type">Aircraft type</option>
+                    <option value="hex">ICAO hex</option>
+                  </select>
+                </label>
+                <label>
+                  Radius miles
+                  <input id="backup-source-radius" name="backup_adsb_source.radius_miles" type="number" min="1" step="0.1" />
+                </label>
+                <label>
+                  Lookup value, URL, or file path
+                  <input id="backup-source-value" name="backup_adsb_source.value" type="text" />
+                </label>
+                <label class="wide">
+                  Custom source base URL
+                  <input id="backup-source-base-url" name="backup_adsb_source.base_url" type="url" placeholder="Optional" />
+                </label>
+              </div>
+            </fieldset>
             <dl class="source-health-detail">
               <div><dt>Health</dt><dd id="source-health-status">Unknown</dd></div>
               <div><dt>Provider</dt><dd id="source-health-provider">Unknown</dd></div>
@@ -184,6 +245,10 @@
             Recent matches hours
             <input id="recent-matches-window-hours" name="recent_matches_window_hours" type="number" min="1" step="1" />
           </label>
+          <label>
+            Source health trend hours
+            <input id="source-health-trend-retention-hours" name="source_health_trend_retention_hours" type="number" min="1" step="1" />
+          </label>
           <fieldset class="settings-group wide">
             <legend>Global Exclusions</legend>
             <div class="form-grid compact">
@@ -191,6 +256,7 @@
               <label>ICAO hex IDs <input id="global-exclusion-hex-ids" type="text" /></label>
               <label>Callsigns <input id="global-exclusion-callsigns" type="text" /></label>
               <label>Aircraft types <input id="global-exclusion-aircraft-types" type="text" /></label>
+              <label>Categories <input id="global-exclusion-categories" type="text" list="category-exclusion-options" /></label>
             </div>
           </fieldset>
         </div>
@@ -201,8 +267,10 @@
       </section>
 
       <section id="notifications" class="tab-panel">
-        <div class="provider-grid">
-          <article class="provider">
+        <div id="notification-provider-selector" class="notification-provider-selector" role="tablist" aria-label="Notification providers"></div>
+        <div class="notification-layout">
+          <div class="provider-grid">
+          <article class="provider" data-provider-panel="email">
             <header>
               <h2>Email</h2>
               <div class="provider-actions">
@@ -237,7 +305,7 @@
             </div>
           </article>
 
-          <article class="provider">
+          <article class="provider" data-provider-panel="pushover">
             <header>
               <h2>Pushover</h2>
               <div class="provider-actions">
@@ -258,7 +326,7 @@
             </div>
           </article>
 
-          <article class="provider">
+          <article class="provider" data-provider-panel="twilio">
             <header>
               <h2>Twilio SMS</h2>
               <div class="provider-actions">
@@ -275,6 +343,14 @@
               <label class="wide">Message template <textarea id="twilio-body-template" rows="4"></textarea></label>
             </div>
           </article>
+          </div>
+          <aside class="notification-preview-panel">
+            <header>
+              <h2>Template Preview</h2>
+              <span id="notification-preview-source">Sample aircraft</span>
+            </header>
+            <div id="notification-preview" class="notification-preview"></div>
+          </aside>
         </div>
       </section>
 
@@ -384,18 +460,41 @@
                   <label>ICAO hex IDs <input id="rule-exclusion-hex-ids" type="text" /></label>
                   <label>Callsigns <input id="rule-exclusion-callsigns" type="text" /></label>
                   <label>Aircraft types <input id="rule-exclusion-aircraft-types" type="text" /></label>
+                  <label>Categories <input id="rule-exclusion-categories" type="text" list="category-exclusion-options" /></label>
                 </div>
               </fieldset>
             </div>
           </article>
         </div>
       </section>
+      <datalist id="category-exclusion-options">
+        <option value="A0">No category information</option>
+        <option value="A1">Light aircraft</option>
+        <option value="A2">Small aircraft</option>
+        <option value="A3">Large aircraft</option>
+        <option value="A4">High vortex large aircraft</option>
+        <option value="A5">Heavy aircraft</option>
+        <option value="A6">High performance aircraft</option>
+        <option value="A7">Rotorcraft</option>
+        <option value="B1">Glider</option>
+        <option value="B2">Lighter-than-air</option>
+        <option value="B3">Parachutist</option>
+        <option value="B4">Ultralight</option>
+        <option value="B6">UAV</option>
+        <option value="B7">Space vehicle</option>
+        <option value="C1">Emergency vehicle</option>
+        <option value="C2">Service vehicle</option>
+        <option value="C3">Point obstacle</option>
+        <option value="C4">Cluster obstacle</option>
+        <option value="C5">Line obstacle</option>
+        <option value="UNKNOWN">Unknown or missing category</option>
+      </datalist>
       <footer class="app-footer">
         <div class="footer-brand">
-          <span>ADS-B Notifier 0.2.0</span>
-          <span id="ui-version">UI 0.2.0</span>
+          <span>ADS-B Notifier 0.3.0</span>
+          <span id="ui-version">UI 0.3.0</span>
         </div>
-        <img id="footer-icon" class="footer-icon" src="/images/icon_teal.png?v=0.2.0" alt="" aria-hidden="true" />
+        <img id="footer-icon" class="footer-icon" src="/images/icon_teal.png?v=0.3.0" alt="" aria-hidden="true" />
       </footer>
     </main>
     <div id="confirm-modal" class="modal-overlay hidden" role="presentation">
@@ -413,7 +512,11 @@
         <header>
           <div>
             <h2 id="match-detail-title">Match Details</h2>
-            <a id="match-detail-link" class="match-detail-link" href="#" target="_blank" rel="noopener noreferrer">Airplanes.live</a>
+            <div class="match-detail-actions">
+              <a id="match-detail-link" class="match-detail-link" href="#" target="_blank" rel="noopener noreferrer">Airplanes.live</a>
+              <a id="match-detail-export-json" class="match-detail-link" href="#" download>JSON</a>
+              <a id="match-detail-export-csv" class="match-detail-link" href="#" download>CSV</a>
+            </div>
           </div>
           <button id="match-detail-close" type="button" aria-label="Close match details">Close</button>
         </header>
@@ -424,19 +527,43 @@
         </details>
       </section>
     </div>
+    <div id="source-health-trend-modal" class="modal-overlay hidden" role="presentation">
+      <section class="modal source-health-trend-modal" role="dialog" aria-modal="true" aria-labelledby="source-health-trend-title">
+        <header>
+          <div>
+            <h2 id="source-health-trend-title">Source Health Trends</h2>
+            <p id="source-health-trend-summary"></p>
+          </div>
+          <button id="source-health-trend-close" type="button" aria-label="Close source health trends">Close</button>
+        </header>
+        <label class="source-health-trend-window">
+          Time window
+          <select id="source-health-trend-window">
+            <option value="1">Last hour</option>
+            <option value="6">Last 6 hours</option>
+            <option value="24" selected>Last 24 hours</option>
+            <option value="168">Last 7 days</option>
+            <option value="all">All retained</option>
+          </select>
+        </label>
+        <div id="source-health-trend-chart" class="source-health-trend-chart"></div>
+        <button id="source-health-trend-events-toggle" class="source-health-trend-events-toggle" type="button">Show events</button>
+        <div id="source-health-trend-list" class="source-health-trend-list"></div>
+      </section>
+    </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-    <script src="/js/constants.js?v=0.2.0"></script>
-    <script src="/js/state.js?v=0.2.0"></script>
-    <script src="/js/theme.js?v=0.2.0"></script>
-    <script src="/js/config-flow.js?v=0.2.0"></script>
-    <script src="/js/dashboard.js?v=0.2.0"></script>
-    <script src="/js/forms.js?v=0.2.0"></script>
-    <script src="/js/rule-actions.js?v=0.2.0"></script>
-    <script src="/js/modal.js?v=0.2.0"></script>
-    <script src="/js/validation.js?v=0.2.0"></script>
-    <script src="/js/rule-model.js?v=0.2.0"></script>
-    <script src="/js/map-utils.js?v=0.2.0"></script>
-    <script src="/js/ui-utils.js?v=0.2.0"></script>
-    <script src="/js/bootstrap.js?v=0.2.0"></script>
+    <script src="/js/constants.js?v=0.3.0"></script>
+    <script src="/js/state.js?v=0.3.0"></script>
+    <script src="/js/theme.js?v=0.3.0"></script>
+    <script src="/js/config-flow.js?v=0.3.0"></script>
+    <script src="/js/dashboard.js?v=0.3.0"></script>
+    <script src="/js/forms.js?v=0.3.0"></script>
+    <script src="/js/rule-actions.js?v=0.3.0"></script>
+    <script src="/js/modal.js?v=0.3.0"></script>
+    <script src="/js/validation.js?v=0.3.0"></script>
+    <script src="/js/rule-model.js?v=0.3.0"></script>
+    <script src="/js/map-utils.js?v=0.3.0"></script>
+    <script src="/js/ui-utils.js?v=0.3.0"></script>
+    <script src="/js/bootstrap.js?v=0.3.0"></script>
   </body>
 </html>

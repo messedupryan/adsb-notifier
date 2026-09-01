@@ -5,11 +5,14 @@ let isJsonDirty = false;
 let selectedRuleId = null;
 let selectedRuleIds = new Set();
 let activeTab = "dashboard";
-const uiVersion = "0.2.0";
+let selectedNotificationProvider = null;
+let emailHtmlPreviewMode = "rendered";
+const uiVersion = "0.3.0";
 const redactedSecret = "********";
 const notificationProviderOrder = ["pushover", "email", "twilio"];
-const adsbSourceProviders = ["adsb_lol", "airplanes_live", "direct"];
-const adsbSourceQueries = ["point", "mil", "reg", "type", "hex"];
+const adsbSourceProviders = ["adsb_lol", "airplanes_live", "local_receiver", "direct"];
+const backupAdsbSourceProviders = ["local_receiver", "adsb_lol", "airplanes_live"];
+const adsbSourceQueries = ["point", "mil", "reg", "type", "hex", "url", "file"];
 const apiBase = new URLSearchParams(window.location.search).get("api") || "/api";
 const assetVersion = `v=${uiVersion}`;
 const themeStorageKey = "adsb-notifier-theme";
@@ -27,8 +30,12 @@ let latestWorkerStatus = null;
 let dashboardMap = null;
 let dashboardMapLayers = null;
 let selectedRecentMatchKey = null;
+let selectedRecentMatchExportKeys = new Set();
+let isRecentMatchExportMode = false;
 let expandedMatchGroupKeys = new Set();
 let filteredRecentMatches = [];
+let isSourceHealthTrendEventListVisible = false;
+let sourceHealthTrendWindowHours = 24;
 
 const fields = {
   adsbUrl: document.querySelector("#adsb-url"),
@@ -37,15 +44,24 @@ const fields = {
   adsbSourceRadius: document.querySelector("#adsb-source-radius"),
   adsbSourceValue: document.querySelector("#adsb-source-value"),
   adsbSourceBaseUrl: document.querySelector("#adsb-source-base-url"),
+  backupSourceEnabled: document.querySelector("#backup-source-enabled"),
+  backupSourceProvider: document.querySelector("#backup-source-provider"),
+  backupSourceQuery: document.querySelector("#backup-source-query"),
+  backupSourceRadius: document.querySelector("#backup-source-radius"),
+  backupSourceValue: document.querySelector("#backup-source-value"),
+  backupSourceBaseUrl: document.querySelector("#backup-source-base-url"),
   homeLat: document.querySelector("#home-lat"),
   homeLon: document.querySelector("#home-lon"),
   pollSeconds: document.querySelector("#poll-seconds"),
+  primaryRetryMinutes: document.querySelector("#primary-retry-minutes"),
   staleAircraftSeconds: document.querySelector("#stale-aircraft-seconds"),
   recentMatchesWindowHours: document.querySelector("#recent-matches-window-hours"),
+  sourceHealthTrendRetentionHours: document.querySelector("#source-health-trend-retention-hours"),
   globalExclusionTailNumbers: document.querySelector("#global-exclusion-tail-numbers"),
   globalExclusionHexIds: document.querySelector("#global-exclusion-hex-ids"),
   globalExclusionCallsigns: document.querySelector("#global-exclusion-callsigns"),
   globalExclusionAircraftTypes: document.querySelector("#global-exclusion-aircraft-types"),
+  globalExclusionCategories: document.querySelector("#global-exclusion-categories"),
   emailEnabled: document.querySelector("#email-enabled"),
   emailSmtpHost: document.querySelector("#email-smtp-host"),
   emailSmtpPort: document.querySelector("#email-smtp-port"),
@@ -99,6 +115,7 @@ const fields = {
   ruleExclusionHexIds: document.querySelector("#rule-exclusion-hex-ids"),
   ruleExclusionCallsigns: document.querySelector("#rule-exclusion-callsigns"),
   ruleExclusionAircraftTypes: document.querySelector("#rule-exclusion-aircraft-types"),
+  ruleExclusionCategories: document.querySelector("#rule-exclusion-categories"),
   ruleMilitary: document.querySelector("#rule-military"),
   ruleIncludeTisb: document.querySelector("#rule-include-tisb"),
   ruleHeadingChange: document.querySelector("#rule-heading-change"),
@@ -128,6 +145,9 @@ const deleteRuleButton = document.querySelector("#delete-rule");
 const testEmailButton = document.querySelector("#test-email");
 const testPushoverButton = document.querySelector("#test-pushover");
 const testTwilioButton = document.querySelector("#test-twilio");
+const notificationProviderSelector = document.querySelector("#notification-provider-selector");
+const notificationPreview = document.querySelector("#notification-preview");
+const notificationPreviewSource = document.querySelector("#notification-preview-source");
 const refreshStatusButton = document.querySelector("#refresh-status");
 const workerStatusValue = document.querySelector("#worker-status-value");
 const workerLastPoll = document.querySelector("#worker-last-poll");
@@ -147,7 +167,22 @@ const sourceHealthBackoff = document.querySelector("#source-health-backoff");
 const sourceHealthRetryAt = document.querySelector("#source-health-retry-at");
 const sourceHealthAircraftCount = document.querySelector("#source-health-aircraft-count");
 const sourceHealthLastError = document.querySelector("#source-health-last-error");
+const sourceHealthTrendsOpenButton = document.querySelector("#source-health-trends-open");
+const sourceHealthTrendModal = document.querySelector("#source-health-trend-modal");
+const sourceHealthTrendCloseButton = document.querySelector("#source-health-trend-close");
+const sourceHealthTrendSummary = document.querySelector("#source-health-trend-summary");
+const sourceHealthTrendWindow = document.querySelector("#source-health-trend-window");
+const sourceHealthTrendChart = document.querySelector("#source-health-trend-chart");
+const sourceHealthTrendEventsToggle = document.querySelector("#source-health-trend-events-toggle");
+const sourceHealthTrendList = document.querySelector("#source-health-trend-list");
 const recentMatches = document.querySelector("#recent-matches");
+const toggleRecentExportButton = document.querySelector("#toggle-recent-export");
+const recentExportActions = document.querySelector("#recent-export-actions");
+const recentExportSelectedCount = document.querySelector("#recent-export-selected-count");
+const selectVisibleMatchesButton = document.querySelector("#select-visible-matches");
+const clearSelectedMatchesButton = document.querySelector("#clear-selected-matches");
+const exportSelectedJson = document.querySelector("#export-selected-json");
+const exportSelectedCsv = document.querySelector("#export-selected-csv");
 const dashboardEventFilter = document.querySelector("#dashboard-event-filter");
 const dashboardRuleFilter = document.querySelector("#dashboard-rule-filter");
 const dashboardProviderFilter = document.querySelector("#dashboard-provider-filter");
@@ -169,6 +204,8 @@ const confirmAcceptButton = document.querySelector("#confirm-accept");
 const matchDetailModal = document.querySelector("#match-detail-modal");
 const matchDetailTitle = document.querySelector("#match-detail-title");
 const matchDetailLink = document.querySelector("#match-detail-link");
+const matchDetailExportJson = document.querySelector("#match-detail-export-json");
+const matchDetailExportCsv = document.querySelector("#match-detail-export-csv");
 const matchDetailCloseButton = document.querySelector("#match-detail-close");
 const matchDetailSummary = document.querySelector("#match-detail-summary");
 const matchDetailPayload = document.querySelector("#match-detail-payload");

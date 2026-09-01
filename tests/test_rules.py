@@ -164,6 +164,92 @@ def test_per_rule_exclusion_only_blocks_that_rule():
     assert [sighting.rule_name for sighting in sightings] == ["allowed"]
 
 
+def test_global_category_exclusion_prevents_matches_for_any_rule():
+    engine = RuleEngine(
+        settings_with_rules(
+            [
+                Rule(
+                    name="helo",
+                    event="aircraft_type",
+                    categories={"A7"},
+                    radius_miles=10,
+                )
+            ],
+            exclusions=Exclusions(categories={"A7"}),
+        )
+    )
+
+    sightings = engine.evaluate([Aircraft(hex="A12345", category="A7", lat=40.7708, lon=-111.8910)])
+
+    assert sightings == []
+
+
+def test_per_rule_category_exclusion_only_blocks_that_rule():
+    engine = RuleEngine(
+        settings_with_rules(
+            [
+                Rule(
+                    name="blocked",
+                    event="aircraft_type",
+                    categories={"A7"},
+                    radius_miles=10,
+                    exclusions=Exclusions(categories={"A7"}),
+                ),
+                Rule(
+                    name="allowed",
+                    event="aircraft_type",
+                    categories={"A7"},
+                    radius_miles=10,
+                ),
+            ]
+        )
+    )
+
+    sightings = engine.evaluate([Aircraft(hex="A12345", category="A7", lat=40.7708, lon=-111.8910)])
+
+    assert [sighting.rule_name for sighting in sightings] == ["allowed"]
+
+
+def test_category_exclusion_uses_exact_matching():
+    engine = RuleEngine(
+        settings_with_rules(
+            [
+                Rule(
+                    name="target",
+                    event="aircraft_type",
+                    categories={"A7"},
+                    radius_miles=10,
+                )
+            ],
+            exclusions=Exclusions(categories={"A"}),
+        )
+    )
+
+    sightings = engine.evaluate([Aircraft(hex="A12345", category="A7", lat=40.7708, lon=-111.8910)])
+
+    assert len(sightings) == 1
+
+
+def test_unknown_category_exclusion_blocks_missing_category():
+    engine = RuleEngine(
+        settings_with_rules(
+            [
+                Rule(
+                    name="target",
+                    event="tail",
+                    tail_numbers={"N12345"},
+                    radius_miles=10,
+                )
+            ],
+            exclusions=Exclusions(categories={"UNKNOWN"}),
+        )
+    )
+
+    sightings = engine.evaluate([Aircraft(hex="A12345", registration="N12345", lat=40.7708, lon=-111.8910)])
+
+    assert sightings == []
+
+
 def test_non_excluded_aircraft_still_matches_rule():
     engine = RuleEngine(
         settings_with_rules(

@@ -25,14 +25,19 @@ function renderWorkerStatus(status) {
   workerRateLimitRetry.textContent = retryAt ? `${retryAt} (${backoffSeconds}s)` : "None";
   workerLastError.textContent = status.last_error || "None";
   renderSourceHealth(status);
+  renderSourceHealthTrendSummary(status);
+  renderNotificationPreview();
 
   recentMatches.replaceChildren();
   const matches = Array.isArray(status.recent_matches) ? status.recent_matches : [];
   renderDashboardFilters(matches);
+  syncRecentMatchExportSelection(matches);
   filteredRecentMatches = filterRecentMatches(matches);
   if (matches.length === 0) {
     selectedRecentMatchKey = null;
+    selectedRecentMatchExportKeys.clear();
     recentMatches.append(emptyState("No recent matches"));
+    renderRecentMatchExportActions();
     renderDashboardMap(status);
     return;
   }
@@ -41,10 +46,12 @@ function renderWorkerStatus(status) {
   }
   if (filteredRecentMatches.length === 0) {
     recentMatches.append(emptyState("No matches for current filters"));
+    renderRecentMatchExportActions();
     renderDashboardMap(status);
     return;
   }
   renderRecentMatchGroups(filteredRecentMatches);
+  renderRecentMatchExportActions();
   renderDashboardMap(status);
 }
 
@@ -62,6 +69,247 @@ function renderSourceHealth(status) {
   sourceHealthRetryAt.textContent = formatDateTime(health.retry_at) || "None";
   sourceHealthAircraftCount.textContent = health.last_aircraft_count ?? "0";
   sourceHealthLastError.textContent = health.last_error || "None";
+}
+
+function renderSourceHealthTrendSummary(status) {
+  const trends = sourceHealthTrends(status);
+  sourceHealthTrendsOpenButton.textContent = trends.length > 0 ? `Trends (${trends.length})` : "Trends";
+}
+
+function openSourceHealthTrendModal() {
+  isSourceHealthTrendEventListVisible = false;
+  renderSourceHealthTrendModal(latestWorkerStatus || {});
+  sourceHealthTrendModal.classList.remove("hidden");
+  sourceHealthTrendCloseButton.focus();
+}
+
+function closeSourceHealthTrendModal() {
+  sourceHealthTrendModal.classList.add("hidden");
+  sourceHealthTrendsOpenButton.focus();
+}
+
+function renderSourceHealthTrendModal(status) {
+  const trends = sourceHealthTrends(status);
+  const chartData = sourceHealthTrendChartData(trends, sourceHealthTrendWindowHours);
+  const retentionHours = status.source_health_trend_retention_hours ?? config?.source_health_trend_retention_hours;
+  sourceHealthTrendSummary.textContent = sourceHealthTrendSummaryText(chartData.events.length, trends.length, retentionHours);
+  sourceHealthTrendWindow.value = String(sourceHealthTrendWindowHours);
+  sourceHealthTrendChart.replaceChildren();
+  sourceHealthTrendChart.append(sourceHealthTrendChartElement(chartData));
+  sourceHealthTrendEventsToggle.textContent = isSourceHealthTrendEventListVisible ? "Hide events" : "Show events";
+  sourceHealthTrendEventsToggle.disabled = trends.length === 0;
+  sourceHealthTrendList.replaceChildren();
+  sourceHealthTrendList.classList.toggle("hidden", !isSourceHealthTrendEventListVisible);
+  if (chartData.events.length === 0) {
+    sourceHealthTrendList.append(emptyState("No trend events"));
+    return;
+  }
+  chartData.events.slice().reverse().forEach((event) => sourceHealthTrendList.append(sourceHealthTrendItem(event)));
+}
+
+function toggleSourceHealthTrendEvents() {
+  isSourceHealthTrendEventListVisible = !isSourceHealthTrendEventListVisible;
+  renderSourceHealthTrendModal(latestWorkerStatus || {});
+}
+
+function updateSourceHealthTrendWindow() {
+  sourceHealthTrendWindowHours = sourceHealthTrendWindow.value === "all" ? "all" : Number(sourceHealthTrendWindow.value);
+  renderSourceHealthTrendModal(latestWorkerStatus || {});
+}
+
+function sourceHealthTrendChartData(trends, windowHours) {
+  const allEvents = trends
+    .map((event) => ({...event, timestamp: sourceHealthTrendTimestamp(event)}))
+    .filter((event) => event.timestamp !== null)
+    .sort((left, right) => left.timestamp - right.timestamp);
+  const events = filterSourceHealthTrendWindow(allEvents, windowHours);
+  const points = events
+    .filter((event) => event.event_type === "success" && Number.isFinite(Number(event.aircraft_count)))
+    .map((event) => ({...event, aircraftCount: Number(event.aircraft_count)}));
+  const failures = events.filter((event) => event.event_type === "failure");
+  return {events, points, failures};
+}
+
+function sourceHealthTrendSummaryText(shownCount, totalCount, retentionHours) {
+  if (totalCount === 0) return "No source health trend events have been recorded yet.";
+  if (shownCount === 0) return `No events shown for ${sourceHealthTrendWindowLabel(sourceHealthTrendWindowHours)}.`;
+  return `${shownCount} of ${totalCount} events shown for ${sourceHealthTrendWindowLabel(sourceHealthTrendWindowHours)}${
+    retentionHours ? `; retained for ${retentionHours} hours` : ""
+  }.`;
+}
+
+function sourceHealthTrendChartElement({events, points, failures}) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "source-health-chart-shell";
+  if (events.length === 0 || points.length === 0) {
+    wrapper.append(emptyState(events.length === 0 ? "No trend events to chart" : "No aircraft-count samples yet"));
+    return wrapper;
+  }
+
+  const width = 760;
+  const height = 280;
+  const padding = {top: 18, right: 20, bottom: 42, left: 54};
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  let minTime = events[0].timestamp;
+  let maxTime = events[events.length - 1].timestamp;
+  if (minTime === maxTime) {
+    minTime -= 60_000;
+    maxTime += 60_000;
+  }
+  const maxAircraftCount = Math.max(1, ...points.map((point) => point.aircraftCount));
+  const x = (timestamp) => padding.left + ((timestamp - minTime) / (maxTime - minTime)) * plotWidth;
+  const y = (count) => padding.top + plotHeight - (count / maxAircraftCount) * plotHeight;
+  const svg = sourceHealthSvg("svg", {viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Aircraft found over time"});
+
+  [0, Math.round(maxAircraftCount / 2), maxAircraftCount].forEach((tick) => {
+    const tickY = y(tick);
+    svg.append(sourceHealthSvg("line", {class: "source-health-chart-grid", x1: padding.left, y1: tickY, x2: width - padding.right, y2: tickY}));
+    const label = sourceHealthSvg("text", {class: "source-health-chart-label", x: padding.left - 10, y: tickY + 4, "text-anchor": "end"});
+    label.textContent = String(tick);
+    svg.append(label);
+  });
+
+  failures.forEach((event) => {
+    const marker = sourceHealthSvg("line", {
+      class: `source-health-chart-failure ${statusClassName(event.status)}`,
+      x1: x(event.timestamp),
+      y1: padding.top,
+      x2: x(event.timestamp),
+      y2: padding.top + plotHeight,
+    });
+    const title = sourceHealthSvg("title");
+    title.textContent = `${sourceHealthLabel(event.status)} at ${formatDateTime(event.observed_at) || event.observed_at}`;
+    marker.append(title);
+    svg.append(marker);
+  });
+
+  const path = points.map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.timestamp).toFixed(1)} ${y(point.aircraftCount).toFixed(1)}`).join(" ");
+  svg.append(sourceHealthSvg("path", {class: "source-health-chart-line", d: path}));
+
+  const startLabel = sourceHealthSvg("text", {class: "source-health-chart-label", x: padding.left, y: height - 12, "text-anchor": "start"});
+  startLabel.textContent = formatDateTime(new Date(minTime).toISOString()) || "";
+  const endLabel = sourceHealthSvg("text", {class: "source-health-chart-label", x: width - padding.right, y: height - 12, "text-anchor": "end"});
+  endLabel.textContent = formatDateTime(new Date(maxTime).toISOString()) || "";
+  svg.append(startLabel, endLabel);
+  wrapper.append(svg, sourceHealthTrendLegend(failures.length));
+  return wrapper;
+}
+
+function sourceHealthTrendLegend(failureCount) {
+  const legend = document.createElement("div");
+  legend.className = "source-health-chart-legend";
+  const sample = document.createElement("span");
+  sample.className = "source-health-chart-legend-line";
+  const lineText = document.createElement("span");
+  lineText.textContent = "Aircraft found";
+  const failure = document.createElement("span");
+  failure.className = "source-health-chart-legend-failure";
+  const failureText = document.createElement("span");
+  failureText.textContent = `${failureCount} failure marker${failureCount === 1 ? "" : "s"}`;
+  legend.append(sample, lineText, failure, failureText);
+  return legend;
+}
+
+function sourceHealthTrendTimestamp(event) {
+  if (!event.observed_at) return null;
+  const date = new Date(event.observed_at);
+  const timestamp = date.getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function filterSourceHealthTrendWindow(events, windowHours) {
+  if (windowHours === "all" || events.length === 0) return events;
+  const hours = Number(windowHours);
+  if (!Number.isFinite(hours) || hours <= 0) return events;
+  const latestTimestamp = events[events.length - 1].timestamp;
+  const cutoff = latestTimestamp - hours * 60 * 60 * 1000;
+  return events.filter((event) => event.timestamp >= cutoff);
+}
+
+function sourceHealthTrendWindowLabel(windowHours) {
+  if (windowHours === "all") return "all retained data";
+  if (Number(windowHours) === 1) return "the last hour";
+  if (Number(windowHours) === 168) return "the last 7 days";
+  return `the last ${windowHours} hours`;
+}
+
+function sourceHealthSvg(tagName, attributes = {}) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tagName);
+  Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, String(value)));
+  return node;
+}
+
+function sourceHealthTrendItem(event) {
+  const item = document.createElement("article");
+  item.className = `source-health-trend-item ${statusClassName(event.status)}`;
+
+  const header = document.createElement("div");
+  header.className = "source-health-trend-item-header";
+  const label = document.createElement("strong");
+  label.textContent = sourceHealthTrendEventLabel(event.event_type);
+  const time = document.createElement("time");
+  time.textContent = formatDateTime(event.observed_at) || "Unknown time";
+  if (event.observed_at) time.dateTime = event.observed_at;
+  header.append(label, time);
+
+  const meta = document.createElement("p");
+  meta.textContent = [
+    sourceHealthLabel(event.status),
+    sourceProviderLabel(event.provider),
+    event.query,
+  ].filter(Boolean).join(" · ");
+
+  item.append(header, meta);
+  if (event.message) {
+    const message = document.createElement("p");
+    message.textContent = event.message;
+    item.append(message);
+  }
+
+  const details = sourceHealthTrendDetails(event);
+  if (details.length > 0) {
+    const list = document.createElement("dl");
+    list.className = "source-health-trend-details";
+    details.forEach(([term, description]) => {
+      const wrapper = document.createElement("div");
+      const dt = document.createElement("dt");
+      dt.textContent = term;
+      const dd = document.createElement("dd");
+      dd.textContent = description;
+      wrapper.append(dt, dd);
+      list.append(wrapper);
+    });
+    item.append(list);
+  }
+  return item;
+}
+
+function sourceHealthTrendDetails(event) {
+  const details = [];
+  if (event.backoff_seconds) details.push(["Backoff", `${event.backoff_seconds}s`]);
+  if (event.retry_at) details.push(["Retry at", formatDateTime(event.retry_at) || event.retry_at]);
+  if (event.consecutive_source_errors) details.push(["Consecutive errors", String(event.consecutive_source_errors)]);
+  if (event.aircraft_count !== undefined) details.push(["Aircraft", String(event.aircraft_count)]);
+  if (event.previous_provider) {
+    details.push(["Previous source", [sourceProviderLabel(event.previous_provider), event.previous_query].filter(Boolean).join(" · ")]);
+  }
+  if (event.url) details.push(["URL", event.url]);
+  return details;
+}
+
+function sourceHealthTrends(status) {
+  return Array.isArray(status.source_health_trends) ? status.source_health_trends : [];
+}
+
+function sourceHealthTrendEventLabel(eventType) {
+  return {
+    success: "Success",
+    failure: "Failure",
+    rate_limit: "Rate limit",
+    retry_backoff: "Retry/backoff",
+    provider_switch: "Provider switch",
+  }[eventType] || eventType || "Trend event";
 }
 
 function normalizedSourceHealth(status) {
@@ -117,6 +365,7 @@ function sourceProviderLabel(provider) {
   return {
     adsb_lol: "ADSB.lol",
     airplanes_live: "Airplanes.live",
+    local_receiver: "Local receiver",
     direct: "Direct aircraft.json",
   }[provider] || provider || "Unknown";
 }
@@ -153,6 +402,10 @@ function renderRecentMatchGroup(group) {
 
   const header = document.createElement("div");
   header.className = "match-group-header";
+  if (isRecentMatchExportMode) {
+    item.classList.add("export-mode");
+    header.append(matchExportCheckbox(group.matches, `${group.ruleName}: ${group.aircraftLabel}`));
+  }
   const title = document.createElement("strong");
   title.textContent = `${group.ruleName}: ${group.aircraftLabel}`;
   const count = document.createElement("span");
@@ -188,6 +441,10 @@ function renderRecentMatchItem(match, options = {}) {
   item.role = "button";
   item.tabIndex = 0;
   item.dataset.matchKey = key;
+  if (isRecentMatchExportMode) {
+    item.classList.add("export-mode");
+    item.append(matchExportCheckbox([match], match.aircraft_label || match.hex || "aircraft"));
+  }
   const title = document.createElement("strong");
   title.textContent = `${match.rule_name || "Rule"}: ${match.aircraft_label || match.hex || "Aircraft"}`;
   const meta = document.createElement("span");
@@ -203,6 +460,68 @@ function renderRecentMatchItem(match, options = {}) {
     item.append(matchActions(matchExternalLink(match), matchDetailButton(match)));
   }
   return item;
+}
+
+function matchExportCheckbox(matches, label) {
+  const keys = matches.map(matchKey);
+  const wrapper = document.createElement("label");
+  wrapper.className = "match-export-select";
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.dataset.exportMatchKeys = keys.join("\n");
+  input.checked = keys.every((key) => selectedRecentMatchExportKeys.has(key));
+  input.indeterminate = !input.checked && keys.some((key) => selectedRecentMatchExportKeys.has(key));
+  input.setAttribute("aria-label", `Select ${label} for export`);
+  wrapper.append(input);
+  return wrapper;
+}
+
+function syncRecentMatchExportSelection(matches) {
+  const availableKeys = new Set(matches.map(matchKey));
+  selectedRecentMatchExportKeys = new Set(Array.from(selectedRecentMatchExportKeys).filter((key) => availableKeys.has(key)));
+}
+
+function renderRecentMatchExportActions() {
+  const keys = Array.from(selectedRecentMatchExportKeys);
+  const count = keys.length;
+  toggleRecentExportButton.textContent = isRecentMatchExportMode ? "Done" : "Export";
+  recentExportActions.classList.toggle("hidden", !isRecentMatchExportMode);
+  recentExportSelectedCount.textContent = `${count} selected`;
+  clearSelectedMatchesButton.disabled = count === 0;
+  const hasVisibleMatches = filteredRecentMatches.length > 0;
+  selectVisibleMatchesButton.disabled = !hasVisibleMatches;
+  updateRecentMatchExportLink(exportSelectedJson, "json", keys);
+  updateRecentMatchExportLink(exportSelectedCsv, "csv", keys);
+}
+
+function toggleRecentMatchExportMode() {
+  isRecentMatchExportMode = !isRecentMatchExportMode;
+  if (!isRecentMatchExportMode) {
+    selectedRecentMatchExportKeys.clear();
+  }
+  if (latestWorkerStatus) {
+    renderWorkerStatus(latestWorkerStatus);
+  }
+}
+
+function updateRecentMatchExportLink(link, format, keys) {
+  const disabled = keys.length === 0;
+  link.href = disabled ? "#" : recentMatchExportUrl(format, keys);
+  link.setAttribute("aria-disabled", String(disabled));
+  link.tabIndex = disabled ? -1 : 0;
+  link.classList.toggle("disabled", disabled);
+}
+
+function selectVisibleRecentMatchesForExport() {
+  if (!latestWorkerStatus) return;
+  filteredRecentMatches.forEach((match) => selectedRecentMatchExportKeys.add(matchKey(match)));
+  renderWorkerStatus(latestWorkerStatus);
+}
+
+function clearRecentMatchExportSelection() {
+  if (!latestWorkerStatus) return;
+  selectedRecentMatchExportKeys.clear();
+  renderWorkerStatus(latestWorkerStatus);
 }
 
 function matchActions(...actions) {
@@ -402,7 +721,7 @@ function fitDashboardMap({maxZoom = 13} = {}) {
   });
 
   dashboardMap.invalidateSize();
-  dashboardMap.fitBounds(bounds, {padding: [28, 28], maxZoom, animate: false});
+  dashboardMap.fitBounds(bounds, {padding: [DASHBOARD_MAP_FIT_PADDING_PX, DASHBOARD_MAP_FIT_PADDING_PX], maxZoom, animate: false});
 }
 
 function zoomSelectedMatch() {
@@ -418,7 +737,7 @@ function zoomSelectedMatch() {
     [Number(match.lat), Number(match.lon)],
   ]);
   dashboardMap.invalidateSize();
-  dashboardMap.fitBounds(bounds, {padding: [42, 42], maxZoom: 12, animate: false});
+  dashboardMap.fitBounds(bounds, {padding: [SELECTED_MATCH_FIT_PADDING_PX, SELECTED_MATCH_FIT_PADDING_PX], maxZoom: 12, animate: false});
 }
 
 function updateMapActionState() {
@@ -427,6 +746,11 @@ function updateMapActionState() {
 
 recentMatches.addEventListener("click", (event) => {
   if (event.target.closest("a")) return;
+  const exportSelection = event.target.closest(".match-export-select input");
+  if (exportSelection) {
+    toggleRecentMatchExportSelection(exportSelection);
+    return;
+  }
   const detailButton = event.target.closest(".match-detail-button");
   if (detailButton?.dataset.matchKey) {
     openMatchDetail(detailButton.dataset.matchKey);
@@ -443,6 +767,7 @@ recentMatches.addEventListener("click", (event) => {
 });
 recentMatches.addEventListener("keydown", (event) => {
   if (!["Enter", " "].includes(event.key)) return;
+  if (event.target.closest(".match-export-select input")) return;
   if (event.target.closest(".match-detail-button")) return;
   if (event.target.closest(".match-group-toggle")) return;
   const item = event.target.closest(".match-item");
@@ -450,6 +775,23 @@ recentMatches.addEventListener("keydown", (event) => {
   event.preventDefault();
   selectRecentMatch(item.dataset.matchKey);
 });
+
+[exportSelectedJson, exportSelectedCsv].forEach((link) => {
+  link.addEventListener("click", (event) => {
+    if (link.getAttribute("aria-disabled") !== "true") return;
+    event.preventDefault();
+  });
+});
+
+function toggleRecentMatchExportSelection(input) {
+  const keys = (input.dataset.exportMatchKeys || "").split("\n").filter(Boolean);
+  if (input.checked) {
+    keys.forEach((key) => selectedRecentMatchExportKeys.add(key));
+  } else {
+    keys.forEach((key) => selectedRecentMatchExportKeys.delete(key));
+  }
+  renderWorkerStatus(latestWorkerStatus);
+}
 
 function toggleMatchGroup(key) {
   if (expandedMatchGroupKeys.has(key)) {
@@ -554,10 +896,18 @@ function openMatchDetail(key) {
   const airplanesLiveUrl = match.airplanes_live_url || match.adsb_exchange_url || "";
   matchDetailLink.href = airplanesLiveUrl || "#";
   matchDetailLink.classList.toggle("hidden", !airplanesLiveUrl);
+  matchDetailExportJson.href = recentMatchExportUrl("json", key);
+  matchDetailExportCsv.href = recentMatchExportUrl("csv", key);
   renderMatchDetailSummary(match);
   matchDetailPayload.textContent = JSON.stringify(match.aircraft_payload || match, null, 2);
   matchDetailModal.classList.remove("hidden");
   matchDetailCloseButton.focus();
+}
+
+function recentMatchExportUrl(format, keys = []) {
+  const selectedKeys = Array.isArray(keys) ? keys : [keys].filter(Boolean);
+  const suffix = selectedKeys.length > 0 ? `?${selectedKeys.map((key) => `match_key=${encodeURIComponent(key)}`).join("&")}` : "";
+  return `${apiBase}/recent-matches/export.${format}${suffix}`;
 }
 
 function renderMatchDetailSummary(match) {

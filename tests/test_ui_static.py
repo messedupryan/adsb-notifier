@@ -107,6 +107,28 @@ def test_email_html_and_brand_fields_are_available():
     assert "email-html-body-template" in parser.textareas
 
 
+def test_notification_provider_selector_and_preview_are_available():
+    assert 'id="notification-provider-selector"' in INDEX_HTML
+    assert 'data-provider-panel="email"' in INDEX_HTML
+    assert 'data-provider-panel="pushover"' in INDEX_HTML
+    assert 'data-provider-panel="twilio"' in INDEX_HTML
+    assert 'id="notification-preview-source"' in INDEX_HTML
+    assert 'id="notification-preview"' in INDEX_HTML
+    assert "selectedNotificationProvider" in UI_JS
+    assert "function sortedNotificationProviders" in UI_JS
+    assert "function selectNotificationProvider" in UI_JS
+    assert "function renderNotificationPreview" in UI_JS
+    assert "function sampleNotificationPreviewMatch" in UI_JS
+    assert "function renderNotificationTemplate" in UI_JS
+    assert "function emailHtmlPreviewField" in UI_JS
+    assert "function emailHtmlPreviewDocument" in UI_JS
+    assert "function emailThemeColor" in UI_JS
+    assert 'frame.setAttribute("sandbox", "")' in UI_JS
+    assert "emailHtmlPreviewMode" in UI_JS
+    assert "dataset.emailHtmlPreviewMode" in UI_JS
+    assert "latestWorkerStatus?.recent_matches" in UI_JS
+
+
 def test_json_editor_lives_under_settings_not_top_level_tabs():
     parser = InputParser()
     parser.feed(INDEX_HTML)
@@ -125,9 +147,21 @@ def test_adsb_source_controls_are_available_in_settings():
     assert "adsb-source-radius" in parser.inputs
     assert "adsb-source-value" in parser.inputs
     assert "adsb-source-base-url" in parser.inputs
+    assert "primary-retry-minutes" in parser.inputs
+    assert "backup-source-enabled" in parser.inputs
+    assert "backup-source-provider" in parser.selects
+    assert "backup-source-query" in parser.selects
+    assert "backup-source-value" in parser.inputs
+    assert "backup-source-radius" in parser.inputs
+    assert "backup-source-base-url" in parser.inputs
     assert "adsb_lol" in INDEX_HTML
     assert "airplanes_live" in INDEX_HTML
+    assert "local_receiver" in INDEX_HTML
     assert "Direct aircraft.json" in INDEX_HTML
+    assert "backup_adsb_source" in UI_JS
+    assert "primary_retry_minutes" in UI_JS
+    assert "function updateSourceQueryOptions" in UI_JS
+    assert 'new Set(["url", "file"])' in UI_JS
 
 
 def test_squawk_rule_controls_are_available():
@@ -148,12 +182,17 @@ def test_exclusion_controls_are_available():
         "global-exclusion-hex-ids",
         "global-exclusion-callsigns",
         "global-exclusion-aircraft-types",
+        "global-exclusion-categories",
         "rule-exclusion-tail-numbers",
         "rule-exclusion-hex-ids",
         "rule-exclusion-callsigns",
         "rule-exclusion-aircraft-types",
+        "rule-exclusion-categories",
     ]:
         assert field_id in parser.inputs
+    assert 'id="category-exclusion-options"' in INDEX_HTML
+    assert 'value="A7"' in INDEX_HTML
+    assert 'value="UNKNOWN"' in INDEX_HTML
     assert "normalizeExclusions" in UI_JS
     assert "exclusionsFromFields" in UI_JS
 
@@ -217,15 +256,57 @@ def test_worker_status_summary_has_source_row_and_status_classes():
 def test_recent_match_detail_view_is_available():
     assert "match-detail-modal" in INDEX_HTML
     assert "match-detail-link" in INDEX_HTML
+    assert "match-detail-export-json" in INDEX_HTML
+    assert "match-detail-export-csv" in INDEX_HTML
     assert "match-detail-summary" in INDEX_HTML
     assert "match-detail-payload" in INDEX_HTML
     assert "function openMatchDetail" in UI_JS
+    assert "function recentMatchExportUrl" in UI_JS
+    assert "recent-matches/export.${format}" in UI_JS
+    assert "match_key=${encodeURIComponent(key)}" in UI_JS
     assert "function renderMatchDetailSummary" in UI_JS
     assert "aircraft_payload" in UI_JS
 
 
+def test_recent_match_multi_export_controls_are_available():
+    assert "toggle-recent-export" in INDEX_HTML
+    assert 'id="recent-export-actions" class="recent-export-actions hidden"' in INDEX_HTML
+    assert "recent-export-selected-count" in INDEX_HTML
+    assert "select-visible-matches" in INDEX_HTML
+    assert "clear-selected-matches" in INDEX_HTML
+    assert "export-selected-json" in INDEX_HTML
+    assert "export-selected-csv" in INDEX_HTML
+    assert "selectedRecentMatchExportKeys" in UI_JS
+    assert "isRecentMatchExportMode" in UI_JS
+    assert "function toggleRecentMatchExportMode" in UI_JS
+    assert "function matchExportCheckbox" in UI_JS
+    assert "function selectVisibleRecentMatchesForExport" in UI_JS
+    assert "function clearRecentMatchExportSelection" in UI_JS
+    assert "dataset.exportMatchKeys" in UI_JS
+
+
+def test_dashboard_map_has_inset_and_tighter_fit_padding():
+    styles = (ROOT / "ui" / "styles.css").read_text(encoding="utf-8")
+
+    assert "--dashboard-map-inset: 8px;" in styles
+    assert "padding: var(--dashboard-map-inset);" in styles
+    assert "border-radius: 6px;" in styles
+    assert "overflow: hidden;" in styles
+    assert "const DASHBOARD_MAP_FIT_PADDING_PX = 18;" in UI_JS
+    assert "const SELECTED_MATCH_FIT_PADDING_PX = 30;" in UI_JS
+    assert "padding: [DASHBOARD_MAP_FIT_PADDING_PX, DASHBOARD_MAP_FIT_PADDING_PX]" in UI_JS
+    assert "padding: [SELECTED_MATCH_FIT_PADDING_PX, SELECTED_MATCH_FIT_PADDING_PX]" in UI_JS
+
+
 def test_source_health_controls_are_available():
     assert "worker-source-health" in INDEX_HTML
+    assert "source-health-trends-open" in INDEX_HTML
+    assert "source-health-trend-retention-hours" in INDEX_HTML
+    assert "source-health-trend-modal" in INDEX_HTML
+    assert "source-health-trend-window" in INDEX_HTML
+    assert "source-health-trend-chart" in INDEX_HTML
+    assert "source-health-trend-events-toggle" in INDEX_HTML
+    assert "source-health-trend-list" in INDEX_HTML
     for field_id in [
         "source-health-status",
         "source-health-provider",
@@ -240,6 +321,14 @@ def test_source_health_controls_are_available():
         assert field_id in INDEX_HTML
     assert "function renderSourceHealth" in UI_JS
     assert "function normalizedSourceHealth" in UI_JS
+    assert "function openSourceHealthTrendModal" in UI_JS
+    assert "function sourceHealthTrendChartElement" in UI_JS
+    assert "function updateSourceHealthTrendWindow" in UI_JS
+    assert "function filterSourceHealthTrendWindow" in UI_JS
+    assert "function toggleSourceHealthTrendEvents" in UI_JS
+    assert "function sourceHealthTrendItem" in UI_JS
+    assert "source_health_trends" in UI_JS
+    assert "source_health_trend_retention_hours" in UI_JS
     assert "source_health" in UI_JS
 
 

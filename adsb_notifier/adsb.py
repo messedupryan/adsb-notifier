@@ -3,6 +3,7 @@ import logging
 import math
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
@@ -55,6 +56,11 @@ class AdsbAccessDeniedError(AdsbSourceUnavailableError):
         )
 
 
+class AdsbStaleDataError(AdsbSourceUnavailableError):
+    def __init__(self, url: str):
+        super().__init__(url, message="ADS-B source data is stale; backing off")
+
+
 def fetch_aircraft(url: str, timeout_seconds: int = DEFAULT_ADSB_REQUEST_TIMEOUT_SECONDS) -> list[Aircraft]:
     request = Request(url, headers={"User-Agent": USER_AGENT})
     try:
@@ -74,6 +80,11 @@ def fetch_aircraft(url: str, timeout_seconds: int = DEFAULT_ADSB_REQUEST_TIMEOUT
 
 
 def fetch_aircraft_for_settings(settings: Settings, timeout_seconds: int = DEFAULT_ADSB_REQUEST_TIMEOUT_SECONDS) -> list[Aircraft]:
+    source = settings.adsb_source
+    if source and source.provider == "local_receiver" and source.query == "file":
+        if not source.value:
+            raise ValueError("local_receiver file source requires value")
+        return fetch_aircraft_file(source.value)
     return fetch_aircraft(build_adsb_url(settings), timeout_seconds=timeout_seconds)
 
 
@@ -83,6 +94,10 @@ def build_adsb_url(settings: Settings) -> str:
         if not settings.adsb_url:
             raise ValueError("adsb_url is required when adsb_source is not configured")
         return settings.adsb_url
+    if source.provider == "local_receiver":
+        if not source.value:
+            raise ValueError(f"local_receiver {source.query} source requires value")
+        return source.value
 
     base_url = _source_base_url(source.provider, source.base_url).rstrip("/")
     if source.query == "point":
@@ -96,6 +111,11 @@ def build_adsb_url(settings: Settings) -> str:
     if source.query == "mil":
         return f"{base_url}/mil"
     raise ValueError(f"unsupported adsb_source query: {source.query}")
+
+
+def fetch_aircraft_file(path: str | Path) -> list[Aircraft]:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    return parse_aircraft_payload(payload)
 
 
 def parse_aircraft_payload(payload: dict) -> list[Aircraft]:
