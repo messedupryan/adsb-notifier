@@ -93,7 +93,7 @@ I found Twilio to be overly cumbersome, and not worth the cost for my use case. 
 ## 🏗️ Architecture
 
 ```text
-ADS-B source (ADSB.lol, Airplanes.live, or direct aircraft.json)
+ADS-B source (ADSB.lol, Airplanes.live, or local receiver aircraft.json)
     |
     v
 Worker service
@@ -136,7 +136,7 @@ Configuration is JSON. The checked-in [config.example.json](config.example.json)
 - `stale_aircraft_seconds`: ignore aircraft that have not been seen recently
 - `recent_matches_window_hours`: how long recent matches remain in status history
 - `source_health_trend_retention_hours`: how long source health trend events remain in PVC-backed status history
-- `adsb_url` or `adsb_source`: primary ADS-B source configuration. The current example defaults to ADSB.lol; Airplanes.live, local receiver URL/file sources, and direct `aircraft.json` endpoints are also supported.
+- `adsb_source`: primary ADS-B source configuration. The current example defaults to ADSB.lol; Airplanes.live and local receiver URL/file sources are supported. Legacy `adsb_url` configs are still read, but new direct `aircraft.json` endpoints should use `local_receiver` with `query: "url"`.
 - `backup_adsb_source`: optional backup source used when the primary is unavailable, rate limited, or returns stale data
 - `notifications`: provider configuration and templates
 - `rules`: alert rules
@@ -212,7 +212,7 @@ The project is currently in beta and uses SemVer-style `0.x.y` versions, with ex
 
 Use `make release-rc` from a clean worktree to prepare, build, push, deploy, and roll out the next release candidate. The target derives the next RC from the current project version, either from the latest numeric checkpoint to the next minor `rc.1`, or from one RC to the next.
 
-Stable minor releases should also get GitHub-facing release notes. Draft them with `make release-notes VERSION=0.3.0 PREVIOUS_VERSION=0.2.0 ROADMAP="ADSB-Notifier Roadmap v0.3.0"` and polish the resulting file under `docs/releases/` before publishing the GitHub Release. See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, RC workflow, release notes, and promotion checklist.
+Stable minor releases should also get GitHub-facing release notes. Draft them with `make release-notes VERSION=0.4.0 PREVIOUS_VERSION=0.3.0 ROADMAP="ADSB-Notifier Roadmap v0.4.0"` and polish the resulting file under `docs/releases/` before publishing the GitHub Release. See [Versioning and Promotion](docs/VERSIONING.md) for the branch flow, image tag strategy, RC workflow, release notes, and promotion checklist.
 
 <a id="security-model"></a>
 

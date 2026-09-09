@@ -154,14 +154,20 @@ def test_adsb_source_controls_are_available_in_settings():
     assert "backup-source-value" in parser.inputs
     assert "backup-source-radius" in parser.inputs
     assert "backup-source-base-url" in parser.inputs
+    assert "adsb-source-radius-hint" in INDEX_HTML
+    assert "backup-source-radius-hint" in INDEX_HTML
     assert "adsb_lol" in INDEX_HTML
     assert "airplanes_live" in INDEX_HTML
     assert "local_receiver" in INDEX_HTML
-    assert "Direct aircraft.json" in INDEX_HTML
+    assert "Direct aircraft.json" not in INDEX_HTML
     assert "backup_adsb_source" in UI_JS
     assert "primary_retry_minutes" in UI_JS
     assert "function updateSourceQueryOptions" in UI_JS
     assert 'new Set(["url", "file"])' in UI_JS
+    assert "function updateSourceOptionalField" in UI_JS
+    assert 'if (query === "point" && radius !== null) source.radius_miles = radius;' in UI_JS
+    assert 'if (["reg", "type", "hex", "url", "file"].includes(query) && value) source.value = value;' in UI_JS
+    assert "Local receiver sources use rule radii after polling." in UI_JS
 
 
 def test_squawk_rule_controls_are_available():

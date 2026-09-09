@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="Cache-Control" content="no-store" />
     <title>ADS-B Notifier Config</title>
-    <link id="favicon" rel="icon" type="image/png" href="/images/icon_teal.png?v=0.3.0" />
-    <link id="apple-touch-icon" rel="apple-touch-icon" href="/images/icon_teal.png?v=0.3.0" />
+    <link id="favicon" rel="icon" type="image/png" href="/images/icon_teal.png?v=0.4.0" />
+    <link id="apple-touch-icon" rel="apple-touch-icon" href="/images/icon_teal.png?v=0.4.0" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-    <link rel="stylesheet" href="/styles.css?v=0.3.0" />
+    <link rel="stylesheet" href="/styles.css?v=0.4.0" />
   </head>
   <body>
     <main class="app-shell">
       <section class="toolbar">
         <div class="brand">
-          <h1><img id="app-logo" class="app-logo" src="/images/logo_teal.png?v=0.3.0" alt="ADS-B Notifier" /></h1>
+          <h1><img id="app-logo" class="app-logo" src="/images/logo_teal.png?v=0.4.0" alt="ADS-B Notifier" /></h1>
           <p id="status">Loading configuration...</p>
         </div>
         <div class="actions">
@@ -139,7 +139,6 @@
                   <option value="adsb_lol">ADSB.lol</option>
                   <option value="airplanes_live">Airplanes.live</option>
                   <option value="local_receiver">Local receiver</option>
-                  <option value="direct">Direct aircraft.json</option>
                 </select>
               </label>
               <label>
@@ -156,19 +155,18 @@
               </label>
               <label>
                 Radius miles
-                <input id="adsb-source-radius" name="adsb_source.radius_miles" type="number" min="1" step="0.1" />
+                <input id="adsb-source-radius" name="adsb_source.radius_miles" type="number" min="1" step="0.1" aria-describedby="adsb-source-radius-hint" />
+                <span id="adsb-source-radius-hint" class="field-hint source-field-hint"></span>
               </label>
               <label>
                 Lookup value, URL, or file path
-                <input id="adsb-source-value" name="adsb_source.value" type="text" />
+                <input id="adsb-source-value" name="adsb_source.value" type="text" aria-describedby="adsb-source-value-hint" />
+                <span id="adsb-source-value-hint" class="field-hint source-field-hint"></span>
               </label>
               <label class="wide">
                 Custom source base URL
-                <input id="adsb-source-base-url" name="adsb_source.base_url" type="url" placeholder="Optional" />
-              </label>
-              <label class="wide">
-                Direct ADS-B endpoint
-                <input id="adsb-url" name="adsb_url" type="url" />
+                <input id="adsb-source-base-url" name="adsb_source.base_url" type="url" placeholder="Optional" aria-describedby="adsb-source-base-url-hint" />
+                <span id="adsb-source-base-url-hint" class="field-hint source-field-hint"></span>
               </label>
               <label>
                 Primary retry minutes
@@ -201,15 +199,18 @@
                 </label>
                 <label>
                   Radius miles
-                  <input id="backup-source-radius" name="backup_adsb_source.radius_miles" type="number" min="1" step="0.1" />
+                  <input id="backup-source-radius" name="backup_adsb_source.radius_miles" type="number" min="1" step="0.1" aria-describedby="backup-source-radius-hint" />
+                  <span id="backup-source-radius-hint" class="field-hint source-field-hint"></span>
                 </label>
                 <label>
                   Lookup value, URL, or file path
-                  <input id="backup-source-value" name="backup_adsb_source.value" type="text" />
+                  <input id="backup-source-value" name="backup_adsb_source.value" type="text" aria-describedby="backup-source-value-hint" />
+                  <span id="backup-source-value-hint" class="field-hint source-field-hint"></span>
                 </label>
                 <label class="wide">
                   Custom source base URL
-                  <input id="backup-source-base-url" name="backup_adsb_source.base_url" type="url" placeholder="Optional" />
+                  <input id="backup-source-base-url" name="backup_adsb_source.base_url" type="url" placeholder="Optional" aria-describedby="backup-source-base-url-hint" />
+                  <span id="backup-source-base-url-hint" class="field-hint source-field-hint"></span>
                 </label>
               </div>
             </fieldset>
@@ -491,10 +492,10 @@
       </datalist>
       <footer class="app-footer">
         <div class="footer-brand">
-          <span>ADS-B Notifier 0.3.0</span>
-          <span id="ui-version">UI 0.3.0</span>
+          <span>ADS-B Notifier 0.4.0</span>
+          <span id="ui-version">UI 0.4.0</span>
         </div>
-        <img id="footer-icon" class="footer-icon" src="/images/icon_teal.png?v=0.3.0" alt="" aria-hidden="true" />
+        <img id="footer-icon" class="footer-icon" src="/images/icon_teal.png?v=0.4.0" alt="" aria-hidden="true" />
       </footer>
     </main>
     <div id="confirm-modal" class="modal-overlay hidden" role="presentation">
@@ -552,18 +553,18 @@
       </section>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-    <script src="/js/constants.js?v=0.3.0"></script>
-    <script src="/js/state.js?v=0.3.0"></script>
-    <script src="/js/theme.js?v=0.3.0"></script>
-    <script src="/js/config-flow.js?v=0.3.0"></script>
-    <script src="/js/dashboard.js?v=0.3.0"></script>
-    <script src="/js/forms.js?v=0.3.0"></script>
-    <script src="/js/rule-actions.js?v=0.3.0"></script>
-    <script src="/js/modal.js?v=0.3.0"></script>
-    <script src="/js/validation.js?v=0.3.0"></script>
-    <script src="/js/rule-model.js?v=0.3.0"></script>
-    <script src="/js/map-utils.js?v=0.3.0"></script>
-    <script src="/js/ui-utils.js?v=0.3.0"></script>
-    <script src="/js/bootstrap.js?v=0.3.0"></script>
+    <script src="/js/constants.js?v=0.4.0"></script>
+    <script src="/js/state.js?v=0.4.0"></script>
+    <script src="/js/theme.js?v=0.4.0"></script>
+    <script src="/js/config-flow.js?v=0.4.0"></script>
+    <script src="/js/dashboard.js?v=0.4.0"></script>
+    <script src="/js/forms.js?v=0.4.0"></script>
+    <script src="/js/rule-actions.js?v=0.4.0"></script>
+    <script src="/js/modal.js?v=0.4.0"></script>
+    <script src="/js/validation.js?v=0.4.0"></script>
+    <script src="/js/rule-model.js?v=0.4.0"></script>
+    <script src="/js/map-utils.js?v=0.4.0"></script>
+    <script src="/js/ui-utils.js?v=0.4.0"></script>
+    <script src="/js/bootstrap.js?v=0.4.0"></script>
   </body>
 </html>

@@ -1,7 +1,7 @@
 function validateConfig(payload) {
   const errors = [];
   const source = payload.adsb_source || {};
-  const sourceProvider = source.provider || "direct";
+  const sourceProvider = source.provider || "local_receiver";
   errors.push(...validateSourceConfig(source, sourceProvider, {
     provider: fields.adsbSourceProvider,
     query: fields.adsbSourceQuery,
@@ -9,9 +9,6 @@ function validateConfig(payload) {
     value: fields.adsbSourceValue,
     baseUrl: fields.adsbSourceBaseUrl,
   }));
-  if (sourceProvider === "direct" && !payload.adsb_url) {
-    errors.push(validationError("ADS-B endpoint is required.", fields.adsbUrl));
-  }
   if (payload.backup_adsb_source) {
     errors.push(...validateSourceConfig(payload.backup_adsb_source, payload.backup_adsb_source.provider, {
       provider: fields.backupSourceProvider,
@@ -135,7 +132,6 @@ function validateSourceConfig(source, sourceProvider, targets) {
     errors.push(validationError(`${label} provider is not supported.`, targets.provider));
     return errors;
   }
-  if (sourceProvider === "direct") return errors;
   if (!adsbSourceQueries.includes(source.query)) {
     errors.push(validationError(`${label} query is not supported.`, targets.query));
   }

@@ -329,6 +329,31 @@ textarea {
   padding: 8px 10px;
 }
 
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+  background: color-mix(in srgb, var(--input) 72%, var(--panel));
+  border-style: dashed;
+}
+
+.field-hint {
+  min-height: 16px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.source-field-inactive {
+  color: color-mix(in srgb, var(--muted) 82%, var(--text));
+}
+
+.source-field-inactive input {
+  color: var(--muted);
+}
+
 input:focus,
 select:focus,
 textarea:focus {
