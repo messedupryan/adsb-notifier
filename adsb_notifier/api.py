@@ -837,7 +837,11 @@ def _bump_revision(config: dict[str, Any], current_config: dict[str, Any] | None
 def _default_config() -> dict[str, Any]:
     return {
         "config_revision": 1,
-        "adsb_url": "http://readsb.default.svc.cluster.local/tar1090/data/aircraft.json",
+        "adsb_source": {
+            "provider": "local_receiver",
+            "query": "url",
+            "value": "http://readsb.default.svc.cluster.local/tar1090/data/aircraft.json",
+        },
         "home": {"lat": 40.7608, "lon": -111.8910},
         "poll_seconds": DEFAULT_POLL_SECONDS,
         "primary_retry_minutes": DEFAULT_PRIMARY_RETRY_MINUTES,

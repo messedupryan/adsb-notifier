@@ -7,7 +7,6 @@ function renderForms() {
   const source = normalizeAdsbSource(config.adsb_source, config.adsb_url);
   const backupSource = normalizeAdsbSource(config.backup_adsb_source, "", "local_receiver");
 
-  fields.adsbUrl.value = config.adsb_url || "";
   fields.adsbSourceProvider.value = source.provider;
   fields.adsbSourceQuery.value = source.query;
   fields.adsbSourceRadius.value = source.radius_miles ?? "";
@@ -548,7 +547,7 @@ function renderJson() {
 
 function syncFromForms() {
   if (!config) return;
-  config.adsb_url = fields.adsbUrl.value.trim();
+  config.adsb_url = "";
   config.adsb_source = adsbSourceFromForms();
   config.backup_adsb_source = fields.backupSourceEnabled.checked ? adsbSourceFromFormFields({
     provider: fields.backupSourceProvider,
@@ -697,9 +696,18 @@ function syncFromJson() {
 }
 
 function normalizeAdsbSource(source, adsbUrl = "", defaultProvider = "adsb_lol") {
+  if (!source && adsbUrl) {
+    return {
+      provider: "local_receiver",
+      query: "url",
+      radius_miles: "",
+      value: adsbUrl,
+      base_url: "",
+    };
+  }
   if (!source || source.provider === "direct") {
     return {
-      provider: adsbUrl ? "direct" : defaultProvider,
+      provider: defaultProvider,
       query: defaultProvider === "local_receiver" ? "url" : "point",
       radius_miles: "",
       value: "",
@@ -727,20 +735,17 @@ function adsbSourceFromForms() {
 
 function adsbSourceFromFormFields(sourceFields) {
   const provider = sourceFields.provider.value;
-  if (provider === "direct") {
-    return {provider: "direct", query: "point"};
-  }
-
+  const query = sourceFields.query.value;
   const source = {
     provider,
-    query: sourceFields.query.value,
+    query,
   };
   const radius = optionalNumberValue(sourceFields.radius);
   const value = sourceFields.value.value.trim();
   const baseUrl = sourceFields.baseUrl.value.trim();
-  if (radius !== null) source.radius_miles = radius;
-  if (value) source.value = value;
-  if (baseUrl) source.base_url = baseUrl;
+  if (query === "point" && radius !== null) source.radius_miles = radius;
+  if (["reg", "type", "hex", "url", "file"].includes(query) && value) source.value = value;
+  if (provider !== "local_receiver" && baseUrl) source.base_url = baseUrl;
   return source;
 }
 
@@ -749,11 +754,20 @@ function updateAdsbSourceFieldVisibility() {
   syncSourceQueryForProvider(fields.adsbSourceProvider, fields.adsbSourceQuery);
   updateSourceQueryOptions(fields.adsbSourceProvider, fields.adsbSourceQuery);
   const query = fields.adsbSourceQuery.value;
-  fields.adsbUrl.closest("label").classList.toggle("hidden", provider !== "direct");
-  fields.adsbSourceQuery.disabled = provider === "direct";
-  fields.adsbSourceRadius.disabled = provider === "direct" || query !== "point";
-  fields.adsbSourceValue.disabled = provider === "direct" || !["reg", "type", "hex", "url", "file"].includes(query);
-  fields.adsbSourceBaseUrl.disabled = provider === "direct" || provider === "local_receiver";
+  fields.adsbSourceQuery.disabled = false;
+  updateSourceOptionalField(fields.adsbSourceRadius, fields.adsbSourceRadiusHint, query !== "point", sourceRadiusHint(provider, query));
+  updateSourceOptionalField(
+    fields.adsbSourceValue,
+    fields.adsbSourceValueHint,
+    !["reg", "type", "hex", "url", "file"].includes(query),
+    sourceValueHint(provider, query)
+  );
+  updateSourceOptionalField(
+    fields.adsbSourceBaseUrl,
+    fields.adsbSourceBaseUrlHint,
+    provider === "local_receiver",
+    sourceBaseUrlHint(provider)
+  );
 }
 
 function updateBackupSourceFieldVisibility() {
@@ -764,9 +778,47 @@ function updateBackupSourceFieldVisibility() {
   const query = fields.backupSourceQuery.value;
   fields.backupSourceProvider.disabled = !enabled;
   fields.backupSourceQuery.disabled = !enabled;
-  fields.backupSourceRadius.disabled = !enabled || query !== "point";
-  fields.backupSourceValue.disabled = !enabled || !["reg", "type", "hex", "url", "file"].includes(query);
-  fields.backupSourceBaseUrl.disabled = !enabled || provider === "local_receiver";
+  updateSourceOptionalField(
+    fields.backupSourceRadius,
+    fields.backupSourceRadiusHint,
+    !enabled || query !== "point",
+    enabled ? sourceRadiusHint(provider, query) : "Enable backup source to edit."
+  );
+  updateSourceOptionalField(
+    fields.backupSourceValue,
+    fields.backupSourceValueHint,
+    !enabled || !["reg", "type", "hex", "url", "file"].includes(query),
+    enabled ? sourceValueHint(provider, query) : "Enable backup source to edit."
+  );
+  updateSourceOptionalField(
+    fields.backupSourceBaseUrl,
+    fields.backupSourceBaseUrlHint,
+    !enabled || provider === "local_receiver",
+    enabled ? sourceBaseUrlHint(provider) : "Enable backup source to edit."
+  );
+}
+
+function updateSourceOptionalField(input, hint, disabled, message) {
+  input.disabled = disabled;
+  input.closest("label").classList.toggle("source-field-inactive", disabled);
+  if (disabled) input.value = "";
+  if (hint) hint.textContent = disabled ? message : "";
+}
+
+function sourceRadiusHint(provider, query) {
+  if (provider === "local_receiver") return "Local receiver sources use rule radii after polling.";
+  if (query !== "point") return "Radius only applies to point/radius source queries.";
+  return "";
+}
+
+function sourceValueHint(provider, query) {
+  if (!["reg", "type", "hex", "url", "file"].includes(query)) return "Lookup value is not used for this source query.";
+  return "";
+}
+
+function sourceBaseUrlHint(provider) {
+  if (provider === "local_receiver") return "Local receiver sources use the receiver URL or file path above.";
+  return "";
 }
 
 function syncSourceQueryForProvider(providerField, queryField) {

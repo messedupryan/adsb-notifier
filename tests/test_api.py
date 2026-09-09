@@ -580,11 +580,11 @@ def test_backup_source_config_and_primary_retry_default_are_supported():
     assert settings.backup_adsb_source.query == "file"
 
 
-def test_backup_source_rejects_direct_provider():
+def test_source_rejects_direct_provider():
     payload = valid_config()
-    payload["backup_adsb_source"] = {"provider": "direct"}
+    payload["adsb_source"] = {"provider": "direct"}
 
-    with pytest.raises(ValueError, match="backup_adsb_source provider must not be direct"):
+    with pytest.raises(ValueError, match="unsupported adsb_source provider: direct"):
         parse_settings(payload)
 
 

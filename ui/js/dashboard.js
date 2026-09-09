@@ -366,12 +366,12 @@ function sourceProviderLabel(provider) {
     adsb_lol: "ADSB.lol",
     airplanes_live: "Airplanes.live",
     local_receiver: "Local receiver",
-    direct: "Direct aircraft.json",
+    legacy_aircraft_json: "Legacy aircraft.json",
   }[provider] || provider || "Unknown";
 }
 
 function sourceProviderFromConfig() {
-  return config?.adsb_source?.provider || (config?.adsb_url ? "direct" : "");
+  return config?.adsb_source?.provider || (config?.adsb_url ? "legacy_aircraft_json" : "");
 }
 
 function sourceQueryFromConfig() {

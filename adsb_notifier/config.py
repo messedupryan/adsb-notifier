@@ -28,7 +28,7 @@ from adsb_notifier.squawk import require_squawk_code
 
 NOTIFICATION_PROVIDERS = {"email", "pushover", "twilio"}
 PHONE_NOTIFICATION_PROVIDERS = {"pushover", "twilio"}
-ADSB_SOURCE_PROVIDERS = {"direct", "airplanes_live", "adsb_lol", "local_receiver"}
+ADSB_SOURCE_PROVIDERS = {"airplanes_live", "adsb_lol", "local_receiver"}
 ADSB_SOURCE_QUERIES = {"point", "mil", "reg", "type", "hex", "url", "file"}
 RULE_EVENTS = {"aircraft_type", "circling", "military", "squawk", "tail"}
 CONFIG_TOP_LEVEL_KEYS = {
@@ -422,8 +422,6 @@ def _parse_adsb_source(data: dict[str, Any] | None, *, field_name: str) -> AdsbS
         raise ValueError(f"{field_name} requires provider")
     if provider not in ADSB_SOURCE_PROVIDERS:
         raise ValueError(f"unsupported {field_name} provider: {provider}")
-    if field_name == "backup_adsb_source" and provider == "direct":
-        raise ValueError("backup_adsb_source provider must not be direct")
     query = str(data.get("query", "point")).strip().lower()
     if provider == "local_receiver" and query == "point":
         query = "url"

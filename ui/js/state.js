@@ -10,7 +10,7 @@ let emailHtmlPreviewMode = "rendered";
 const uiVersion = "0.3.0";
 const redactedSecret = "********";
 const notificationProviderOrder = ["pushover", "email", "twilio"];
-const adsbSourceProviders = ["adsb_lol", "airplanes_live", "local_receiver", "direct"];
+const adsbSourceProviders = ["adsb_lol", "airplanes_live", "local_receiver"];
 const backupAdsbSourceProviders = ["local_receiver", "adsb_lol", "airplanes_live"];
 const adsbSourceQueries = ["point", "mil", "reg", "type", "hex", "url", "file"];
 const apiBase = new URLSearchParams(window.location.search).get("api") || "/api";
@@ -38,18 +38,23 @@ let isSourceHealthTrendEventListVisible = false;
 let sourceHealthTrendWindowHours = 24;
 
 const fields = {
-  adsbUrl: document.querySelector("#adsb-url"),
   adsbSourceProvider: document.querySelector("#adsb-source-provider"),
   adsbSourceQuery: document.querySelector("#adsb-source-query"),
   adsbSourceRadius: document.querySelector("#adsb-source-radius"),
+  adsbSourceRadiusHint: document.querySelector("#adsb-source-radius-hint"),
   adsbSourceValue: document.querySelector("#adsb-source-value"),
+  adsbSourceValueHint: document.querySelector("#adsb-source-value-hint"),
   adsbSourceBaseUrl: document.querySelector("#adsb-source-base-url"),
+  adsbSourceBaseUrlHint: document.querySelector("#adsb-source-base-url-hint"),
   backupSourceEnabled: document.querySelector("#backup-source-enabled"),
   backupSourceProvider: document.querySelector("#backup-source-provider"),
   backupSourceQuery: document.querySelector("#backup-source-query"),
   backupSourceRadius: document.querySelector("#backup-source-radius"),
+  backupSourceRadiusHint: document.querySelector("#backup-source-radius-hint"),
   backupSourceValue: document.querySelector("#backup-source-value"),
+  backupSourceValueHint: document.querySelector("#backup-source-value-hint"),
   backupSourceBaseUrl: document.querySelector("#backup-source-base-url"),
+  backupSourceBaseUrlHint: document.querySelector("#backup-source-base-url-hint"),
   homeLat: document.querySelector("#home-lat"),
   homeLon: document.querySelector("#home-lon"),
   pollSeconds: document.querySelector("#poll-seconds"),

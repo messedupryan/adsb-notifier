@@ -139,7 +139,6 @@
                   <option value="adsb_lol">ADSB.lol</option>
                   <option value="airplanes_live">Airplanes.live</option>
                   <option value="local_receiver">Local receiver</option>
-                  <option value="direct">Direct aircraft.json</option>
                 </select>
               </label>
               <label>
@@ -156,19 +155,18 @@
               </label>
               <label>
                 Radius miles
-                <input id="adsb-source-radius" name="adsb_source.radius_miles" type="number" min="1" step="0.1" />
+                <input id="adsb-source-radius" name="adsb_source.radius_miles" type="number" min="1" step="0.1" aria-describedby="adsb-source-radius-hint" />
+                <span id="adsb-source-radius-hint" class="field-hint source-field-hint"></span>
               </label>
               <label>
                 Lookup value, URL, or file path
-                <input id="adsb-source-value" name="adsb_source.value" type="text" />
+                <input id="adsb-source-value" name="adsb_source.value" type="text" aria-describedby="adsb-source-value-hint" />
+                <span id="adsb-source-value-hint" class="field-hint source-field-hint"></span>
               </label>
               <label class="wide">
                 Custom source base URL
-                <input id="adsb-source-base-url" name="adsb_source.base_url" type="url" placeholder="Optional" />
-              </label>
-              <label class="wide">
-                Direct ADS-B endpoint
-                <input id="adsb-url" name="adsb_url" type="url" />
+                <input id="adsb-source-base-url" name="adsb_source.base_url" type="url" placeholder="Optional" aria-describedby="adsb-source-base-url-hint" />
+                <span id="adsb-source-base-url-hint" class="field-hint source-field-hint"></span>
               </label>
               <label>
                 Primary retry minutes
@@ -201,15 +199,18 @@
                 </label>
                 <label>
                   Radius miles
-                  <input id="backup-source-radius" name="backup_adsb_source.radius_miles" type="number" min="1" step="0.1" />
+                  <input id="backup-source-radius" name="backup_adsb_source.radius_miles" type="number" min="1" step="0.1" aria-describedby="backup-source-radius-hint" />
+                  <span id="backup-source-radius-hint" class="field-hint source-field-hint"></span>
                 </label>
                 <label>
                   Lookup value, URL, or file path
-                  <input id="backup-source-value" name="backup_adsb_source.value" type="text" />
+                  <input id="backup-source-value" name="backup_adsb_source.value" type="text" aria-describedby="backup-source-value-hint" />
+                  <span id="backup-source-value-hint" class="field-hint source-field-hint"></span>
                 </label>
                 <label class="wide">
                   Custom source base URL
-                  <input id="backup-source-base-url" name="backup_adsb_source.base_url" type="url" placeholder="Optional" />
+                  <input id="backup-source-base-url" name="backup_adsb_source.base_url" type="url" placeholder="Optional" aria-describedby="backup-source-base-url-hint" />
+                  <span id="backup-source-base-url-hint" class="field-hint source-field-hint"></span>
                 </label>
               </div>
             </fieldset>
