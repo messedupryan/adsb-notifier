@@ -9,7 +9,7 @@ The root `VERSION` file is the project version source of truth.
 The current beta version is:
 
 ```text
-0.4.0
+0.4.1
 ```
 
 For now, the worker, API, UI, Python package, Helm chart, and container images all share the project version. Split component versions only when the components need independent release cadence.
@@ -31,7 +31,7 @@ Run `make version` to display the project version and image tags that will be bu
 
 - Use `0.x.y` while the project is still changing quickly.
 - Increment the patch version for each stable batch of work that should be deployable or eligible for promotion.
-- While building toward the next minor release, use numeric patch versions on `develop` as deployable checkpoints. For example, after stable `0.3.0`, use `0.3.1`, `0.3.2`, and later `0.3.x` while building toward `0.4.0`.
+- While building toward the next minor release, use numeric patch versions on `develop` as deployable checkpoints. For example, after stable `0.4.0`, use `0.4.1`, `0.4.2`, and later `0.4.x` while building toward `0.5.0`.
 - Use prerelease suffixes only for release-candidate builds that are feature-complete and ready for soak testing, such as `0.x.0-rc.n`.
 - Avoid alpha/beta prerelease versions unless the project convention intentionally changes.
 - Keep all components on the same version during beta unless there is a strong reason to split them.
@@ -55,8 +55,8 @@ make version
 
 git switch main
 git merge --no-ff develop
-git tag v0.4.0
-git push origin main v0.4.0
+git tag v0.5.0
+git push origin main v0.5.0
 ```
 
 Release-note drafts live under `docs/releases/` and are written for GitHub Releases. Stable minor releases should have a concise public summary before or during promotion; patch checkpoints and release candidates do not need formal release notes unless there is a specific operational reason.
@@ -64,7 +64,7 @@ Release-note drafts live under `docs/releases/` and are written for GitHub Relea
 Draft release notes from the roadmap and commit history:
 
 ```bash
-make release-notes VERSION=0.4.0 PREVIOUS_VERSION=0.3.0 ROADMAP="ADSB-Notifier Roadmap v0.4.0"
+make release-notes VERSION=0.5.0 PREVIOUS_VERSION=0.4.0 ROADMAP="ADSB-Notifier Roadmap v0.5.0"
 ```
 
 The generated draft is a starting point for the GitHub Release body. Keep the final text focused on functional changes, validation, and notable operational notes; do not add binary or custom artifact expectations.

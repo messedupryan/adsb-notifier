@@ -53,7 +53,7 @@ API_HOST=127.0.0.1
 API_PORT=8765
 UI_PORT=8766
 REGISTRY=registry.example.test
-IMAGE_TAG=0.4.0
+IMAGE_TAG=0.4.1
 NAMESPACE=adsb
 RELEASE=adsb-notifier
 HELM_VALUES=charts/adsb-notifier/values.yaml
@@ -237,10 +237,10 @@ make release-rc REGISTRY=registry.example.test NAMESPACE=adsb RELEASE=adsb-notif
 Draft GitHub release notes for a stable minor release:
 
 ```bash
-make release-notes VERSION=0.4.0 PREVIOUS_VERSION=0.3.0 ROADMAP="ADSB-Notifier Roadmap v0.4.0"
+make release-notes VERSION=0.5.0 PREVIOUS_VERSION=0.4.0 ROADMAP="ADSB-Notifier Roadmap v0.5.0"
 ```
 
-This writes `docs/releases/v0.4.0.md` with a GitHub Release-oriented outline and commit history since `v0.3.0`. Patch checkpoints and release candidates usually do not need formal release notes.
+This writes `docs/releases/v0.5.0.md` with a GitHub Release-oriented outline and commit history since `v0.4.0`. Patch checkpoints and release candidates usually do not need formal release notes.
 
 Individual images:
 
