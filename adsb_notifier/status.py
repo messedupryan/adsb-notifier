@@ -1,7 +1,10 @@
 import json
 import os
+import sqlite3
 import tempfile
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +16,8 @@ from adsb_notifier.constants import (
 )
 from adsb_notifier.links import airplanes_live_aircraft_url
 from adsb_notifier.models import Sighting
+
+SOURCE_HEALTH_TRENDS_DB_NAME = "source_health_trends.sqlite3"
 
 
 def write_poll_status(path: str | Path, settings: Settings, aircraft_count: int, sightings: list[Sighting]) -> None:
@@ -47,7 +52,7 @@ def write_poll_status(path: str | Path, settings: Settings, aircraft_count: int,
         "notification_count": len(sightings),
         "recent_matches_window_hours": settings.recent_matches_window_hours,
         "source_health_trend_retention_hours": retention_hours,
-        "source_health_trends": _source_health_trends(existing, retention_hours, trend_events),
+        "source_health_trends": _stored_source_health_trends(path, existing, retention_hours, trend_events),
         "recent_matches": recent_matches,
         "last_error": None,
         "consecutive_source_errors": 0,
@@ -77,7 +82,8 @@ def write_error_status(path: str | Path, error: BaseException) -> None:
             "last_error_at": now,
             "consecutive_source_errors": consecutive_source_errors,
             "source_health_trend_retention_hours": retention_hours,
-            "source_health_trends": _source_health_trends(
+            "source_health_trends": _stored_source_health_trends(
+                path,
                 existing,
                 retention_hours,
                 [
@@ -161,7 +167,8 @@ def write_rate_limit_status(
             "rate_limit_backoff_seconds": backoff_seconds,
             "rate_limit_retry_at": retry_at,
             "source_health_trend_retention_hours": settings.source_health_trend_retention_hours,
-            "source_health_trends": _source_health_trends(
+            "source_health_trends": _stored_source_health_trends(
+                path,
                 existing,
                 settings.source_health_trend_retention_hours,
                 trend_events,
@@ -302,30 +309,123 @@ def _source_identity(health: dict[str, Any]) -> tuple[str, str, str]:
     )
 
 
-def _source_health_trends(
+def source_health_trends_db_path(status_path: str | Path) -> Path:
+    return Path(status_path).with_name(SOURCE_HEALTH_TRENDS_DB_NAME)
+
+
+def _stored_source_health_trends(
+    status_path: str | Path,
     existing: dict[str, Any],
     retention_hours: int,
     new_events: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(hours=retention_hours)
-    existing_events = existing.get("source_health_trends", [])
-    if not isinstance(existing_events, list):
-        existing_events = []
+    migrated_events = existing.get("source_health_trends", [])
+    if not isinstance(migrated_events, list):
+        migrated_events = []
 
-    trends: list[dict[str, Any]] = []
-    for event in [*new_events, *existing_events]:
-        if not isinstance(event, dict) or not _event_is_recent(event, cutoff):
-            continue
-        trends.append(event)
-
-    trends.sort(key=lambda event: _observed_at(event) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-    return trends
+    events = [event for event in [*migrated_events, *new_events] if isinstance(event, dict)]
+    _write_source_health_trend_events(status_path, retention_hours, events)
+    return read_source_health_trends(status_path, retention_hours)
 
 
-def _event_is_recent(event: dict[str, Any], cutoff: datetime) -> bool:
-    observed_at = _observed_at(event)
-    return observed_at is not None and observed_at >= cutoff
+def read_source_health_trends(status_path: str | Path, retention_hours: int) -> list[dict[str, Any]]:
+    db_path = source_health_trends_db_path(status_path)
+    if not db_path.exists():
+        return []
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=retention_hours)
+    with _source_health_db(db_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT event_json
+            FROM source_health_trends
+            WHERE observed_at >= ?
+            ORDER BY observed_at DESC, id ASC
+            """,
+            (cutoff.isoformat(),),
+        ).fetchall()
+    return [json.loads(row["event_json"]) for row in rows]
+
+
+def _write_source_health_trend_events(
+    status_path: str | Path,
+    retention_hours: int,
+    events: list[dict[str, Any]],
+) -> None:
+    db_path = source_health_trends_db_path(status_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=retention_hours)
+
+    with _source_health_db(db_path) as connection:
+        _init_source_health_trends_db(connection)
+        for event in events:
+            observed_at = _observed_at(event)
+            if observed_at is None or observed_at < cutoff:
+                continue
+            event_json = json.dumps(event, sort_keys=True, separators=(",", ":"))
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO source_health_trends (
+                    event_key,
+                    observed_at,
+                    event_type,
+                    status,
+                    provider,
+                    query,
+                    url,
+                    message,
+                    event_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    sha256(event_json.encode("utf-8")).hexdigest(),
+                    observed_at.isoformat(),
+                    str(event.get("event_type") or ""),
+                    str(event.get("status") or ""),
+                    str(event.get("provider") or ""),
+                    str(event.get("query") or ""),
+                    str(event.get("url") or ""),
+                    str(event.get("message") or ""),
+                    event_json,
+                ),
+            )
+        connection.execute("DELETE FROM source_health_trends WHERE observed_at < ?", (cutoff.isoformat(),))
+        connection.commit()
+
+
+def _source_health_db(path: Path) -> sqlite3.Connection:
+    connection = sqlite3.connect(path)
+    connection.row_factory = sqlite3.Row
+    _init_source_health_trends_db(connection)
+    return closing(connection)
+
+
+def _init_source_health_trends_db(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS source_health_trends (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_key TEXT NOT NULL UNIQUE,
+            observed_at TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            query TEXT NOT NULL,
+            url TEXT NOT NULL,
+            message TEXT NOT NULL,
+            event_json TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_source_health_trends_observed_at ON source_health_trends (observed_at DESC)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_source_health_trends_provider ON source_health_trends (provider, query, observed_at DESC)"
+    )
+    connection.commit()
 
 
 def _status_trend_retention_hours(status: dict[str, Any]) -> int:

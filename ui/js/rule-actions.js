@@ -35,7 +35,7 @@ async function deleteSelectedRule() {
       method: "DELETE",
       headers: writeHeaders(),
     });
-    const payload = await response.json().catch(() => ({}));
+    const payload = await parseJsonResponse(response, "Unable to delete rule");
     if (!response.ok) {
       throw new Error(payload.error || "Unable to delete rule");
     }
@@ -78,7 +78,7 @@ async function testSelectedRule() {
       method: "POST",
       headers: {"Content-Type": "application/json"},
     });
-    const payload = await response.json().catch(() => ({}));
+    const payload = await parseJsonResponse(response, "Unable to test rule");
     if (!response.ok) {
       throw new Error(payload.error || "Unable to test rule");
     }
@@ -118,7 +118,7 @@ async function testNotification(provider) {
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({provider}),
     });
-    const payload = await response.json().catch(() => ({}));
+    const payload = await parseJsonResponse(response, `Unable to send ${providerLabel(provider)} test`);
     if (!response.ok) {
       throw new Error(payload.error || `Unable to send ${providerLabel(provider)} test`);
     }
@@ -138,7 +138,7 @@ async function createRuleOnServer(rule, action) {
       headers: writeHeaders(),
       body: JSON.stringify(rule),
     });
-    const payload = await response.json().catch(() => ({}));
+    const payload = await parseJsonResponse(response, "Unable to create rule");
     if (!response.ok) {
       throw new Error(payload.error || "Unable to create rule");
     }
@@ -188,7 +188,7 @@ async function bulkSetSelectedRulesEnabled(enabled) {
       headers: writeHeaders(),
       body: JSON.stringify(config),
     });
-    const saved = await response.json().catch(() => ({}));
+    const saved = await parseJsonResponse(response, "Unable to save bulk rule update");
     if (!response.ok) {
       throw new Error(saved.error || "Unable to save bulk rule update");
     }

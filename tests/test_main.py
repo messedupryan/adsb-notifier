@@ -14,7 +14,14 @@ from adsb_notifier.main import (
 )
 from adsb_notifier.adsb import AdsbAccessDeniedError, AdsbRateLimitError, AdsbSourceUnavailableError
 from adsb_notifier.models import Aircraft, Sighting
-from adsb_notifier.status import read_status, write_error_status, write_poll_status, write_rate_limit_status
+from adsb_notifier.status import (
+    read_source_health_trends,
+    read_status,
+    source_health_trends_db_path,
+    write_error_status,
+    write_poll_status,
+    write_rate_limit_status,
+)
 
 
 def test_apply_overrides_replaces_adsb_url_only():
@@ -454,6 +461,100 @@ def test_source_health_trends_survive_restarts_and_prune_by_retention(tmp_path):
     assert "Poll succeeded with 4 aircraft" in messages
     assert "recent failure" in messages
     assert "old rate limit" not in messages
+
+
+def test_source_health_trends_are_written_to_sqlite_store(tmp_path):
+    settings = Settings(
+        adsb_url="http://example.test/aircraft.json",
+        adsb_source=None,
+        home=Home(lat=40.7608, lon=-111.8910),
+        poll_seconds=30,
+        stale_aircraft_seconds=90,
+        notifications=Notifications(),
+        rules=[],
+        source_health_trend_retention_hours=24,
+    )
+    status_path = tmp_path / "status.json"
+
+    write_poll_status(status_path, settings, aircraft_count=7, sightings=[])
+
+    assert source_health_trends_db_path(status_path).exists()
+    trends = read_source_health_trends(status_path, retention_hours=24)
+    assert trends[0]["event_type"] == "success"
+    assert trends[0]["aircraft_count"] == 7
+    assert trends[0]["message"] == "Poll succeeded with 7 aircraft"
+
+
+def test_source_health_trends_migrate_existing_json_events_to_sqlite(tmp_path):
+    settings = Settings(
+        adsb_url="http://example.test/aircraft.json",
+        adsb_source=None,
+        home=Home(lat=40.7608, lon=-111.8910),
+        poll_seconds=30,
+        stale_aircraft_seconds=90,
+        notifications=Notifications(),
+        rules=[],
+        source_health_trend_retention_hours=24,
+    )
+    existing_event = {
+        "event_type": "failure",
+        "observed_at": (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat(),
+        "status": "failing",
+        "provider": "direct",
+        "query": "aircraft_json",
+        "url": "http://example.test/aircraft.json",
+        "message": "old json event",
+    }
+    status_path = tmp_path / "status.json"
+    status_path.write_text(json.dumps({"source_health_trends": [existing_event]}), encoding="utf-8")
+
+    write_poll_status(status_path, settings, aircraft_count=4, sightings=[])
+    write_poll_status(status_path, settings, aircraft_count=5, sightings=[])
+
+    trends = read_source_health_trends(status_path, retention_hours=24)
+    messages = [event["message"] for event in trends]
+    assert messages.count("old json event") == 1
+    assert "Poll succeeded with 4 aircraft" in messages
+    assert "Poll succeeded with 5 aircraft" in messages
+
+
+def test_source_health_trend_sqlite_retention_prunes_old_events(tmp_path):
+    settings = Settings(
+        adsb_url="http://example.test/aircraft.json",
+        adsb_source=None,
+        home=Home(lat=40.7608, lon=-111.8910),
+        poll_seconds=30,
+        stale_aircraft_seconds=90,
+        notifications=Notifications(),
+        rules=[],
+        source_health_trend_retention_hours=1,
+    )
+    recent_event = {
+        "event_type": "failure",
+        "observed_at": (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat(),
+        "status": "failing",
+        "provider": "direct",
+        "query": "aircraft_json",
+        "url": "http://example.test/aircraft.json",
+        "message": "recent sqlite event",
+    }
+    old_event = {
+        "event_type": "failure",
+        "observed_at": (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat(),
+        "status": "failing",
+        "provider": "direct",
+        "query": "aircraft_json",
+        "url": "http://example.test/aircraft.json",
+        "message": "old sqlite event",
+    }
+    status_path = tmp_path / "status.json"
+    status_path.write_text(json.dumps({"source_health_trends": [recent_event, old_event]}), encoding="utf-8")
+
+    write_poll_status(status_path, settings, aircraft_count=4, sightings=[])
+
+    messages = [event["message"] for event in read_source_health_trends(status_path, retention_hours=24)]
+    assert "recent sqlite event" in messages
+    assert "old sqlite event" not in messages
 
 
 def test_write_poll_status_records_provider_switch_trend(tmp_path):

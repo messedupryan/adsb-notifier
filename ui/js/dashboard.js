@@ -1,7 +1,7 @@
 async function loadWorkerStatus() {
   try {
     const response = await fetch(`${apiBase}/status`);
-    const payload = await response.json().catch(() => ({}));
+    const payload = await parseJsonResponse(response, "Unable to load worker status");
     if (!response.ok) {
       throw new Error(payload.error || "Unable to load worker status");
     }

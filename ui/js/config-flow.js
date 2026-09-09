@@ -1,3 +1,23 @@
+async function parseJsonResponse(response, fallbackMessage) {
+  const text = await response.text();
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    try {
+      return text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error(`${fallbackMessage}: API returned malformed JSON.`);
+    }
+  }
+  if (text.trim().startsWith("<")) {
+    throw new Error(`${fallbackMessage}: API returned HTML. When running locally, open the UI with ?api=http://127.0.0.1:8765.`);
+  }
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(`${fallbackMessage}: API returned a non-JSON response.`);
+  }
+}
+
 async function loadConfig() {
   if (
     isDirty &&
@@ -13,7 +33,7 @@ async function loadConfig() {
   setBusy(true);
   try {
     const response = await fetch(`${apiBase}/config`);
-    const payload = await response.json();
+    const payload = await parseJsonResponse(response, "Unable to load configuration");
     if (!response.ok) {
       throw new Error(payload.error || "Unable to load configuration");
     }
@@ -61,7 +81,7 @@ async function saveConfig(options = {}) {
             headers: writeHeaders(),
             body: JSON.stringify(config),
           });
-    const saved = await response.json().catch(() => ({}));
+    const saved = await parseJsonResponse(response, "Unable to save configuration");
     if (!response.ok) {
       throw new Error(saved.error || "Unable to save configuration");
     }

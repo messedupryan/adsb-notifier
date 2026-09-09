@@ -359,6 +359,8 @@ curl -fsS http://adsb-notifier.example.test/api/healthz
 
 The API writes live config to the shared Kubernetes PVC at `/config/config.json` and stores API-created backups under `/config/backups`.
 
+The worker also keeps source-health trend history beside `status.json` as `source_health_trends.sqlite3` on the status PVC. The JSON status payload still includes recent `source_health_trends` for the dashboard, but the SQLite file is the durable trend store for longer review windows. Back up or preserve the status PVC if you want to keep source-health history across cluster rebuilds.
+
 Export the current live config:
 
 ```bash

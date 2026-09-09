@@ -75,6 +75,12 @@ def test_ui_javascript_is_split_into_ordered_scripts():
     assert parser.scripts[-len(expected_scripts) :] == expected_scripts
 
 
+def test_ui_reports_local_api_routing_errors_without_json_parser_noise():
+    assert "function parseJsonResponse" in UI_JS
+    assert "API returned HTML" in UI_JS
+    assert "?api=http://127.0.0.1:8765" in UI_JS
+
+
 def test_removed_webhook_provider_is_not_in_ui():
     assert "webhook" not in INDEX_HTML.lower()
     assert '"webhook"' not in UI_JS
